@@ -21,7 +21,8 @@
     sunset: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 18a5 5 0 0 0-10 0"/><line x1="12" y1="9" x2="12" y2="2"/><line x1="4.22" y1="10.22" x2="5.64" y2="11.64"/><line x1="18.36" y1="11.64" x2="19.78" y2="10.22"/><line x1="1" y1="18" x2="23" y2="18"/></svg>',
     alert: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
     activity: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',
-    userCard: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><circle cx="8" cy="11" r="2.4"/><path d="M4.5 17c.6-1.7 2-2.6 3.5-2.6s2.9.9 3.5 2.6"/><line x1="14" y1="9" x2="19" y2="9"/><line x1="14" y1="13" x2="19" y2="13"/></svg>'
+    userCard: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><circle cx="8" cy="11" r="2.4"/><path d="M4.5 17c.6-1.7 2-2.6 3.5-2.6s2.9.9 3.5 2.6"/><line x1="14" y1="9" x2="19" y2="9"/><line x1="14" y1="13" x2="19" y2="13"/></svg>',
+    logout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>'
   };
   var NAV_ICON = { "Overview": ICON.grid, "Attendance Management": ICON.list, "My Dashboard": ICON.grid, "Dashboard": ICON.grid, "Attendance History": ICON.clock };
 
@@ -144,7 +145,7 @@
     var hash = location.hash || "#/dashboard";
     el("nav").innerHTML = links.map(function (l) {
       return '<a href="' + l[0] + '" class="' + (hash === l[0] ? "active" : "") + '">' + (NAV_ICON[l[1]] || "") + '<span>' + l[1] + "</span></a>";
-    }).join("");
+    }).join("") + '<button type="button" class="nav-signout" id="navSignout">' + ICON.logout + '<span>Sign out</span></button>';
     el("nav").classList.remove("open");
     document.body.classList.remove("nav-open");
     el("navBackdrop").hidden = true;
@@ -158,6 +159,30 @@
   el("logoutBtn").addEventListener("click", function () {
     setSession(null); location.hash = "#/login"; toast("You have been signed out."); render();
   });
+
+  function openNav() {
+    syncHeaderHeight();
+    el("nav").classList.add("open");
+    document.body.classList.add("nav-open");
+    el("navBackdrop").hidden = false;
+    el("navBackdrop").classList.add("show");
+    el("menuToggle").setAttribute("aria-expanded", "true");
+  }
+  function closeNav() {
+    el("nav").classList.remove("open");
+    document.body.classList.remove("nav-open");
+    el("navBackdrop").hidden = true;
+    el("navBackdrop").classList.remove("show");
+    el("menuToggle").setAttribute("aria-expanded", "false");
+  }
+
+  el("nav").addEventListener("click", function (e) {
+    if (e.target.closest("#navSignout")) {
+      setSession(null); location.hash = "#/login"; toast("You have been signed out."); render();
+      return;
+    }
+    if (e.target.closest("a")) closeNav();
+  });
   function syncHeaderHeight() {
     var head = el("masthead");
     if (head && !head.hidden) {
@@ -166,30 +191,22 @@
   }
   window.addEventListener("resize", function () {
     syncHeaderHeight();
-    if (window.innerWidth > 760) {
-      el("nav").classList.remove("open");
-      document.body.classList.remove("nav-open");
-      el("navBackdrop").hidden = true;
-      el("navBackdrop").classList.remove("show");
-    }
+    if (window.innerWidth > 760) closeNav();
   });
 
   el("menuToggle").addEventListener("click", function (e) {
     e.stopPropagation();
-    syncHeaderHeight();
-    var open = el("nav").classList.toggle("open");
-    document.body.classList.toggle("nav-open", open);
-    el("navBackdrop").hidden = !open;
-    el("navBackdrop").classList.toggle("show", open);
+    if (el("nav").classList.contains("open")) closeNav(); else openNav();
   });
+  el("navBackdrop").addEventListener("click", closeNav);
   document.addEventListener("click", function (e) {
     var nav = el("nav");
     if (!nav.classList.contains("open")) return;
     if (nav.contains(e.target) || el("menuToggle").contains(e.target)) return;
-    nav.classList.remove("open");
-    document.body.classList.remove("nav-open");
-    el("navBackdrop").hidden = true;
-    el("navBackdrop").classList.remove("show");
+    closeNav();
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && el("nav").classList.contains("open")) closeNav();
   });
 
   /* ------------------------- validation ------------------------- */
