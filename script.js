@@ -148,11 +148,6 @@
     el("nav").classList.remove("open");
 
     var now = new Date();
-    el("clock").textContent = longDate(now) + " · " + clockTime(now);
-    var todays = db.attendance.filter(function (a) { return a.date === dateKey(now); });
-    el("ticker").innerHTML = "<b>Live</b><span>" + todays.filter(function (a) { return a.morning; }).length +
-      " morning submissions · " + todays.filter(function (a) { return a.evening; }).length +
-      " closing submissions · " + db.users.filter(function (x) { return x.role !== "admin"; }).length + " staff on record</span>";
     el("year").textContent = now.getFullYear();
   }
 
