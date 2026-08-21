@@ -146,23 +146,42 @@
       return '<a href="' + l[0] + '" class="' + (hash === l[0] ? "active" : "") + '">' + (NAV_ICON[l[1]] || "") + '<span>' + l[1] + "</span></a>";
     }).join("");
     el("nav").classList.remove("open");
+    document.body.classList.remove("nav-open");
 
     var now = new Date();
     el("year").textContent = now.getFullYear();
+    syncHeaderHeight();
   }
 
   el("logoutBtn").addEventListener("click", function () {
     setSession(null); location.hash = "#/login"; toast("You have been signed out."); render();
   });
+  function syncHeaderHeight() {
+    var head = el("masthead");
+    if (head && !head.hidden) {
+      document.documentElement.style.setProperty("--header-h", head.offsetHeight + "px");
+    }
+  }
+  window.addEventListener("resize", function () {
+    syncHeaderHeight();
+    if (window.innerWidth > 760) {
+      el("nav").classList.remove("open");
+      document.body.classList.remove("nav-open");
+    }
+  });
+
   el("menuToggle").addEventListener("click", function (e) {
     e.stopPropagation();
-    el("nav").classList.toggle("open");
+    syncHeaderHeight();
+    var open = el("nav").classList.toggle("open");
+    document.body.classList.toggle("nav-open", open);
   });
   document.addEventListener("click", function (e) {
     var nav = el("nav");
     if (!nav.classList.contains("open")) return;
     if (nav.contains(e.target) || el("menuToggle").contains(e.target)) return;
     nav.classList.remove("open");
+    document.body.classList.remove("nav-open");
   });
 
   /* ------------------------- validation ------------------------- */
