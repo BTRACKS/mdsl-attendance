@@ -10,6 +10,21 @@
   var DEPARTMENTS = ["Media & Broadcast", "Technology", "Marketing", "Creative & Design", "Operations", "Finance", "Human Resources", "Sales"];
   var POSITIONS_HINT = "e.g. Video Editor, Backend Engineer";
 
+  /* ------------------------- icons ------------------------- */
+  var ICON = {
+    grid: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>',
+    list: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>',
+    clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 16 14"/></svg>',
+    users: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+    check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="8.5 12.5 11 15 16 9"/></svg>',
+    sunrise: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 18a5 5 0 0 0-10 0"/><line x1="12" y1="2" x2="12" y2="9"/><line x1="4.22" y1="10.22" x2="5.64" y2="11.64"/><line x1="18.36" y1="11.64" x2="19.78" y2="10.22"/><line x1="1" y1="18" x2="23" y2="18"/></svg>',
+    sunset: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 18a5 5 0 0 0-10 0"/><line x1="12" y1="9" x2="12" y2="2"/><line x1="4.22" y1="10.22" x2="5.64" y2="11.64"/><line x1="18.36" y1="11.64" x2="19.78" y2="10.22"/><line x1="1" y1="18" x2="23" y2="18"/></svg>',
+    alert: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+    activity: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',
+    userCard: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><circle cx="8" cy="11" r="2.4"/><path d="M4.5 17c.6-1.7 2-2.6 3.5-2.6s2.9.9 3.5 2.6"/><line x1="14" y1="9" x2="19" y2="9"/><line x1="14" y1="13" x2="19" y2="13"/></svg>'
+  };
+  var NAV_ICON = { "Overview": ICON.grid, "Attendance Management": ICON.list, "My Dashboard": ICON.grid, "Dashboard": ICON.grid, "Attendance History": ICON.clock };
+
   function load() {
     try { return JSON.parse(localStorage.getItem(DB_KEY)) || seed(); }
     catch (e) { return seed(); }
@@ -128,16 +143,9 @@
       : [["#/dashboard", "Dashboard"], ["#/history", "Attendance History"]];
     var hash = location.hash || "#/dashboard";
     el("nav").innerHTML = links.map(function (l) {
-      return '<a href="' + l[0] + '" class="' + (hash === l[0] ? "active" : "") + '">' + l[1] + "</a>";
-    }).join("") + '<a href="#" class="nav-signout" id="navSignOut">Sign out</a>';
+      return '<a href="' + l[0] + '" class="' + (hash === l[0] ? "active" : "") + '">' + (NAV_ICON[l[1]] || "") + '<span>' + l[1] + "</span></a>";
+    }).join("");
     el("nav").classList.remove("open");
-    var navSignOut = el("navSignOut");
-    if (navSignOut) {
-      navSignOut.addEventListener("click", function (e) {
-        e.preventDefault();
-        el("logoutBtn").click();
-      });
-    }
 
     var now = new Date();
     el("clock").textContent = longDate(now) + " · " + clockTime(now);
@@ -226,7 +234,7 @@
   function aside(headline, lede) {
     return '<div class="auth-aside"><a class="brand brand-lg" href="#/login">' +
       '<img class="brand-logo" src="logo-mark.png" alt="Multidigital Service Limited" />' +
-      '<span class="brand-text"><span class="brand-name">Multidigital Service Limited</span><em>Attendance Platform</em></span></a>' +
+      '<span class="brand-text">Multidigital Service Limited<em>Attendance Platform</em></span></a>' +
       '<div><h2 class="auth-headline">' + headline + "</h2>" +
       '<p class="auth-lede">' + esc(lede) + "</p></div>" +
       '<div class="auth-stats"><div><span>Staff on record</span><b>' + db.users.filter(function (u) { return u.role !== "admin"; }).length +
@@ -284,14 +292,14 @@
   }
 
   function profilePanel(u) {
-    return '<aside><div class="panel"><div class="panel-head">Staff Profile</div><div class="panel-body">' +
+    return '<aside><div class="panel"><div class="panel-head">' + ICON.userCard + 'Staff Profile</div><div class="panel-body">' +
       '<div class="identity"><div class="avatar">' + esc(initials(u.fullName)) + "</div>" +
       "<div><h3>" + esc(u.fullName) + "</h3><p>" + esc(u.position) + "</p></div></div>" +
       '<dl class="dl">' +
       row("Staff ID", u.staffId) + row("Employment Type", u.employmentType) +
       row("Department", u.department) + row("Position", u.position) + row("Email", u.email) +
       "</dl></div></div>" +
-      '<div class="panel" style="margin-top:20px"><div class="panel-head">This Month</div><div class="panel-body">' +
+      '<div class="panel" style="margin-top:20px"><div class="panel-head">' + ICON.activity + 'This Month</div><div class="panel-body">' +
       monthSummary(u) + "</div></div></aside>";
   }
   function row(k, v) { return "<div><dt>" + esc(k) + "</dt><dd>" + esc(v) + "</dd></div>"; }
@@ -346,12 +354,12 @@
     return '<div class="page"><div class="page-head"><p class="eyebrow">Administration</p><h1>Attendance Overview</h1>' +
       '<p class="dateline">' + longDate(now) + " · organisation-wide monitoring</p></div>" +
       '<div class="stats">' +
-      stat("Total Staff", staff.length) + stat("Staff Present", morning.length) +
-      stat("Morning Submitted", morning.length) + stat("Evening Submitted", evening.length) +
-      stat("Missing Attendance", missing.length, true) + "</div>" +
+      stat("Total Staff", staff.length, "", ICON.users) + stat("Staff Present", morning.length, "ok", ICON.check) +
+      stat("Morning Submitted", morning.length, "ok", ICON.sunrise) + stat("Evening Submitted", evening.length, "accent", ICON.sunset) +
+      stat("Missing Attendance", missing.length, missing.length ? "danger" : "", ICON.alert) + "</div>" +
       '<div class="layout"><div><section class="section"><div class="section-head"><h2>Today\'s Register</h2><span>' + longDate(now) + "</span></div>" +
       adminTable(staff, key) + "</section></div>" +
-      '<aside><div class="panel"><div class="panel-head">Recent Attendance Activity</div><div class="panel-body">' +
+      '<aside><div class="panel"><div class="panel-head">' + ICON.activity + 'Recent Attendance Activity</div><div class="panel-body">' +
       '<div class="feed">' + (activity.length ? activity.map(function (a) {
         var user = db.users.find(function (u) { return u.id === a.userId; }) || { fullName: "Unknown" };
         var latest = a.evening || a.morning;
@@ -359,13 +367,14 @@
           "<p><b>" + esc(user.fullName) + "</b> submitted " + (a.evening ? "closing" : "resumption") +
           " time · " + esc(prettyDate(a.date)) + "</p></div>";
       }).join("") : '<p class="empty">No activity recorded.</p>') + "</div></div></div>" +
-      '<div class="panel" style="margin-top:20px"><div class="panel-head">Missing Today</div><div class="panel-body">' +
+      '<div class="panel" style="margin-top:20px"><div class="panel-head">' + ICON.alert + 'Missing Today</div><div class="panel-body">' +
       (missing.length ? '<dl class="dl">' + missing.map(function (u) { return row(u.fullName, u.staffId); }).join("") + "</dl>"
         : '<p class="dateline">All staff have submitted attendance.</p>') +
       "</div></div></aside></div></div>";
   }
-  function stat(label, value, accent) {
-    return '<div class="stat' + (accent ? " accent" : "") + '"><span>' + label + "</span><b>" + value + "</b></div>";
+  function stat(label, value, tone, icon) {
+    return '<div class="stat' + (tone ? " " + tone : "") + '"><div class="stat-top"><span>' + label + '</span>' +
+      (icon ? '<span class="stat-icon">' + icon + '</span>' : '') + '</div><b>' + value + "</b></div>";
   }
 
   var filters = { q: "", dept: "", type: "", date: "" };
