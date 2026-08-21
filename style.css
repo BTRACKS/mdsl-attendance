@@ -90,18 +90,19 @@ img{max-width:100%;display:block}
 .nav a.active svg{opacity:1}
 .masthead-right{display:flex;align-items:center;gap:12px;margin-left:auto}
 .clock{font-size:12px;font-variant-numeric:tabular-nums;color:var(--ink-4);letter-spacing:.02em;white-space:nowrap}
-.menu-toggle{display:none;background:none;border:0;padding:8px;cursor:pointer}
-.menu-toggle span{display:block;width:20px;height:2px;background:var(--navy);border-radius:2px;margin:4px 0}
-.ticker{
-  max-width:var(--maxw);margin:0 auto;padding:0 24px 12px;
-  font-size:12px;color:var(--ink-3);display:flex;gap:12px;align-items:center;overflow:hidden;white-space:nowrap
+.menu-toggle{
+  display:none;background:var(--paper);border:1.5px solid var(--amber);border-radius:10px;
+  width:38px;height:38px;padding:0;cursor:pointer;align-items:center;justify-content:center;
+  flex:0 0 auto;transition:background var(--t),border-color var(--t)
 }
-.ticker b{
-  background:var(--gradient-amber);color:var(--navy-deep);padding:3px 10px;border-radius:var(--radius-pill);
-  font-size:10.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase
+.menu-toggle:hover{background:var(--amber-soft)}
+.menu-toggle span{
+  display:block;width:16px;height:2px;background:var(--amber-deep);border-radius:2px;margin:2.5px 0;
+  transition:transform var(--t),opacity var(--t)
 }
-.ticker span{overflow:hidden;text-overflow:ellipsis}
-
+.nav.open ~ .masthead-right .menu-toggle span:nth-child(1){transform:translateY(5px) rotate(45deg)}
+.nav.open ~ .masthead-right .menu-toggle span:nth-child(2){opacity:0}
+.nav.open ~ .masthead-right .menu-toggle span:nth-child(3){transform:translateY(-5px) rotate(-45deg)}
 /* ---------- Buttons ---------- */
 .btn{
   display:inline-flex;align-items:center;justify-content:center;gap:8px;
@@ -334,16 +335,16 @@ td .sub{font-size:12.5px;color:var(--ink-4)}
 @media (max-width:760px){
   .masthead-inner{padding:12px 18px;gap:12px;flex-wrap:nowrap}
   .brand-text{font-size:13px}
-  .menu-toggle{display:block}
-  .clock{display:none}
-  #logoutBtn{display:none}
+  .menu-toggle{display:flex}
+  #logoutBtn{width:38px;height:38px;padding:0;border-radius:10px}
+  #logoutBtn .btn-label{display:none}
+  #logoutBtn svg{width:16px;height:16px}
   .nav{
     position:absolute;top:100%;left:12px;right:12px;background:var(--paper);border:1px solid var(--rule);
     border-radius:var(--radius);flex-direction:column;gap:2px;padding:10px;display:none;box-shadow:var(--shadow)
   }
   .nav.open{display:flex}
   .nav a{padding:12px 14px;width:100%;border-radius:10px}
-  .ticker{padding:0 18px 10px;font-size:11.5px}
   .att-grid{grid-template-columns:1fr}
   .form-grid{grid-template-columns:1fr}
   .page{padding:18px 14px 56px}

@@ -154,7 +154,16 @@
   el("logoutBtn").addEventListener("click", function () {
     setSession(null); location.hash = "#/login"; toast("You have been signed out."); render();
   });
-  el("menuToggle").addEventListener("click", function () { el("nav").classList.toggle("open"); });
+  el("menuToggle").addEventListener("click", function (e) {
+    e.stopPropagation();
+    el("nav").classList.toggle("open");
+  });
+  document.addEventListener("click", function (e) {
+    var nav = el("nav");
+    if (!nav.classList.contains("open")) return;
+    if (nav.contains(e.target) || el("menuToggle").contains(e.target)) return;
+    nav.classList.remove("open");
+  });
 
   /* ------------------------- validation ------------------------- */
   function readForm(form, rules) {
