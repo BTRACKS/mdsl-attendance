@@ -421,7 +421,7 @@
       "</div></div></aside></div></div>";
   }
   function stat(label, value, tone, icon) {
-    return '<div class="stat' + (tone ? " " + tone : "") + '"><div class="stat-top"><span>' + label + '</span>' +
+    return '<div class="stat' + (tone ? " " + tone : "") + '"><div class="stat-top"><span class="stat-label">' + label + '</span>' +
       (icon ? '<span class="stat-icon">' + icon + '</span>' : '') + '</div><b>' + value + "</b></div>";
   }
 
