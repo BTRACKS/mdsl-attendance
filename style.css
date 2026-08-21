@@ -93,17 +93,21 @@ img{max-width:100%;display:block}
 .clock{font-size:12px;font-variant-numeric:tabular-nums;color:var(--ink-4);letter-spacing:.02em;white-space:nowrap}
 .menu-toggle{
   display:none;background:var(--paper);border:1.5px solid var(--amber);border-radius:10px;
-  width:38px;height:38px;padding:0;cursor:pointer;align-items:center;justify-content:center;
-  flex-direction:column;flex:0 0 auto;transition:background var(--t),border-color var(--t)
+  width:38px;height:38px;padding:0;cursor:pointer;position:relative;
+  flex:0 0 auto;transition:background var(--t),border-color var(--t)
 }
 .menu-toggle:hover{background:var(--amber-soft)}
 .menu-toggle span{
-  display:block;width:16px;height:2px;background:var(--amber-deep);border-radius:2px;margin:2.5px 0;
+  position:absolute;left:50%;width:16px;height:2px;margin-left:-8px;
+  background:var(--amber-deep);border-radius:2px;
   transition:transform var(--t),opacity var(--t)
 }
-.nav.open ~ .masthead-right .menu-toggle span:nth-child(1){transform:translateY(5px) rotate(45deg)}
+.menu-toggle span:nth-child(1){top:12px}
+.menu-toggle span:nth-child(2){top:18px}
+.menu-toggle span:nth-child(3){top:24px}
+.nav.open ~ .masthead-right .menu-toggle span:nth-child(1){transform:translateY(6px) rotate(45deg)}
 .nav.open ~ .masthead-right .menu-toggle span:nth-child(2){opacity:0}
-.nav.open ~ .masthead-right .menu-toggle span:nth-child(3){transform:translateY(-5px) rotate(-45deg)}
+.nav.open ~ .masthead-right .menu-toggle span:nth-child(3){transform:translateY(-6px) rotate(-45deg)}
 /* ---------- Buttons ---------- */
 .btn{
   display:inline-flex;align-items:center;justify-content:center;gap:8px;
