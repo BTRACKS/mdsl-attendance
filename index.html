@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Multidigital Service Limited | Internal Attendance Platform</title>
+<meta name="description" content="Internal attendance platform for Multidigital Service Limited staff: registration, daily morning and evening attendance, history and administrative monitoring." />
+<link rel="icon" type="image/png" href="favicon.png" />
+<link rel="apple-touch-icon" href="favicon.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="masthead" id="masthead" hidden>
+    <div class="masthead-inner">
+      <a class="brand" href="#/dashboard">
+        <img class="brand-logo" src="logo-mark.png" alt="Multidigital Service Limited" />
+        <span class="brand-text"><span class="brand-name">Multidigital Service Limited</span><em>Attendance Platform</em></span>
+      </a>
+      <nav class="nav" id="nav"></nav>
+      <div class="masthead-right">
+        <span class="clock" id="clock"></span>
+        <button class="btn btn-dark btn-sm" id="logoutBtn" type="button">Sign out</button>
+        <button class="menu-toggle" id="menuToggle" type="button" aria-label="Menu"><span></span><span></span><span></span></button>
+      </div>
+    </div>
+    <div class="ticker" id="ticker"></div>
+  </header>
+
+  <main id="view"></main>
+
+  <footer class="footer" id="footer" hidden>
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <img src="logo-mark.png" alt="Multidigital Service Limited" />
+        <span>© <span id="year"></span> Multidigital Service Limited. Internal use only.</span>
+      </div>
+      <span class="footer-note">Attendance records are final once submitted.</span>
+    </div>
+  </footer>
+
+  <div class="modal-backdrop" id="modal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <p class="eyebrow" id="modalKicker">Confirmation required</p>
+      <h2 id="modalTitle">Confirm Attendance</h2>
+      <p id="modalBody"></p>
+      <p class="modal-question">Are you sure you want to proceed?</p>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="modalCancel" type="button">Cancel</button>
+        <button class="btn btn-primary" id="modalConfirm" type="button">Yes, submit</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toasts" id="toasts"></div>
+
+  <script src="script.js"></script>
+</body>
+</html>
