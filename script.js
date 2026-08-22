@@ -55,7 +55,7 @@
      Views read synchronously from this cache; actions that change data
      (sign up, sign in, submit attendance) await refreshData() before
      re-rendering, so the UI code below stays largely unchanged. */
-  var db = { users: [], attendance: [] };
+  var db = { users: [], attendance: [], staffCount: null };
   var authUser = null;     // the raw Supabase auth user (has .id, .email)
   var currentUser = null;  // the matching row from db.users (profile + role)
   var dataError = null;
@@ -81,6 +81,14 @@
       if (attendanceRes.error) dataError = attendanceRes.error.message;
       db.users = (profilesRes.data || []).map(mapProfile);
       db.attendance = (attendanceRes.data || []).map(mapAttendance);
+
+      // profiles select() is RLS-restricted before login, so db.users can be
+      // empty pre-auth. staff_count() is a SECURITY DEFINER RPC that returns
+      // just the count without exposing any profile rows to anon visitors.
+      var countRes = await supabaseClient.rpc("staff_count");
+      db.staffCount = (!countRes.error && typeof countRes.data === "number")
+        ? countRes.data
+        : db.users.filter(function (u) { return u.role !== "admin"; }).length;
     } finally {
       pageLoader.hide();
     }
@@ -337,7 +345,7 @@
       passwordField("password", "Password", "Minimum 8 characters", { strength: true }) +
       passwordField("confirmPassword", "Confirm Password", "Re-enter password") +
       '</div><div class="form-foot">' +
-      '<button class="btn btn-primary btn-lg btn-block" type="submit"><span>Create account</span></button>' +
+      '<button class="btn btn-primary btn-lg btn-block" type="submit">' + ICON.register + '<span>Create account</span></button>' +
       '<p class="form-alt">Already registered? <a class="auth-link" href="#/login">' + ICON.signin + '<span>Sign in instead</span></a></p>' +
       "</div></form></div></div></div>";
   }
@@ -377,7 +385,7 @@
       '<span class="brand-text">Multidigital Service Limited<em>E-Attendance Platform</em></span></a>' +
       '<div><h2 class="auth-headline">' + headline + "</h2>" +
       '<p class="auth-lede">' + esc(lede) + "</p></div>" +
-      '<div class="auth-stats"><div><span>Staff on record</span><b>' + db.users.filter(function (u) { return u.role !== "admin"; }).length +
+      '<div class="auth-stats"><div><span>Staff on record</span><b>' + (db.staffCount != null ? db.staffCount : 0) +
       "</b></div><div><span>Daily windows</span><b>2</b></div><div><span>Editable after submit</span><b>No</b></div></div></div>";
   }
 
