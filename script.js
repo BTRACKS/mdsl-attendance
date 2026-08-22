@@ -537,7 +537,7 @@
     ["How does the E-Attendance System work?",
      "Each member of staff signs in, submits a morning resumption time when the day begins and an evening closing time when it ends. Every submission is time-stamped and locked, so records stay accurate and final."],
     ["Who can use the platform?",
-     "All Multidigital Service Limited personnel — interns and full staff across every department — plus administrators who monitor and report on attendance."],
+     "All Multidigital Service Limited personnel, interns and full staff across every department, plus administrators who monitor and report on attendance."],
     ["How does attendance tracking work?",
      "The platform captures two windows per working day: resumption and closing. Submitted entries cannot be edited or resubmitted, and every record is stored against your staff ID and department."],
     ["Can administrators manage attendance records?",
