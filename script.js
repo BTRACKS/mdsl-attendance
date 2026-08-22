@@ -311,6 +311,7 @@
 
   function aside(headline, lede) {
     return '<div class="auth-aside"><a class="brand brand-lg" href="#/login">' +
+      '<img class="brand-logo" src="logo-mark.png" alt="Multidigital Service Limited logo" width="52" height="52" />' +
       '<span class="brand-text">Multidigital Service Limited<em>E-Attendance Platform</em></span></a>' +
       '<div><h2 class="auth-headline">' + headline + "</h2>" +
       '<p class="auth-lede">' + esc(lede) + "</p></div>" +
