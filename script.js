@@ -1,9 +1,18 @@
 /* Multidigital Service Limited — E-Attendance Platform
-   Standalone front-end app. Data persists in the browser (localStorage). */
+   Front-end app backed by Supabase (Auth + Postgres). */
 (function () {
   "use strict";
 
-  /* ------------------------- storage ------------------------- */
+  /* ------------------------- Supabase ------------------------- */
+  var SUPABASE_URL = "PASTE_YOUR_SUPABASE_PROJECT_URL_HERE";
+  var SUPABASE_PUBLISHABLE_KEY = "PASTE_YOUR_SUPABASE_PUBLISHABLE_KEY_HERE";
+
+  var supabaseClient = window.supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_PUBLISHABLE_KEY
+  );
+
+  /* ------------------------- routing ------------------------- */
   var PAGE = (document.body.getAttribute("data-page") || "app");
   var HOME = PAGE === "app" ? "" : "index.html";
   var ABOUT_URL = PAGE === "app" ? "about.html" : "about.html";
@@ -11,9 +20,6 @@
     if (PAGE === "app") { location.hash = hash; render(); }
     else { location.href = "index.html" + hash; }
   }
-
-  var DB_KEY = "multidigital.attendance.v1";
-  var SESSION_KEY = "multidigital.session.v1";
 
   var DEPARTMENTS = ["Media & Broadcast", "Technology", "Marketing", "Creative & Design", "Operations", "Finance", "Human Resources", "Sales"];
   var POSITIONS_HINT = "e.g. Video Editor, Backend Engineer";
@@ -41,53 +47,41 @@
   };
   var NAV_ICON = { "Overview": ICON.grid, "Attendance Management": ICON.list, "My Dashboard": ICON.grid, "Dashboard": ICON.grid, "Attendance History": ICON.clock, "About Us": ICON.info, "Sign in": ICON.signin, "Register": ICON.register };
 
-  function load() {
-    try { return JSON.parse(localStorage.getItem(DB_KEY)) || seed(); }
-    catch (e) { return seed(); }
-  }
-  function save(db) { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
+  /* db is an in-memory cache of Supabase data, refreshed via refreshData().
+     Views read synchronously from this cache; actions that change data
+     (sign up, sign in, submit attendance) await refreshData() before
+     re-rendering, so the UI code below stays largely unchanged. */
+  var db = { users: [], attendance: [] };
+  var authUser = null;     // the raw Supabase auth user (has .id, .email)
+  var currentUser = null;  // the matching row from db.users (profile + role)
+  var dataError = null;
 
-  function seed() {
-    var db = {
-      users: [{
-        id: "u-admin", fullName: "Adaeze Okonkwo", staffId: "MD-0001",
-        email: "admin@multidigital.com", employmentType: "Staff",
-        department: "Human Resources", position: "Head of People Operations",
-        password: "Admin123!", role: "admin", createdAt: Date.now()
-      }],
-      attendance: []
+  function mapProfile(p) {
+    return {
+      id: p.id, fullName: p.full_name, staffId: p.staff_id, email: p.email,
+      employmentType: p.employment_type, department: p.department, position: p.position,
+      role: p.role, createdAt: p.created_at
     };
-    var demo = [
-      ["Tobi Alade", "MD-0102", "tobi@multidigital.com", "Staff", "Technology", "Frontend Engineer"],
-      ["Ngozi Eze", "MD-0118", "ngozi@multidigital.com", "Staff", "Media & Broadcast", "Producer"],
-      ["Yusuf Bello", "MD-0143", "yusuf@multidigital.com", "Intern", "Creative & Design", "Design Intern"],
-      ["Chidera Nwosu", "MD-0150", "chidera@multidigital.com", "Staff", "Marketing", "Brand Strategist"]
-    ];
-    demo.forEach(function (d, i) {
-      db.users.push({
-        id: "u-" + (i + 2), fullName: d[0], staffId: d[1], email: d[2],
-        employmentType: d[3], department: d[4], position: d[5],
-        password: "Password1!", role: "staff", createdAt: Date.now()
-      });
-    });
-    // a few historical records
-    for (var back = 1; back <= 4; back++) {
-      var d = new Date(); d.setDate(d.getDate() - back);
-      var key = dateKey(d);
-      db.users.slice(1).forEach(function (u, idx) {
-        if (back === 2 && idx === 2) return; // one missing day
-        db.attendance.push({
-          userId: u.id, date: key,
-          morning: { time: "08:" + pad(2 + idx * 3) + " AM", at: d.getTime() },
-          evening: back === 1 && idx === 1 ? null : { time: "5:" + pad(1 + idx * 4) + " PM", at: d.getTime() }
-        });
-      });
-    }
-    save(db);
-    return db;
+  }
+  function mapAttendance(a) {
+    return { userId: a.user_id, date: a.date, morning: a.morning || null, evening: a.evening || null };
   }
 
-  var db = load();
+  async function refreshData() {
+    dataError = null;
+    var profilesRes = await supabaseClient.from("profiles").select("*");
+    var attendanceRes = await supabaseClient.from("attendance").select("*");
+    if (profilesRes.error) dataError = profilesRes.error.message;
+    if (attendanceRes.error) dataError = attendanceRes.error.message;
+    db.users = (profilesRes.data || []).map(mapProfile);
+    db.attendance = (attendanceRes.data || []).map(mapAttendance);
+  }
+
+  async function refreshSessionUser() {
+    var sessionRes = await supabaseClient.auth.getSession();
+    authUser = (sessionRes.data && sessionRes.data.session) ? sessionRes.data.session.user : null;
+    currentUser = authUser ? (db.users.find(function (u) { return u.id === authUser.id; }) || null) : null;
+  }
 
   /* ------------------------- helpers ------------------------- */
   function pad(n) { return String(n).padStart(2, "0"); }
@@ -112,11 +106,14 @@
   }
   function el(id) { return document.getElementById(id); }
 
-  function session() {
-    try { var id = localStorage.getItem(SESSION_KEY); return db.users.find(function (u) { return u.id === id; }) || null; }
-    catch (e) { return null; }
+  function session() { return currentUser; }
+
+  async function doLogout() {
+    await supabaseClient.auth.signOut();
+    authUser = null; currentUser = null;
+    toast("You have been signed out.");
+    go("#/login");
   }
-  function setSession(u) { u ? localStorage.setItem(SESSION_KEY, u.id) : localStorage.removeItem(SESSION_KEY); }
 
   function record(userId, key) {
     return db.attendance.find(function (a) { return a.userId === userId && a.date === key; }) || null;
@@ -186,9 +183,7 @@
     syncHeaderHeight();
   }
 
-  el("logoutBtn").addEventListener("click", function () {
-    setSession(null); toast("You have been signed out."); go("#/login");
-  });
+  el("logoutBtn").addEventListener("click", doLogout);
 
   function openNav() {
     syncHeaderHeight();
@@ -208,7 +203,7 @@
 
   el("nav").addEventListener("click", function (e) {
     if (e.target.closest("#navSignout")) {
-      setSession(null); toast("You have been signed out."); go("#/login");
+      doLogout();
       return;
     }
     if (e.target.closest("a")) closeNav();
@@ -293,7 +288,6 @@
       '<a class="link-muted auth-link" href="#/signup">' + ICON.register + '<span>Create an account</span></a></div>' +
       '<button class="btn btn-primary btn-lg btn-block" type="submit">' + ICON.signin + '<span>Sign in</span></button>' +
       "</div></form>" +
-      '<div class="hint"><b>Demo access</b> — Administrator: admin@multidigital.com / Admin123! · Staff: MD-0102 / Password1!</div>' +
       "</div></div></div>";
   }
 
@@ -508,9 +502,8 @@
     var u = session(); if (!u) return;
     var now = new Date(), key = dateKey(now);
     var rec = record(u.id, key);
-    if (!rec) { rec = { userId: u.id, date: key, morning: null, evening: null }; db.attendance.push(rec); }
-    if (rec[kind]) { toast("This attendance is locked and cannot be changed.", "error"); return; }
-    if (kind === "evening" && !rec.morning) { toast("Submit your morning resumption first.", "error"); return; }
+    if (rec && rec[kind]) { toast("This attendance is locked and cannot be changed.", "error"); return; }
+    if (kind === "evening" && (!rec || !rec.morning)) { toast("Submit your morning resumption first.", "error"); return; }
 
     var time = clockTime(now);
     var isMorning = kind === "morning";
@@ -520,9 +513,20 @@
         ? "Please review your resumption time before submitting. Once submitted, this attendance cannot be changed."
         : "Please review your closing time before submitting. Once submitted, this attendance cannot be changed.") +
       "  Recorded time: " + time + ".",
-      function () {
-        rec[kind] = { time: time, at: Date.now() };
-        save(db);
+      async function () {
+        var payload = { time: time, at: Date.now() };
+        var writeRes;
+        if (!rec) {
+          var insertRow = { user_id: u.id, date: key, morning: null, evening: null };
+          insertRow[kind] = payload;
+          writeRes = await supabaseClient.from("attendance").insert(insertRow);
+        } else {
+          var updateRow = {};
+          updateRow[kind] = payload;
+          writeRes = await supabaseClient.from("attendance").update(updateRow).eq("user_id", u.id).eq("date", key);
+        }
+        if (writeRes.error) { toast(writeRes.error.message, "error"); return; }
+        await refreshData();
         toast(isMorning ? "Morning attendance submitted successfully." : "Evening attendance submitted successfully.");
         render();
       }
@@ -612,7 +616,6 @@
 
   /* ------------------------- router ------------------------- */
   function render() {
-    db = load();
     var u = session();
     var hash = location.hash || (u ? "#/dashboard" : "#/login");
     var view = el("view");
@@ -664,7 +667,7 @@
 
   function bindAuth() {
     var s = el("signupForm");
-    if (s) s.addEventListener("submit", function (e) {
+    if (s) s.addEventListener("submit", async function (e) {
       e.preventDefault();
       var v = readForm(s, {
         fullName: function (x) { return x.length >= 3 ? "" : "Enter your full name."; },
@@ -680,35 +683,95 @@
       if (db.users.some(function (u) { return u.email.toLowerCase() === v.email.toLowerCase() || u.staffId.toLowerCase() === v.staffId.toLowerCase(); })) {
         toast("An account with that email or staff ID already exists.", "error"); return;
       }
-      var user = {
-        id: "u-" + Date.now(), fullName: v.fullName, staffId: v.staffId, email: v.email,
-        employmentType: v.employmentType, department: v.department, position: v.position,
-        password: v.password, role: "staff", createdAt: Date.now()
-      };
-      db.users.push(user); save(db); setSession(user);
+
+      var submitBtn = s.querySelector('button[type="submit"]');
+      if (submitBtn) submitBtn.disabled = true;
+
+      var signUpRes = await supabaseClient.auth.signUp({ email: v.email, password: v.password });
+      if (signUpRes.error) {
+        toast(signUpRes.error.message, "error");
+        if (submitBtn) submitBtn.disabled = false;
+        return;
+      }
+      var newAuthUser = signUpRes.data.user;
+      if (!newAuthUser) {
+        toast("Something went wrong creating your account. Please try again.", "error");
+        if (submitBtn) submitBtn.disabled = false;
+        return;
+      }
+
+      var profileRes = await supabaseClient.from("profiles").insert({
+        id: newAuthUser.id, full_name: v.fullName, staff_id: v.staffId, email: v.email,
+        employment_type: v.employmentType, department: v.department, position: v.position,
+        role: "staff"
+      });
+      if (profileRes.error) {
+        toast(profileRes.error.message, "error");
+        if (submitBtn) submitBtn.disabled = false;
+        return;
+      }
+
+      // If the Supabase project requires email confirmation, signUp won't
+      // return an active session yet — send the person to sign in instead.
+      if (!signUpRes.data.session) {
+        toast("Account created. Check your email to confirm it, then sign in.");
+        location.hash = "#/login"; render();
+        return;
+      }
+
+      await refreshData();
+      authUser = newAuthUser;
+      currentUser = db.users.find(function (u) { return u.id === newAuthUser.id; }) || null;
       toast("Account created. Welcome to Multidigital Service Limited.");
       location.hash = "#/dashboard"; render();
     });
 
     var l = el("loginForm");
-    if (l) l.addEventListener("submit", function (e) {
+    if (l) l.addEventListener("submit", async function (e) {
       e.preventDefault();
       var v = readForm(l, { identifier: req("Email or staff ID"), password: req("Password") });
       if (!v) return;
-      var id = v.identifier.toLowerCase();
-      var user = db.users.find(function (u) { return u.email.toLowerCase() === id || u.staffId.toLowerCase() === id; });
-      if (!user || user.password !== v.password) { toast("Invalid credentials. Please try again.", "error"); return; }
-      setSession(user);
-      toast("Signed in as " + user.fullName + ".");
-      location.hash = user.role === "admin" ? "#/admin" : "#/dashboard";
+
+      var submitBtn = l.querySelector('button[type="submit"]');
+      if (submitBtn) submitBtn.disabled = true;
+
+      var email = v.identifier;
+      if (email.indexOf("@") === -1) {
+        var lookup = await supabaseClient.from("profiles").select("email").ilike("staff_id", v.identifier).maybeSingle();
+        if (lookup.error || !lookup.data) {
+          toast("Invalid credentials. Please try again.", "error");
+          if (submitBtn) submitBtn.disabled = false;
+          return;
+        }
+        email = lookup.data.email;
+      }
+
+      var signInRes = await supabaseClient.auth.signInWithPassword({ email: email, password: v.password });
+      if (signInRes.error || !signInRes.data.user) {
+        toast("Invalid credentials. Please try again.", "error");
+        if (submitBtn) submitBtn.disabled = false;
+        return;
+      }
+
+      authUser = signInRes.data.user;
+      await refreshData();
+      currentUser = db.users.find(function (u) { return u.id === authUser.id; }) || null;
+      if (!currentUser) {
+        toast("No staff profile is linked to this account.", "error");
+        if (submitBtn) submitBtn.disabled = false;
+        return;
+      }
+      toast("Signed in as " + currentUser.fullName + ".");
+      location.hash = currentUser.role === "admin" ? "#/admin" : "#/dashboard";
       render();
     });
 
     var fg = el("forgotForm");
-    if (fg) fg.addEventListener("submit", function (e) {
+    if (fg) fg.addEventListener("submit", async function (e) {
       e.preventDefault();
       var v = readForm(fg, { email: function (x) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x) ? "" : "Enter a valid email address."; } });
       if (!v) return;
+      await supabaseClient.auth.resetPasswordForEmail(v.email);
       toast("If that address is registered, reset instructions have been sent.");
       fg.reset();
     });
@@ -721,7 +784,26 @@
     if (t) t.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 
+  function loadingView() {
+    return '<div class="page"><div class="page-head"><p class="eyebrow">Please wait</p>' +
+      "<h1>Loading your attendance data&hellip;</h1></div></div>";
+  }
+
+  async function init() {
+    el("view").innerHTML = loadingView();
+    await refreshData();
+    if (dataError) {
+      toast("Could not reach the database: " + dataError, "error");
+    }
+    await refreshSessionUser();
+    render();
+  }
+
+  supabaseClient.auth.onAuthStateChange(function (event) {
+    if (event === "SIGNED_OUT") { authUser = null; currentUser = null; }
+  });
+
   if (PAGE === "app") window.addEventListener("hashchange", render);
   setInterval(function () { if (session()) renderChrome(); }, 30000);
-  render();
+  init();
 })();
