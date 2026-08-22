@@ -49,7 +49,7 @@
     eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7.5 11-7.5S23 12 23 12s-4 7.5-11 7.5S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>',
     eyeOff: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19.5C5 19.5 1 12 1 12a19.4 19.4 0 0 1 5.06-5.94M9.9 4.24A10.6 10.6 0 0 1 12 4.5c7 0 11 7.5 11 7.5a19.5 19.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'
   };
-  var NAV_ICON = { "Overview": ICON.grid, "Attendance Management": ICON.list, "My Dashboard": ICON.grid, "Dashboard": ICON.grid, "Attendance History": ICON.clock, "About Us": ICON.info, "Sign in": ICON.signin, "Register": ICON.register };
+  var NAV_ICON = { "Overview": ICON.grid, "Dashboard": ICON.grid, "Attendance History": ICON.clock };
 
   /* db is an in-memory cache of Supabase data, refreshed via refreshData().
      Views read synchronously from this cache; actions that change data
@@ -178,7 +178,7 @@
       var href = l[0].charAt(0) === "#" ? HOME + l[0] : l[0];
       var active = l[0].charAt(0) === "#" ? hash === l[0] : PAGE === "about";
       return '<a href="' + href + '" class="' + (active ? "active" : "") + '">' + (NAV_ICON[l[1]] || "") + '<span>' + l[1] + "</span></a>";
-    }).join("") + (u ? '<button type="button" class="nav-signout" id="navSignout">' + ICON.logout + '<span>Sign out</span></button>' : "");
+    }).join("") + (u ? '<button type="button" class="nav-signout" id="navSignout"><span>Sign out</span></button>' : "");
     el("nav").classList.remove("open");
     document.body.classList.remove("nav-open");
     el("navBackdrop").hidden = true;
