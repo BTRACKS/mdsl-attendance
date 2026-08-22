@@ -171,11 +171,16 @@
 
   function session() { return currentUser; }
 
-  async function doLogout() {
-    await supabaseClient.auth.signOut();
-    authUser = null; currentUser = null;
-    toast("You have been signed out.");
-    go("#/login");
+  async function doLogout(btn) {
+    setBtnLoading(btn, true);
+    try {
+      await supabaseClient.auth.signOut();
+      authUser = null; currentUser = null;
+      toast("You have been signed out.");
+      go("#/login");
+    } finally {
+      setBtnLoading(btn, false);
+    }
   }
 
   function record(userId, key) {
@@ -246,7 +251,7 @@
     syncHeaderHeight();
   }
 
-  el("logoutBtn").addEventListener("click", doLogout);
+  el("logoutBtn").addEventListener("click", function () { doLogout(el("logoutBtn")); });
 
   function openNav() {
     syncHeaderHeight();
@@ -266,7 +271,7 @@
 
   el("nav").addEventListener("click", function (e) {
     if (e.target.closest("#navSignout")) {
-      doLogout();
+      doLogout(el("navSignout"));
       return;
     }
     if (e.target.closest("a")) closeNav();
