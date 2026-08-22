@@ -170,6 +170,48 @@ img{max-width:100%;display:block}
 .field input:focus,.field select:focus{outline:none;border-color:var(--navy);box-shadow:0 0 0 4px rgba(18,58,107,.1)}
 .field .error{color:var(--danger);font-size:12px;font-weight:600;min-height:15px}
 .field.invalid input,.field.invalid select{border-color:var(--danger);box-shadow:0 0 0 4px var(--danger-soft)}
+
+/* custom select arrow — properly centered and never overlapping the border */
+.field select{
+  appearance:none;-webkit-appearance:none;-moz-appearance:none;
+  padding-right:40px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235b6577' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;
+  background-position:right 14px center;
+  background-size:16px 16px;
+  cursor:pointer;
+}
+.field select::-ms-expand{display:none}
+.field select:focus{
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23123a6b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+}
+
+/* password visibility toggle */
+.pw-wrap{position:relative;width:100%}
+.pw-wrap input{padding-right:44px}
+.pw-toggle{
+  position:absolute;top:50%;right:6px;transform:translateY(-50%);
+  display:flex;align-items:center;justify-content:center;
+  width:34px;height:34px;padding:0;border:0;background:transparent;
+  color:var(--ink-3);border-radius:8px;cursor:pointer;transition:color var(--t),background var(--t)
+}
+.pw-toggle svg{width:19px;height:19px}
+.pw-toggle:hover{color:var(--navy);background:var(--paper-3)}
+.pw-toggle:focus-visible{outline:2px solid var(--navy);outline-offset:1px}
+
+/* password strength indicator */
+.pw-strength{display:flex;align-items:center;gap:10px;margin-top:2px}
+.pw-strength-track{flex:1 1 auto;height:5px;border-radius:var(--radius-pill);background:var(--rule);overflow:hidden}
+.pw-strength-track i{display:block;height:100%;width:0;border-radius:inherit;transition:width var(--t),background var(--t)}
+.pw-strength-label{font-size:11.5px;font-weight:700;letter-spacing:.01em;color:var(--ink-3);flex:0 0 auto}
+.pw-strength-weak .pw-strength-track i{width:25%;background:var(--danger)}
+.pw-strength-weak .pw-strength-label{color:var(--danger)}
+.pw-strength-medium .pw-strength-track i{width:50%;background:var(--amber-deep)}
+.pw-strength-medium .pw-strength-label{color:var(--amber-deep)}
+.pw-strength-strong .pw-strength-track i{width:75%;background:#2f6fb0}
+.pw-strength-strong .pw-strength-label{color:#2f6fb0}
+.pw-strength-very-strong .pw-strength-track i{width:100%;background:var(--ok)}
+.pw-strength-very-strong .pw-strength-label{color:var(--ok)}
 .form-foot{margin-top:26px;display:flex;flex-direction:column;gap:16px}
 .form-alt{font-size:14px;color:var(--ink-3);text-align:center}
 .form-alt a{font-weight:700;color:var(--navy)}
@@ -433,6 +475,11 @@ td .sub{font-size:12.5px;color:var(--ink-4)}
   .auth-headline{margin:26px 0 14px}
   .auth-main{padding:28px 22px 36px}
   .auth-stats{margin-top:26px;grid-template-columns:1fr}
+}
+@media (max-width:600px){
+  .pw-toggle{width:38px;height:38px}
+  .pw-wrap input{padding-right:46px}
+  .field select{padding-right:38px;background-position:right 12px center}
 }
 @media (max-width:760px){
   .masthead-inner{padding:12px 18px;gap:12px;flex-wrap:nowrap}

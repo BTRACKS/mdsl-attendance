@@ -21,7 +21,9 @@
     else { location.href = "index.html" + hash; }
   }
 
-  var DEPARTMENTS = ["Media & Broadcast", "Technology", "Marketing", "Creative & Design", "Operations", "Finance", "Human Resources", "Sales"];
+  var DEPARTMENTS = ["Operations", "Media & Broadcast", "Technology", "Marketing", "Creative & Design", "Finance", "Human Resources", "Sales",
+    "Administration", "Finance & Accounting", "Information Technology", "Customer Service", "Sales & Marketing", "Procurement",
+    "Logistics", "Engineering", "Maintenance", "Quality Assurance", "Business Development", "Legal & Compliance", "Security", "Research & Development"];
   var POSITIONS_HINT = "e.g. Video Editor, Backend Engineer";
 
   /* ------------------------- icons ------------------------- */
@@ -43,7 +45,9 @@
     cap: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8.5 12 4l10 4.5-10 4.5z"/><path d="M6 10.8V16c0 1.7 2.7 3 6 3s6-1.3 6-3v-5.2"/></svg>',
     signin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>',
     register: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>',
-    logout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>'
+    logout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>',
+    eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7.5 11-7.5S23 12 23 12s-4 7.5-11 7.5S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>',
+    eyeOff: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19.5C5 19.5 1 12 1 12a19.4 19.4 0 0 1 5.06-5.94M9.9 4.24A10.6 10.6 0 0 1 12 4.5c7 0 11 7.5 11 7.5a19.5 19.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'
   };
   var NAV_ICON = { "Overview": ICON.grid, "Attendance Management": ICON.list, "My Dashboard": ICON.grid, "Dashboard": ICON.grid, "Attendance History": ICON.clock, "About Us": ICON.info, "Sign in": ICON.signin, "Register": ICON.register };
 
@@ -266,8 +270,8 @@
       selectField("employmentType", "Employment Type", ["Intern", "Staff"]) +
       selectField("department", "Department", DEPARTMENTS) +
       field("position", "Position / Role", "text", POSITIONS_HINT) +
-      field("password", "Password", "password", "Minimum 8 characters") +
-      field("confirmPassword", "Confirm Password", "password", "Re-enter password") +
+      passwordField("password", "Password", "Minimum 8 characters", { strength: true }) +
+      passwordField("confirmPassword", "Confirm Password", "Re-enter password") +
       '</div><div class="form-foot">' +
       '<button class="btn btn-primary btn-lg btn-block" type="submit">' + ICON.register + '<span>Create account</span></button>' +
       '<p class="form-alt">Already registered? <a class="auth-link" href="#/login">' + ICON.signin + '<span>Sign in instead</span></a></p>' +
@@ -282,7 +286,7 @@
       '<p class="auth-sub">Use your registered email address or staff ID.</p>' +
       '<form id="loginForm" novalidate><div class="form-grid">' +
       field("identifier", "Email or Staff ID", "text", "name@multidigital.com", true) +
-      field("password", "Password", "password", "Your password", true) +
+      passwordField("password", "Password", "Your password", { full: true }) +
       '</div><div class="form-foot">' +
       '<div class="inline-between"><a class="link-muted" href="#/forgot">Forgot password?</a>' +
       '<a class="link-muted auth-link" href="#/signup">' + ICON.register + '<span>Create an account</span></a></div>' +
@@ -323,6 +327,16 @@
       '<option value="">Select ' + label.toLowerCase() + "</option>" +
       options.map(function (o) { return '<option value="' + esc(o) + '">' + esc(o) + "</option>"; }).join("") +
       '</select><span class="error"></span></div>';
+  }
+  function passwordField(name, label, placeholder, opts) {
+    opts = opts || {};
+    return '<div class="field password-field' + (opts.full ? " full" : "") + '"><label for="f-' + name + '">' + label + "</label>" +
+      '<div class="pw-wrap">' +
+      '<input id="f-' + name + '" name="' + name + '" type="password" placeholder="' + esc(placeholder) + '" autocomplete="off" />' +
+      '<button type="button" class="pw-toggle" aria-label="Show password" aria-pressed="false">' + ICON.eye + "</button>" +
+      "</div>" +
+      (opts.strength ? '<div class="pw-strength" data-pw-strength hidden><span class="pw-strength-track"><i></i></span><span class="pw-strength-label"></span></div>' : "") +
+      '<span class="error"></span></div>';
   }
 
   /* ---------- staff dashboard ---------- */
@@ -666,6 +680,44 @@
   }
 
   function bindAuth() {
+    /* password visibility toggles */
+    Array.prototype.forEach.call(document.querySelectorAll(".pw-toggle"), function (btn) {
+      btn.addEventListener("click", function () {
+        var input = btn.previousElementSibling;
+        var showing = input.type === "text";
+        input.type = showing ? "password" : "text";
+        btn.innerHTML = showing ? ICON.eye : ICON.eyeOff;
+        btn.setAttribute("aria-label", showing ? "Show password" : "Hide password");
+        btn.setAttribute("aria-pressed", showing ? "false" : "true");
+      });
+    });
+
+    /* password strength indicator */
+    Array.prototype.forEach.call(document.querySelectorAll("[data-pw-strength]"), function (meter) {
+      var wrap = meter.closest(".field");
+      var input = wrap.querySelector("input");
+      var label = meter.querySelector(".pw-strength-label");
+      input.addEventListener("input", function () {
+        var val = input.value;
+        if (!val) { meter.hidden = true; meter.className = "pw-strength"; label.textContent = ""; return; }
+        var score = 0;
+        if (val.length >= 8) score++;
+        if (val.length >= 12) score++;
+        if (/[a-z]/.test(val)) score++;
+        if (/[A-Z]/.test(val)) score++;
+        if (/[0-9]/.test(val)) score++;
+        if (/[^A-Za-z0-9]/.test(val)) score++;
+        var level, text;
+        if (score <= 2) { level = "weak"; text = "Weak"; }
+        else if (score <= 3) { level = "medium"; text = "Medium"; }
+        else if (score <= 5) { level = "strong"; text = "Strong"; }
+        else { level = "very-strong"; text = "Very Strong"; }
+        meter.hidden = false;
+        meter.className = "pw-strength pw-strength-" + level;
+        label.textContent = text;
+      });
+    });
+
     var s = el("signupForm");
     if (s) s.addEventListener("submit", async function (e) {
       e.preventDefault();
