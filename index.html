@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Multidigital Service Limited | Internal Attendance Platform</title>
-<meta name="description" content="Internal attendance platform for Multidigital Service Limited staff: registration, daily morning and evening attendance, history and administrative monitoring." />
+<title>Multidigital Service Limited | E-Attendance Platform</title>
+<meta name="description" content="E-Attendance Platform for Multidigital Service Limited staff: registration, daily morning and evening attendance, history and administrative monitoring." />
 <link rel="icon" type="image/png" sizes="256x256" href="favicon.png" />
 <link rel="apple-touch-icon" href="favicon.png" />
 <meta name="theme-color" content="#123a6b" />
@@ -18,7 +18,7 @@
     <div class="masthead-inner">
       <a class="brand" href="#/dashboard">
         <img class="brand-logo" src="logo-mark.png" alt="Multidigital Service Limited" />
-        <span class="brand-text">Multidigital Service Limited<em>Attendance Platform</em></span>
+        <span class="brand-text">Multidigital Service Limited<em>E-Attendance Platform</em></span>
       </a>
       <nav class="nav" id="nav"></nav>
       <div class="masthead-right">
@@ -35,13 +35,48 @@
 
   <main id="view"></main>
 
+  <section class="faq" id="faqSection" hidden>
+    <div class="faq-inner">
+      <div class="faq-head">
+        <p class="eyebrow">Frequently Asked Questions</p>
+        <h2>Everything about the E-Attendance Platform</h2>
+        <p class="faq-lede">Short answers to the questions staff and administrators ask most.</p>
+      </div>
+      <div class="faq-list" id="faqList"></div>
+    </div>
+  </section>
+
   <footer class="footer" id="footer" hidden>
     <div class="footer-inner">
-      <div class="footer-brand">
-        <img src="logo-mark.png" alt="Multidigital Service Limited" />
-        <span>© <span id="year"></span> Multidigital Service Limited. Internal use only.</span>
+      <div class="footer-top">
+        <div class="footer-about">
+          <p class="footer-title">Multidigital Service Limited</p>
+          <p class="footer-copy">The E-Attendance Platform keeps daily resumption and closing times accurate, transparent and easy to review for every department.</p>
+        </div>
+        <nav class="footer-nav" aria-label="Footer">
+          <div>
+            <h3>Platform</h3>
+            <a href="#/dashboard">Dashboard</a>
+            <a href="#/history">Attendance History</a>
+            <a href="#/about">About Us</a>
+          </div>
+          <div>
+            <h3>Support</h3>
+            <button type="button" class="footer-link" data-scroll="faqSection">FAQ</button>
+            <a href="mailto:people@multidigital.com">people@multidigital.com</a>
+            <a href="#/forgot">Reset password</a>
+          </div>
+          <div>
+            <h3>Company</h3>
+            <span>Lagos, Nigeria</span>
+            <span>Mon – Fri, 8:00 – 17:00</span>
+          </div>
+        </nav>
       </div>
-      <span class="footer-note">Attendance records are final once submitted.</span>
+      <div class="footer-bottom">
+        <span>&copy; <span id="year"></span> Multidigital Service Limited. All rights reserved.</span>
+        <span class="footer-note">Attendance records are final once submitted.</span>
+      </div>
     </div>
   </footer>
 

@@ -1,4 +1,4 @@
-/* Multidigital Service Limited — Attendance Platform
+/* Multidigital Service Limited — E-Attendance Platform
    Standalone front-end app. Data persists in the browser (localStorage). */
 (function () {
   "use strict";
@@ -22,9 +22,14 @@
     alert: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
     activity: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',
     userCard: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><circle cx="8" cy="11" r="2.4"/><path d="M4.5 17c.6-1.7 2-2.6 3.5-2.6s2.9.9 3.5 2.6"/><line x1="14" y1="9" x2="19" y2="9"/><line x1="14" y1="13" x2="19" y2="13"/></svg>',
+    info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16.5"/><line x1="12" y1="7.6" x2="12.01" y2="7.6"/></svg>',
+    spark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/></svg>',
+    shield: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.4-3 7.7-7 9-4-1.3-7-4.6-7-9V6z"/><polyline points="9 12 11 14 15 10"/></svg>',
+    phone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><line x1="10.5" y1="18.5" x2="13.5" y2="18.5"/></svg>',
+    cap: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8.5 12 4l10 4.5-10 4.5z"/><path d="M6 10.8V16c0 1.7 2.7 3 6 3s6-1.3 6-3v-5.2"/></svg>',
     logout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>'
   };
-  var NAV_ICON = { "Overview": ICON.grid, "Attendance Management": ICON.list, "My Dashboard": ICON.grid, "Dashboard": ICON.grid, "Attendance History": ICON.clock };
+  var NAV_ICON = { "Overview": ICON.grid, "Attendance Management": ICON.list, "My Dashboard": ICON.grid, "Dashboard": ICON.grid, "Attendance History": ICON.clock, "About Us": ICON.info };
 
   function load() {
     try { return JSON.parse(localStorage.getItem(DB_KEY)) || seed(); }
@@ -135,13 +140,17 @@
   /* ------------------------- chrome ------------------------- */
   function renderChrome() {
     var u = session();
-    var head = el("masthead"), foot = el("footer");
-    head.hidden = !u; foot.hidden = !u;
+    var head = el("masthead"), foot = el("footer"), faq = el("faqSection");
+    var isAuthScreen = !u && (location.hash || "#/login").indexOf("#/about") !== 0;
+    head.hidden = !u; foot.hidden = isAuthScreen; faq.hidden = isAuthScreen;
+    renderFaq();
+    el("year").textContent = new Date().getFullYear();
     if (!u) return;
 
     var links = u.role === "admin"
       ? [["#/admin", "Overview"], ["#/admin/attendance", "Attendance Management"], ["#/dashboard", "My Dashboard"]]
       : [["#/dashboard", "Dashboard"], ["#/history", "Attendance History"]];
+    links = links.concat([["#/about", "About Us"]]);
     var hash = location.hash || "#/dashboard";
     el("nav").innerHTML = links.map(function (l) {
       return '<a href="' + l[0] + '" class="' + (hash === l[0] ? "active" : "") + '">' + (NAV_ICON[l[1]] || "") + '<span>' + l[1] + "</span></a>";
@@ -250,7 +259,7 @@
   }
 
   function loginView() {
-    return '<div class="auth">' + aside("The Multidigital Service Limited<br><span>attendance record.</span>",
+    return '<div class="auth">' + aside("Multidigital Service Limited<br><span>attendance record.</span>",
       "Sign in to submit your morning resumption and evening closing times, and to review your attendance history.") +
       '<div class="auth-main"><div class="auth-card">' +
       '<p class="eyebrow">Staff Sign In</p><h1>Welcome back</h1>' +
@@ -282,7 +291,7 @@
   function aside(headline, lede) {
     return '<div class="auth-aside"><a class="brand brand-lg" href="#/login">' +
       '<img class="brand-logo" src="logo-mark.png" alt="Multidigital Service Limited" />' +
-      '<span class="brand-text">Multidigital Service Limited<em>Attendance Platform</em></span></a>' +
+      '<span class="brand-text">Multidigital Service Limited<em>E-Attendance Platform</em></span></a>' +
       '<div><h2 class="auth-headline">' + headline + "</h2>" +
       '<p class="auth-lede">' + esc(lede) + "</p></div>" +
       '<div class="auth-stats"><div><span>Staff on record</span><b>' + db.users.filter(function (u) { return u.role !== "admin"; }).length +
@@ -499,6 +508,87 @@
     );
   }
 
+
+  /* ------------------------- FAQ ------------------------- */
+  var FAQS = [
+    ["What is the E-Attendance System?",
+     "The E-Attendance System is Multidigital Service Limited's internal platform for recording daily staff attendance. It replaces paper registers and spreadsheets with a single, time-stamped digital record."],
+    ["How does the E-Attendance System work?",
+     "Each member of staff signs in, submits a morning resumption time when the day begins and an evening closing time when it ends. Every submission is time-stamped and locked, so records stay accurate and final."],
+    ["Who can use the platform?",
+     "All Multidigital Service Limited personnel — interns and full staff across every department — plus administrators who monitor and report on attendance."],
+    ["How does attendance tracking work?",
+     "The platform captures two windows per working day: resumption and closing. Submitted entries cannot be edited or resubmitted, and every record is stored against your staff ID and department."],
+    ["Can administrators manage attendance records?",
+     "Yes. Administrators have an overview dashboard and a management view where records can be searched and filtered by staff, department, employment type and date."],
+    ["Is the platform accessible on mobile devices?",
+     "Yes. The interface is fully responsive and works on phones, tablets and desktops, so staff can log attendance from any device."],
+    ["How does the system help organizations manage attendance?",
+     "It removes manual record-keeping, gives leadership real-time visibility of punctuality and presence, and produces a reliable history for payroll, reviews and compliance."]
+  ];
+
+  function renderFaq() {
+    var list = el("faqList");
+    if (!list || list.getAttribute("data-ready") === "1") return;
+    list.innerHTML = FAQS.map(function (f, i) {
+      return '<div class="faq-item"><button class="faq-q" type="button" aria-expanded="false" data-faq="' + i + '">' +
+        "<span>" + esc(f[0]) + '</span><span class="faq-icon" aria-hidden="true"></span></button>' +
+        '<div class="faq-a"><div><p>' + esc(f[1]) + "</p></div></div></div>";
+    }).join("");
+    list.setAttribute("data-ready", "1");
+    list.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-faq]");
+      if (!b) return;
+      var item = b.parentNode, open = item.classList.contains("open");
+      Array.prototype.forEach.call(list.querySelectorAll(".faq-item"), function (it) {
+        it.classList.remove("open");
+        it.querySelector(".faq-q").setAttribute("aria-expanded", "false");
+      });
+      if (!open) { item.classList.add("open"); b.setAttribute("aria-expanded", "true"); }
+    });
+  }
+
+  /* ------------------------- about ------------------------- */
+  function aboutView() {
+    function card(icon, title, body) {
+      return '<div class="about-card"><span class="about-ic">' + icon + "</span><h3>" + title + "</h3><p>" + body + "</p></div>";
+    }
+    return '<div class="page about"><div class="page-head"><p class="eyebrow">About Us</p>' +
+      "<h1>The E-Attendance Platform by Multidigital Service Limited.</h1>" +
+      '<p class="dateline">A purpose-built internal system for accurate, transparent daily attendance.</p></div>' +
+
+      '<section class="about-hero"><div><h2>What the system is</h2>' +
+      "<p>The E-Attendance Platform is Multidigital Service Limited's internal system for capturing, storing and reviewing staff attendance. " +
+      "Every member of staff records a morning resumption time and an evening closing time, and each entry is time-stamped and locked the moment it is submitted.</p>" +
+      "<p>It gives the organisation one trusted source of truth for who resumed, when they resumed and when they closed — across every department.</p></div>" +
+      '<div class="about-stats"><div><span>Daily windows</span><b>2</b></div><div><span>Records editable</span><b>No</b></div>' +
+      "<div><span>Departments covered</span><b>" + DEPARTMENTS.length + "</b></div></div></section>" +
+
+      '<section class="section"><div class="section-head"><h2>What it does</h2></div><div class="about-grid">' +
+      card(ICON.clock, "Two-window logging", "Staff submit resumption and closing times from any device, with the exact time captured automatically.") +
+      card(ICON.shield, "Tamper-proof records", "Submitted entries are locked and cannot be edited or resubmitted, keeping the register credible.") +
+      card(ICON.users, "Departmental visibility", "Administrators can search and filter attendance by staff, department, employment type and date.") +
+      card(ICON.activity, "Live overview", "Leadership sees presence and punctuality as the day unfolds instead of waiting for month-end reports.") +
+      "</div></section>" +
+
+      '<section class="section"><div class="section-head"><h2>The problem it solves</h2></div>' +
+      '<div class="about-split"><div class="about-panel"><h3>Before</h3><ul>' +
+      "<li>Paper registers and scattered spreadsheets</li><li>Times written in after the fact</li>" +
+      "<li>No reliable history for payroll or reviews</li><li>Manual collation at the end of every month</li></ul></div>" +
+      '<div class="about-panel accent"><h3>With E-Attendance</h3><ul>' +
+      "<li>One digital register for the whole company</li><li>Time-stamped, final submissions</li>" +
+      "<li>Instant history per staff member</li><li>Reports ready the moment they are needed</li></ul></div></div></section>" +
+
+      '<section class="section"><div class="section-head"><h2>Our purpose</h2></div>' +
+      '<p class="about-purpose">We built this platform to make attendance effortless for staff and dependable for management — accurate records, fair reporting, and a culture of punctuality that runs on trust rather than paperwork.</p></section>' +
+
+      '<section class="creator"><div class="creator-card">' +
+      '<span class="creator-ic">' + ICON.cap + "</span>" +
+      '<div><p class="creator-kicker">Created by</p><p class="creator-name">Oladapo Salami</p>' +
+      '<p class="creator-role">Computer Science Intern, University of Lagos</p></div></div></section>' +
+      "</div>";
+  }
+
   /* ------------------------- router ------------------------- */
   function render() {
     db = load();
@@ -507,7 +597,8 @@
     var view = el("view");
 
     if (!u) {
-      if (hash === "#/signup") view.innerHTML = signupView();
+      if (hash === "#/about") view.innerHTML = aboutView();
+      else if (hash === "#/signup") view.innerHTML = signupView();
       else if (hash === "#/forgot") view.innerHTML = forgotView();
       else { if (hash !== "#/login") { location.hash = "#/login"; } view.innerHTML = loginView(); }
       renderChrome(); bindAuth(); window.scrollTo(0, 0); return;
@@ -516,6 +607,8 @@
     if (hash === "#/admin" || hash === "#/admin/attendance") {
       if (u.role !== "admin") { location.hash = "#/dashboard"; return; }
       view.innerHTML = hash === "#/admin" ? adminOverview() : adminManagement();
+    } else if (hash === "#/about") {
+      view.innerHTML = aboutView();
     } else if (hash === "#/history") {
       view.innerHTML = historyView(u);
     } else {
@@ -599,6 +692,13 @@
       fg.reset();
     });
   }
+
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-scroll]");
+    if (!b) return;
+    var t = el(b.getAttribute("data-scroll"));
+    if (t) t.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
 
   window.addEventListener("hashchange", render);
   setInterval(function () { if (session()) renderChrome(); }, 30000);
