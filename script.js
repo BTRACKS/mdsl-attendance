@@ -141,27 +141,35 @@
   function renderChrome() {
     var u = session();
     var head = el("masthead"), foot = el("footer"), faq = el("faqSection");
-    var isAuthScreen = !u && (location.hash || "#/login").indexOf("#/about") !== 0;
-    head.hidden = !u; foot.hidden = isAuthScreen; faq.hidden = isAuthScreen;
+    /* Chrome (header, FAQ, footer) is shown on every page, including the
+       login / registration screens and the standalone About Us page. */
+    head.hidden = false; foot.hidden = false; faq.hidden = false;
     renderFaq();
     el("year").textContent = new Date().getFullYear();
-    if (!u) return;
 
-    var links = u.role === "admin"
-      ? [["#/admin", "Overview"], ["#/admin/attendance", "Attendance Management"], ["#/dashboard", "My Dashboard"]]
-      : [["#/dashboard", "Dashboard"], ["#/history", "Attendance History"]];
-    links = links.concat([["#/about", "About Us"]]);
-    var hash = location.hash || "#/dashboard";
+    var brand = document.querySelector(".masthead .brand");
+    if (brand) brand.setAttribute("href", u ? "#/dashboard" : "#/login");
+    el("logoutBtn").hidden = !u;
+    document.body.classList.toggle("public-chrome", !u);
+
+    var links;
+    if (!u) {
+      links = [["#/login", "Sign in"], ["#/signup", "Register"], ["#/about", "About Us"]];
+    } else {
+      links = u.role === "admin"
+        ? [["#/admin", "Overview"], ["#/admin/attendance", "Attendance Management"], ["#/dashboard", "My Dashboard"]]
+        : [["#/dashboard", "Dashboard"], ["#/history", "Attendance History"]];
+      links = links.concat([["#/about", "About Us"]]);
+    }
+    var hash = location.hash || (u ? "#/dashboard" : "#/login");
     el("nav").innerHTML = links.map(function (l) {
       return '<a href="' + l[0] + '" class="' + (hash === l[0] ? "active" : "") + '">' + (NAV_ICON[l[1]] || "") + '<span>' + l[1] + "</span></a>";
-    }).join("") + '<button type="button" class="nav-signout" id="navSignout">' + ICON.logout + '<span>Sign out</span></button>';
+    }).join("") + (u ? '<button type="button" class="nav-signout" id="navSignout">' + ICON.logout + '<span>Sign out</span></button>' : "");
     el("nav").classList.remove("open");
     document.body.classList.remove("nav-open");
     el("navBackdrop").hidden = true;
     el("navBackdrop").classList.remove("show");
 
-    var now = new Date();
-    el("year").textContent = now.getFullYear();
     syncHeaderHeight();
   }
 
