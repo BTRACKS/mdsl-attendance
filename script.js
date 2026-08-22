@@ -338,7 +338,7 @@
       '<form id="signupForm" novalidate><div class="form-grid">' +
       field("fullName", "Full Name", "text", "Adaeze Okonkwo") +
       field("staffId", "Staff ID", "text", "MD-0123") +
-      field("email", "Email Address", "email", "name@multidigital.com", true) +
+      field("email", "Email Address", "email", "name@multidigitalng.com", true) +
       selectField("employmentType", "Employment Type", ["Intern", "Staff"]) +
       selectField("department", "Department", DEPARTMENTS) +
       field("position", "Position / Role", "text", POSITIONS_HINT) +
@@ -357,7 +357,7 @@
       '<p class="eyebrow">Staff Sign In</p><h1>Welcome back</h1>' +
       '<p class="auth-sub">Use your registered email address or staff ID.</p>' +
       '<form id="loginForm" novalidate><div class="form-grid">' +
-      field("identifier", "Email or Staff ID", "text", "name@multidigital.com", true) +
+      field("identifier", "Email or Staff ID", "text", "name@multidigitalng.com", true) +
       passwordField("password", "Password", "Your password", { full: true }) +
       '</div><div class="form-foot">' +
       '<div class="inline-between"><a class="link-muted" href="#/forgot">Forgot password?</a>' +
@@ -374,7 +374,7 @@
       '<p class="eyebrow">Account Recovery</p><h1>Forgot password</h1>' +
       '<p class="auth-sub">Reset instructions are sent to your registered work email.</p>' +
       '<form id="forgotForm" novalidate><div class="form-grid">' +
-      field("email", "Email Address", "email", "name@multidigital.com", true) +
+      field("email", "Email Address", "email", "name@multidigitalng.com", true) +
       '</div><div class="form-foot"><button class="btn btn-dark btn-lg btn-block" type="submit">Send reset link</button>' +
       '<p class="form-alt"><a class="auth-link" href="#/login">' + ICON.signin + '<span>Back to sign in</span></a></p></div></form></div></div></div>';
   }
