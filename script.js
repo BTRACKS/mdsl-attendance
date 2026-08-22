@@ -4,6 +4,14 @@
   "use strict";
 
   /* ------------------------- storage ------------------------- */
+  var PAGE = (document.body.getAttribute("data-page") || "app");
+  var HOME = PAGE === "app" ? "" : "index.html";
+  var ABOUT_URL = PAGE === "app" ? "about.html" : "about.html";
+  function go(hash) {
+    if (PAGE === "app") { location.hash = hash; render(); }
+    else { location.href = "index.html" + hash; }
+  }
+
   var DB_KEY = "multidigital.attendance.v1";
   var SESSION_KEY = "multidigital.session.v1";
 
@@ -148,22 +156,25 @@
     el("year").textContent = new Date().getFullYear();
 
     var brand = document.querySelector(".masthead .brand");
-    if (brand) brand.setAttribute("href", u ? "#/dashboard" : "#/login");
+    if (brand) brand.setAttribute("href", HOME + (u ? "#/dashboard" : "#/login"));
     el("logoutBtn").hidden = !u;
     document.body.classList.toggle("public-chrome", !u);
 
     var links;
     if (!u) {
-      links = [["#/login", "Sign in"], ["#/signup", "Register"], ["#/about", "About Us"]];
+      links = [["#/login", "Sign in"], ["#/signup", "Register"]];
     } else {
       links = u.role === "admin"
         ? [["#/admin", "Overview"], ["#/admin/attendance", "Attendance Management"], ["#/dashboard", "My Dashboard"]]
         : [["#/dashboard", "Dashboard"], ["#/history", "Attendance History"]];
-      links = links.concat([["#/about", "About Us"]]);
+
     }
-    var hash = location.hash || (u ? "#/dashboard" : "#/login");
+    var hash = PAGE === "about" ? "" : (location.hash || (u ? "#/dashboard" : "#/login"));
+    links = links.concat([[ABOUT_URL, "About Us"]]);
     el("nav").innerHTML = links.map(function (l) {
-      return '<a href="' + l[0] + '" class="' + (hash === l[0] ? "active" : "") + '">' + (NAV_ICON[l[1]] || "") + '<span>' + l[1] + "</span></a>";
+      var href = l[0].charAt(0) === "#" ? HOME + l[0] : l[0];
+      var active = l[0].charAt(0) === "#" ? hash === l[0] : PAGE === "about";
+      return '<a href="' + href + '" class="' + (active ? "active" : "") + '">' + (NAV_ICON[l[1]] || "") + '<span>' + l[1] + "</span></a>";
     }).join("") + (u ? '<button type="button" class="nav-signout" id="navSignout">' + ICON.logout + '<span>Sign out</span></button>' : "");
     el("nav").classList.remove("open");
     document.body.classList.remove("nav-open");
@@ -174,7 +185,7 @@
   }
 
   el("logoutBtn").addEventListener("click", function () {
-    setSession(null); location.hash = "#/login"; toast("You have been signed out."); render();
+    setSession(null); toast("You have been signed out."); go("#/login");
   });
 
   function openNav() {
@@ -195,7 +206,7 @@
 
   el("nav").addEventListener("click", function (e) {
     if (e.target.closest("#navSignout")) {
-      setSession(null); location.hash = "#/login"; toast("You have been signed out."); render();
+      setSession(null); toast("You have been signed out."); go("#/login");
       return;
     }
     if (e.target.closest("a")) closeNav();
@@ -604,9 +615,11 @@
     var hash = location.hash || (u ? "#/dashboard" : "#/login");
     var view = el("view");
 
+    if (PAGE === "about") { view.innerHTML = aboutView(); renderChrome(); return; }
+    if (hash === "#/about") { location.replace("about.html"); return; }
+
     if (!u) {
-      if (hash === "#/about") view.innerHTML = aboutView();
-      else if (hash === "#/signup") view.innerHTML = signupView();
+      if (hash === "#/signup") view.innerHTML = signupView();
       else if (hash === "#/forgot") view.innerHTML = forgotView();
       else { if (hash !== "#/login") { location.hash = "#/login"; } view.innerHTML = loginView(); }
       renderChrome(); bindAuth(); window.scrollTo(0, 0); return;
@@ -615,8 +628,6 @@
     if (hash === "#/admin" || hash === "#/admin/attendance") {
       if (u.role !== "admin") { location.hash = "#/dashboard"; return; }
       view.innerHTML = hash === "#/admin" ? adminOverview() : adminManagement();
-    } else if (hash === "#/about") {
-      view.innerHTML = aboutView();
     } else if (hash === "#/history") {
       view.innerHTML = historyView(u);
     } else {
@@ -708,7 +719,7 @@
     if (t) t.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 
-  window.addEventListener("hashchange", render);
+  if (PAGE === "app") window.addEventListener("hashchange", render);
   setInterval(function () { if (session()) renderChrome(); }, 30000);
   render();
 })();

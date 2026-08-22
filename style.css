@@ -503,3 +503,28 @@ body.public-chrome .masthead .btn-dark{display:none}
 @media (max-width:760px){
   .auth{min-height:0;padding:20px 16px 32px}
 }
+
+/* ---------- Maintenance page ---------- */
+body.maintenance-page{background:var(--gradient-hero);min-height:100vh}
+.maint{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:40px 20px}
+.maint-card{
+  width:100%;max-width:760px;background:var(--paper);border:1px solid var(--rule);
+  border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);padding:44px;text-align:center;overflow:hidden
+}
+.maint-brand{display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:26px;text-align:left}
+.maint-brand .brand-text{display:flex;flex-direction:column;font-weight:800;font-size:14.5px;color:var(--navy);letter-spacing:-.01em}
+.maint-brand .brand-text em{font-style:normal;font-weight:500;font-size:12px;color:var(--ink-4)}
+.maint-card h1{font-size:clamp(28px,5vw,42px);margin-bottom:14px}
+.maint-lede{color:var(--ink-3);font-size:16px;max-width:56ch;margin:0 auto}
+.maint-points{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:32px 0 8px;text-align:left
+}
+.maint-points>div{background:var(--paper-2);border:1px solid var(--rule);border-radius:var(--radius);padding:16px}
+.maint-points h3{font-size:13px;margin-bottom:6px;color:var(--navy)}
+.maint-points p{font-size:13.5px;color:var(--ink-3);word-break:break-word}
+.maint-points a{color:var(--navy);font-weight:600}
+.maint-foot{margin-top:26px;font-size:12.5px;color:var(--ink-4)}
+@media (max-width:760px){
+  .maint-card{padding:26px 20px}
+  .maint-points{grid-template-columns:1fr}
+}
