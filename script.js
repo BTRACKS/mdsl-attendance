@@ -290,7 +290,7 @@
       '</div><div class="form-foot">' +
       '<div class="inline-between"><a class="link-muted" href="#/forgot">Forgot password?</a>' +
       '<a class="link-muted auth-link" href="#/signup">' + ICON.register + '<span>Create an account</span></a></div>' +
-      '<button class="btn btn-primary btn-lg btn-block" type="submit">' + ICON.signin + '<span>Sign in</span></button>' +
+      '<button class="btn btn-primary btn-lg btn-block" type="submit"><span>Sign in</span></button>' +
       "</div></form>" +
       "</div></div></div>";
   }
