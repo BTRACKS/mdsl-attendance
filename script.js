@@ -72,13 +72,18 @@
   }
 
   async function refreshData() {
-    dataError = null;
-    var profilesRes = await supabaseClient.from("profiles").select("*");
-    var attendanceRes = await supabaseClient.from("attendance").select("*");
-    if (profilesRes.error) dataError = profilesRes.error.message;
-    if (attendanceRes.error) dataError = attendanceRes.error.message;
-    db.users = (profilesRes.data || []).map(mapProfile);
-    db.attendance = (attendanceRes.data || []).map(mapAttendance);
+    pageLoader.show();
+    try {
+      dataError = null;
+      var profilesRes = await supabaseClient.from("profiles").select("*");
+      var attendanceRes = await supabaseClient.from("attendance").select("*");
+      if (profilesRes.error) dataError = profilesRes.error.message;
+      if (attendanceRes.error) dataError = attendanceRes.error.message;
+      db.users = (profilesRes.data || []).map(mapProfile);
+      db.attendance = (attendanceRes.data || []).map(mapAttendance);
+    } finally {
+      pageLoader.hide();
+    }
   }
 
   async function refreshSessionUser() {
@@ -109,6 +114,60 @@
     return name.split(/\s+/).filter(Boolean).slice(0, 2).map(function (w) { return w[0]; }).join("").toUpperCase();
   }
   function el(id) { return document.getElementById(id); }
+
+  /* ------------------------- loading UI ------------------------- */
+  /* Reusable top-of-page progress bar. Every refreshData() call routes
+     through show()/hide(), so any screen that fetches data gets the same
+     indicator automatically — no per-page loader markup needed.
+     A short delay-in avoids flashing on fast requests, and a minimum
+     visible time avoids the bar blinking on and off for quick ones. */
+  function makeLoader(node, delayMs, minVisibleMs) {
+    var showTimer = null, shownAt = null, pending = 0;
+    function reveal() {
+      showTimer = null;
+      node.hidden = false;
+      requestAnimationFrame(function () { node.classList.add("visible"); });
+      shownAt = Date.now();
+    }
+    return {
+      show: function () {
+        pending++;
+        if (shownAt || showTimer) return;
+        showTimer = setTimeout(reveal, delayMs);
+      },
+      hide: function () {
+        pending = Math.max(0, pending - 1);
+        if (pending > 0) return;
+        if (showTimer) { clearTimeout(showTimer); showTimer = null; return; }
+        if (!shownAt) return;
+        var wait = Math.max(0, minVisibleMs - (Date.now() - shownAt));
+        setTimeout(function () {
+          node.classList.remove("visible");
+          setTimeout(function () { node.hidden = true; }, 200);
+          shownAt = null;
+        }, wait);
+      }
+    };
+  }
+  var pageLoader = makeLoader(el("topLoader"), 150, 300);
+
+  /* Reusable button-loading toggle: swaps the button's content for a
+     centered spinner (keeping the button's size/label markup intact) and
+     disables it, so it can never be double-submitted or left stuck. */
+  function setBtnLoading(btn, loading) {
+    if (!btn) return;
+    if (loading) {
+      if (btn.dataset.loadingHtml === undefined) btn.dataset.loadingHtml = btn.innerHTML;
+      btn.disabled = true;
+      btn.classList.add("is-loading");
+      var light = btn.classList.contains("btn-dark") ? " spinner-light" : "";
+      btn.insertAdjacentHTML("beforeend", '<span class="spinner' + light + '" aria-hidden="true"></span>');
+    } else {
+      btn.disabled = false;
+      btn.classList.remove("is-loading");
+      if (btn.dataset.loadingHtml !== undefined) { btn.innerHTML = btn.dataset.loadingHtml; delete btn.dataset.loadingHtml; }
+    }
+  }
 
   function session() { return currentUser; }
 
@@ -737,18 +796,18 @@
       }
 
       var submitBtn = s.querySelector('button[type="submit"]');
-      if (submitBtn) submitBtn.disabled = true;
+      setBtnLoading(submitBtn, true);
 
       var signUpRes = await supabaseClient.auth.signUp({ email: v.email, password: v.password });
       if (signUpRes.error) {
         toast(signUpRes.error.message, "error");
-        if (submitBtn) submitBtn.disabled = false;
+        setBtnLoading(submitBtn, false);
         return;
       }
       var newAuthUser = signUpRes.data.user;
       if (!newAuthUser) {
         toast("Something went wrong creating your account. Please try again.", "error");
-        if (submitBtn) submitBtn.disabled = false;
+        setBtnLoading(submitBtn, false);
         return;
       }
 
@@ -759,7 +818,7 @@
       });
       if (profileRes.error) {
         toast(profileRes.error.message, "error");
-        if (submitBtn) submitBtn.disabled = false;
+        setBtnLoading(submitBtn, false);
         return;
       }
 
@@ -785,14 +844,14 @@
       if (!v) return;
 
       var submitBtn = l.querySelector('button[type="submit"]');
-      if (submitBtn) submitBtn.disabled = true;
+      setBtnLoading(submitBtn, true);
 
       var email = v.identifier;
       if (email.indexOf("@") === -1) {
         var lookup = await supabaseClient.from("profiles").select("email").ilike("staff_id", v.identifier).maybeSingle();
         if (lookup.error || !lookup.data) {
           toast("Invalid credentials. Please try again.", "error");
-          if (submitBtn) submitBtn.disabled = false;
+          setBtnLoading(submitBtn, false);
           return;
         }
         email = lookup.data.email;
@@ -801,7 +860,7 @@
       var signInRes = await supabaseClient.auth.signInWithPassword({ email: email, password: v.password });
       if (signInRes.error || !signInRes.data.user) {
         toast("Invalid credentials. Please try again.", "error");
-        if (submitBtn) submitBtn.disabled = false;
+        setBtnLoading(submitBtn, false);
         return;
       }
 
@@ -810,7 +869,7 @@
       currentUser = db.users.find(function (u) { return u.id === authUser.id; }) || null;
       if (!currentUser) {
         toast("No staff profile is linked to this account.", "error");
-        if (submitBtn) submitBtn.disabled = false;
+        setBtnLoading(submitBtn, false);
         return;
       }
       toast("Signed in as " + currentUser.fullName + ".");
@@ -823,7 +882,10 @@
       e.preventDefault();
       var v = readForm(fg, { email: function (x) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x) ? "" : "Enter a valid email address."; } });
       if (!v) return;
+      var submitBtn = fg.querySelector('button[type="submit"]');
+      setBtnLoading(submitBtn, true);
       await supabaseClient.auth.resetPasswordForEmail(v.email);
+      setBtnLoading(submitBtn, false);
       toast("If that address is registered, reset instructions have been sent.");
       fg.reset();
     });
@@ -837,8 +899,8 @@
   });
 
   function loadingView() {
-    return '<div class="page"><div class="page-head"><p class="eyebrow">Please wait</p>' +
-      "<h1>Loading your attendance data&hellip;</h1></div></div>";
+    return '<div class="page-loader"><span class="spinner spinner-lg" aria-hidden="true"></span>' +
+      "<p>Loading your attendance data&hellip;</p></div>";
   }
 
   async function init() {
