@@ -4,8 +4,8 @@
   "use strict";
 
   /* ------------------------- Supabase ------------------------- */
-  var SUPABASE_URL = "PASTE_YOUR_SUPABASE_PROJECT_URL_HERE";
-  var SUPABASE_PUBLISHABLE_KEY = "PASTE_YOUR_SUPABASE_PUBLISHABLE_KEY_HERE";
+  var SUPABASE_URL = "https://wdrgcavxwamwqgxkdscn.supabase.co";
+  var SUPABASE_PUBLISHABLE_KEY = "sb_publishable_XlL1WvosmoBvl3vttrT-xw_nVvtMrQo";
 
   var supabaseClient = window.supabase.createClient(
     SUPABASE_URL,
