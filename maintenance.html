@@ -3,9 +3,8 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>We'll Be Back Soon | Multidigital Service Limited</title>
-<meta name="description" content="The Multidigital Service Limited E-Attendance Platform is temporarily undergoing scheduled maintenance. Please check back shortly." />
-<meta name="robots" content="noindex" />
+<title>Scheduled Maintenance | Multidigital Service Limited E-Attendance Platform</title>
+<meta name="description" content="The Multidigital Service Limited E-Attendance Platform is temporarily unavailable for scheduled maintenance." />
 <link rel="icon" type="image/png" sizes="256x256" href="favicon.png" />
 <link rel="apple-touch-icon" href="favicon.png" />
 <meta name="theme-color" content="#123a6b" />
@@ -18,29 +17,38 @@
   <main class="maint">
     <div class="maint-card">
       <div class="maint-brand">
-        <img class="brand-logo" src="logo-mark.png" alt="Multidigital Service Limited" />
         <span class="brand-text">Multidigital Service Limited<em>E-Attendance Platform</em></span>
       </div>
-      <p class="eyebrow">Scheduled maintenance</p>
-      <h1>We&rsquo;ll Be Back Soon</h1>
-      <p class="maint-lede">We&rsquo;re currently performing scheduled maintenance to improve our services. Please check back shortly. Thank you for your patience and understanding.</p>
+      <p class="eyebrow">Scheduled Maintenance</p>
+      <h1>We are carrying out essential maintenance</h1>
+      <p class="maint-lede">The E-Attendance Platform is temporarily unavailable while we complete scheduled updates. Attendance records already submitted are safe and unchanged.</p>
       <div class="maint-points">
         <div>
-          <h3>Why you&rsquo;re seeing this</h3>
-          <p>The platform is temporarily unavailable while we carry out planned updates.</p>
+          <h3>What is happening</h3>
+          <p>System updates and record verification are in progress.</p>
         </div>
         <div>
-          <h3>What happens next</h3>
-          <p>Attendance records are safe and the service will be available again soon.</p>
+          <h3>What you should do</h3>
+          <p>Please try again shortly. Attendance windows are not affected.</p>
         </div>
         <div>
-          <h3>Need help now?</h3>
+          <h3>Need help?</h3>
           <p><a href="mailto:info@multidigitalng.com">info@multidigitalng.com</a></p>
         </div>
       </div>
-      <p class="maint-foot">&copy; <span id="maintYear">2026</span> Multidigital Service Limited. All rights reserved.</p>
+      <div class="modal-actions" style="justify-content:center;margin-top:26px">
+        <a class="btn btn-primary auth-link" href="index.html#/login">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+          <span>Sign in</span>
+        </a>
+        <a class="btn btn-ghost auth-link" href="index.html#/signup">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+          <span>Register</span>
+        </a>
+      </div>
+      <p class="maint-foot">&copy; <span id="year"></span> Multidigital Service Limited. All rights reserved.</p>
     </div>
   </main>
-  <script>document.getElementById("maintYear").textContent = new Date().getFullYear();</script>
+  <script>document.getElementById("year").textContent = new Date().getFullYear();</script>
 </body>
 </html>

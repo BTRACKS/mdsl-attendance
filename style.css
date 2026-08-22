@@ -528,3 +528,17 @@ body.maintenance-page{background:var(--gradient-hero);min-height:100vh}
   .maint-card{padding:26px 20px}
   .maint-points{grid-template-columns:1fr}
 }
+
+/* ---------- Logo-free brand + auth action icons ---------- */
+.brand{gap:0}
+.brand-logo{display:none}
+.auth-aside .brand{padding:10px 18px}
+.auth-link{display:inline-flex;align-items:center;gap:8px}
+.auth-link svg{width:15px;height:15px;flex:0 0 auto}
+.btn svg{width:16px;height:16px;flex:0 0 auto}
+.btn-lg svg{width:18px;height:18px}
+.nav a svg{width:15px;height:15px;flex:0 0 auto}
+@media (max-width:480px){
+  .btn-lg{padding:14px 18px}
+  .auth-link{flex-wrap:nowrap}
+}

@@ -35,9 +35,11 @@
     shield: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.4-3 7.7-7 9-4-1.3-7-4.6-7-9V6z"/><polyline points="9 12 11 14 15 10"/></svg>',
     phone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><line x1="10.5" y1="18.5" x2="13.5" y2="18.5"/></svg>',
     cap: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8.5 12 4l10 4.5-10 4.5z"/><path d="M6 10.8V16c0 1.7 2.7 3 6 3s6-1.3 6-3v-5.2"/></svg>',
+    signin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>',
+    register: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>',
     logout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>'
   };
-  var NAV_ICON = { "Overview": ICON.grid, "Attendance Management": ICON.list, "My Dashboard": ICON.grid, "Dashboard": ICON.grid, "Attendance History": ICON.clock, "About Us": ICON.info };
+  var NAV_ICON = { "Overview": ICON.grid, "Attendance Management": ICON.list, "My Dashboard": ICON.grid, "Dashboard": ICON.grid, "Attendance History": ICON.clock, "About Us": ICON.info, "Sign in": ICON.signin, "Register": ICON.register };
 
   function load() {
     try { return JSON.parse(localStorage.getItem(DB_KEY)) || seed(); }
@@ -272,8 +274,8 @@
       field("password", "Password", "password", "Minimum 8 characters") +
       field("confirmPassword", "Confirm Password", "password", "Re-enter password") +
       '</div><div class="form-foot">' +
-      '<button class="btn btn-primary btn-lg btn-block" type="submit">Create account</button>' +
-      '<p class="form-alt">Already registered? <a href="#/login">Sign in instead</a></p>' +
+      '<button class="btn btn-primary btn-lg btn-block" type="submit">' + ICON.register + '<span>Create account</span></button>' +
+      '<p class="form-alt">Already registered? <a class="auth-link" href="#/login">' + ICON.signin + '<span>Sign in instead</span></a></p>' +
       "</div></form></div></div></div>";
   }
 
@@ -288,8 +290,8 @@
       field("password", "Password", "password", "Your password", true) +
       '</div><div class="form-foot">' +
       '<div class="inline-between"><a class="link-muted" href="#/forgot">Forgot password?</a>' +
-      '<a class="link-muted" href="#/signup">Create an account</a></div>' +
-      '<button class="btn btn-primary btn-lg btn-block" type="submit">Log in</button>' +
+      '<a class="link-muted auth-link" href="#/signup">' + ICON.register + '<span>Create an account</span></a></div>' +
+      '<button class="btn btn-primary btn-lg btn-block" type="submit">' + ICON.signin + '<span>Sign in</span></button>' +
       "</div></form>" +
       '<div class="hint"><b>Demo access</b> — Administrator: admin@multidigital.com / Admin123! · Staff: MD-0102 / Password1!</div>' +
       "</div></div></div>";
@@ -304,12 +306,11 @@
       '<form id="forgotForm" novalidate><div class="form-grid">' +
       field("email", "Email Address", "email", "name@multidigital.com", true) +
       '</div><div class="form-foot"><button class="btn btn-dark btn-lg btn-block" type="submit">Send reset link</button>' +
-      '<p class="form-alt"><a href="#/login">Back to sign in</a></p></div></form></div></div></div>';
+      '<p class="form-alt"><a class="auth-link" href="#/login">' + ICON.signin + '<span>Back to sign in</span></a></p></div></form></div></div></div>';
   }
 
   function aside(headline, lede) {
     return '<div class="auth-aside"><a class="brand brand-lg" href="#/login">' +
-      '<img class="brand-logo" src="logo-mark.png" alt="Multidigital Service Limited" />' +
       '<span class="brand-text">Multidigital Service Limited<em>E-Attendance Platform</em></span></a>' +
       '<div><h2 class="auth-headline">' + headline + "</h2>" +
       '<p class="auth-lede">' + esc(lede) + "</p></div>" +
