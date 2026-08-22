@@ -110,32 +110,37 @@ img{max-width:100%;display:block}
 .nav.open ~ .masthead-right .menu-toggle span:nth-child(2){opacity:0}
 .nav.open ~ .masthead-right .menu-toggle span:nth-child(3){transform:translateY(-6px) rotate(-45deg)}
 /* ---------- Loading ---------- */
-@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 
-/* Reusable rolling spinner — a soft comet-tail ring that sweeps a full,
-   continuous 360°. Default suits light/amber backgrounds (btn-primary);
-   .spinner-light suits dark backgrounds (btn-dark, overlays). */
+/* Reusable rolling spinner — a two-tone ring that rotates a full, smooth,
+   continuous 360° with no jump or reset. Default suits light/amber
+   backgrounds (btn-primary); .spinner-light suits dark backgrounds
+   (btn-dark, overlays, the mobile nav's Sign out row). */
 .spinner{
-  width:16px;height:16px;border-radius:50%;flex:0 0 auto;
-  background:conic-gradient(from 0deg, rgba(16,24,40,0) 0%, var(--navy-deep) 92%, rgba(16,24,40,0) 100%);
-  -webkit-mask:radial-gradient(farthest-side, transparent calc(100% - 2.25px), #000 calc(100% - 2.25px));
-  mask:radial-gradient(farthest-side, transparent calc(100% - 2.25px), #000 calc(100% - 2.25px));
-  animation:spin .8s linear infinite
+  display:inline-block;width:16px;height:16px;flex:0 0 auto;border-radius:50%;
+  border:2.25px solid rgba(16,24,40,.15);
+  border-top-color:var(--navy-deep);
+  border-right-color:var(--navy-deep);
+  animation:spin .65s linear infinite;
+  transform-origin:50% 50%;
+  will-change:transform;
 }
-.spinner-light{background:conic-gradient(from 0deg, rgba(255,255,255,0) 0%, #fff 92%, rgba(255,255,255,0) 100%)}
-.spinner-lg{
-  width:26px;height:26px;
-  -webkit-mask:radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
-  mask:radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px))
+.spinner-light{
+  border-color:rgba(255,255,255,.32);
+  border-top-color:#fff;
+  border-right-color:#fff;
 }
+.spinner-lg{width:26px;height:26px;border-width:3px}
 
-/* Button loading state: label fades out in place, spinner centers over it.
-   Button keeps its size/shape so nothing shifts in the layout. */
+/* Button loading state: label fades out in place (keeping the button's
+   width/height and layout balanced) and the spinner is centered exactly
+   over the button, regardless of button size or content. */
 .is-loading{color:transparent !important;pointer-events:none;position:relative}
 .is-loading svg{visibility:hidden}
 .is-loading .spinner{
-  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);margin:0
+  position:absolute;left:50%;top:50%;margin:-8px 0 0 -8px;
 }
+.is-loading .spinner-lg{margin:-13px 0 0 -13px}
 
 /* Slim indeterminate bar fixed to the very top of the viewport — the
    reusable "page is working" indicator. Shown/hidden via JS (pageLoader
@@ -159,7 +164,6 @@ img{max-width:100%;display:block}
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   gap:16px;min-height:60vh;text-align:center;color:var(--ink-3)
 }
-.page-loader .spinner-lg{background:conic-gradient(from 0deg, rgba(16,24,40,0) 0%, var(--navy) 92%, rgba(16,24,40,0) 100%)}
 .page-loader p{font-size:14px;font-weight:600;color:var(--ink-2)}
 
 /* ---------- Buttons ---------- */
