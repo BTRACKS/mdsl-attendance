@@ -60,7 +60,7 @@ img{max-width:100%;display:block}
 
 /* ---------- Masthead ---------- */
 .masthead{position:sticky;top:0;z-index:40;background:rgba(255,255,255,.85);backdrop-filter:blur(14px);border-bottom:1px solid var(--rule)}
-.masthead-inner{max-width:var(--maxw);margin:0 auto;padding:14px 24px;display:flex;align-items:center;gap:24px}
+.masthead-inner{max-width:var(--maxw);margin:0 auto;padding:14px 24px;display:flex;align-items:center;gap:24px;min-height:56px}
 .brand{display:flex;align-items:center;gap:12px;flex:0 0 auto;min-width:0}
 .brand-logo{
   width:42px;height:42px;object-fit:contain;flex:0 0 auto;padding:4px;border-radius:11px;
@@ -75,7 +75,7 @@ img{max-width:100%;display:block}
   text-transform:uppercase;color:var(--ink-4)
 }
 .nav{
-  display:flex;gap:4px;align-items:center;margin:0 auto;
+  display:flex;gap:4px;align-items:center;margin:0 auto;flex-wrap:wrap;justify-content:center;max-width:100%;
   background:var(--paper-2);border:1px solid var(--rule);border-radius:var(--radius-pill);padding:5px
 }
 .nav a{
@@ -89,7 +89,8 @@ img{max-width:100%;display:block}
 .nav a.active{background:var(--paper);color:var(--navy);box-shadow:var(--shadow-xs);font-weight:700}
 .nav a.active svg{opacity:1}
 .nav-signout{display:none}
-.masthead-right{display:flex;align-items:center;gap:12px;margin-left:auto}
+.masthead-right{display:flex;align-items:center;gap:12px;margin-left:auto;flex:1 1 0;justify-content:flex-end;min-width:0}
+.masthead-inner::before{content:"";flex:1 1 0;min-width:0}
 .clock{font-size:12px;font-variant-numeric:tabular-nums;color:var(--ink-4);letter-spacing:.02em;white-space:nowrap}
 .menu-toggle{
   display:none;background:var(--paper);border:1.5px solid var(--amber);border-radius:10px;
