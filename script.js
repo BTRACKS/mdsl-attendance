@@ -345,7 +345,7 @@
       passwordField("password", "Password", "Minimum 8 characters", { strength: true }) +
       passwordField("confirmPassword", "Confirm Password", "Re-enter password") +
       '</div><div class="form-foot">' +
-      '<button class="btn btn-primary btn-lg btn-block" type="submit">' + ICON.register + '<span>Create account</span></button>' +
+      '<button class="btn btn-primary btn-lg btn-block" type="submit"><span>Create account</span></button>' +
       '<p class="form-alt">Already registered? <a class="auth-link" href="#/login">' + ICON.signin + '<span>Sign in instead</span></a></p>' +
       "</div></form></div></div></div>";
   }
