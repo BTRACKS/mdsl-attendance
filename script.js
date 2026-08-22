@@ -685,11 +685,16 @@
       '<section class="section"><div class="section-head"><h2>Our purpose</h2></div>' +
       '<p class="about-purpose">We built this platform to make attendance effortless for staff and dependable for management — accurate records, fair reporting, and a culture of punctuality that runs on trust rather than paperwork.</p></section>' +
 
-      '<section class="creator"><div class="creator-card">' +
-      '<span class="creator-ic">' + ICON.cap + "</span>" +
-      '<div><p class="creator-kicker">Created by</p><p class="creator-name">Oladapo Salami</p>' +
-      '<p class="creator-role">Computer Science Intern, University of Lagos</p></div></div></section>' +
+      '<section class="creator"><div class="creator-grid">' +
+      creatorCard("Oladapo Salami", "Computer Science Intern, University of Lagos") +
+      creatorCard("Victor Utoo", "Computer Engineering Intern, Afe Babalola University") +
+      "</div></section>" +
       "</div>";
+  }
+  function creatorCard(name, role) {
+    return '<div class="creator-card"><span class="creator-ic">' + ICON.cap + "</span>" +
+      '<div><p class="creator-kicker">Created by</p><p class="creator-name">' + esc(name) + '</p>' +
+      '<p class="creator-role">' + esc(role) + "</p></div></div>";
   }
 
   /* ------------------------- router ------------------------- */
