@@ -357,6 +357,7 @@ td .sub{font-size:12.5px;color:var(--ink-4)}
 .footer-nav a:hover,.footer-link:hover,.footer-offices a:hover{color:var(--navy)}
 .footer-offices{display:grid;gap:22px;min-width:0}
 .footer-offices address{font-style:normal;font-size:14.5px;line-height:1.6;color:var(--ink-3)}
+.footer-legal{margin-top:18px;font-size:12.5px;color:var(--ink-4)}
 .footer-bottom{margin-top:40px;padding-top:20px;border-top:1px solid var(--rule);
   display:flex;justify-content:center;align-items:center;gap:8px;flex-wrap:wrap;text-align:center;font-size:13px;color:var(--ink-4)}
 @media (max-width:1024px){
@@ -372,7 +373,8 @@ td .sub{font-size:12.5px;color:var(--ink-4)}
   .footer-inner{padding:40px 20px 24px}
   .footer-nav{grid-template-columns:1fr 1fr;gap:22px}
   .footer-offices{grid-template-columns:1fr;gap:18px}
-  .footer-bottom{margin-top:30px;text-align:left;justify-content:flex-start}
+  .footer-legal{margin-top:18px;font-size:12.5px;color:var(--ink-4)}
+.footer-bottom{margin-top:30px;text-align:left;justify-content:flex-start}
   .faq-q{font-size:15px;padding:16px}
   .faq-a p{padding:0 16px 16px}
 }
