@@ -46,10 +46,12 @@
     signin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>',
     register: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>',
     logout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>',
+    settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.06A1.7 1.7 0 0 0 8.9 19.3a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.7 15a1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.06A1.7 1.7 0 0 0 4.7 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.7h.06A1.7 1.7 0 0 0 10.1 3.14V3a2 2 0 1 1 4 0v.06A1.7 1.7 0 0 0 15 4.7a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.3 9v.06A1.7 1.7 0 0 0 20.86 10.1H21a2 2 0 1 1 0 4h-.06A1.7 1.7 0 0 0 19.4 15z"/></svg>',
+    camera: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h1.2a1.5 1.5 0 0 0 1.3-.75l.6-1A1.5 1.5 0 0 1 9.9 3.5h4.2a1.5 1.5 0 0 1 1.3.75l.6 1A1.5 1.5 0 0 0 17.3 6h1.2A2.5 2.5 0 0 1 21 8.5v9A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5z"/><circle cx="12" cy="13" r="3.4"/></svg>',
     eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7.5 11-7.5S23 12 23 12s-4 7.5-11 7.5S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>',
     eyeOff: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19.5C5 19.5 1 12 1 12a19.4 19.4 0 0 1 5.06-5.94M9.9 4.24A10.6 10.6 0 0 1 12 4.5c7 0 11 7.5 11 7.5a19.5 19.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'
   };
-  var NAV_ICON = { "Overview": ICON.grid, "Dashboard": ICON.grid, "Attendance History": ICON.clock };
+  var NAV_ICON = { "Overview": ICON.grid, "Dashboard": ICON.grid, "Attendance History": ICON.clock, "Settings": ICON.settings };
 
   /* db is an in-memory cache of Supabase data, refreshed via refreshData().
      Views read synchronously from this cache; actions that change data
@@ -64,7 +66,8 @@
     return {
       id: p.id, fullName: p.full_name, staffId: p.staff_id, email: p.email,
       employmentType: p.employment_type, department: p.department, position: p.position,
-      role: p.role, createdAt: p.created_at
+      role: p.role, createdAt: p.created_at,
+      phone: p.phone || "", avatarUrl: p.avatar_url || ""
     };
   }
   function mapAttendance(a) {
@@ -240,8 +243,8 @@
       links = [["#/login", "Sign in"], ["#/signup", "Register"]];
     } else {
       links = u.role === "admin"
-        ? [["#/admin", "Overview"], ["#/admin/attendance", "Attendance Management"], ["#/dashboard", "My Dashboard"]]
-        : [["#/dashboard", "Dashboard"], ["#/history", "Attendance History"]];
+        ? [["#/admin", "Overview"], ["#/admin/attendance", "Attendance Management"], ["#/dashboard", "My Dashboard"], ["#/settings", "Settings"]]
+        : [["#/dashboard", "Dashboard"], ["#/history", "Attendance History"], ["#/settings", "Settings"]];
 
     }
     var hash = PAGE === "about" ? "" : (location.hash || (u ? "#/dashboard" : "#/login"));
@@ -451,12 +454,15 @@
 
   function profilePanel(u) {
     return '<aside><div class="panel"><div class="panel-head">' + ICON.userCard + 'Staff Profile</div><div class="panel-body">' +
-      '<div class="identity"><div class="avatar">' + esc(initials(u.fullName)) + "</div>" +
+      '<div class="identity">' + avatarHtml(u) +
       "<div><h3>" + esc(u.fullName) + "</h3><p>" + esc(u.position) + "</p></div></div>" +
       '<dl class="dl">' +
       row("Staff ID", u.staffId) + row("Employment Type", u.employmentType) +
       row("Department", u.department) + row("Position", u.position) + row("Email", u.email) +
-      "</dl></div></div>" +
+      (u.phone ? row("Phone", u.phone) : "") +
+      "</dl>" +
+      '<a class="btn btn-ghost btn-sm btn-block" style="margin-top:16px" href="#/settings">' + ICON.settings + "<span>Profile &amp; settings</span></a>" +
+      "</div></div>" +
       '<div class="panel" style="margin-top:20px"><div class="panel-head">' + ICON.activity + 'This Month</div><div class="panel-body">' +
       monthSummary(u) + "</div></div></aside>";
   }
@@ -705,6 +711,263 @@
       '<p class="creator-role">' + esc(role) + "</p></div></div>";
   }
 
+
+  /* ------------------------- profile picture helpers ------------------------- */
+  var AVATAR_BUCKET = "avatars";
+  var AVATAR_TYPES = ["image/jpeg", "image/png", "image/webp"];
+  var AVATAR_MAX_BYTES = 2 * 1024 * 1024;
+
+  /* Renders the staff avatar: the uploaded picture when present, initials
+     otherwise. Used everywhere an avatar appears so a new upload shows up
+     consistently across the platform. */
+  function avatarHtml(u, extraClass) {
+    var cls = "avatar" + (extraClass ? " " + extraClass : "");
+    if (u.avatarUrl) {
+      return '<span class="' + cls + ' avatar-photo"><img src="' + esc(u.avatarUrl) +
+        '" alt="' + esc(u.fullName) + '" /></span>';
+    }
+    return '<div class="' + cls + '">' + esc(initials(u.fullName)) + "</div>";
+  }
+
+  function validateAvatar(file) {
+    if (!file) return "Choose an image to upload.";
+    if (AVATAR_TYPES.indexOf(file.type) === -1) return "Use a JPG, PNG or WebP image.";
+    if (file.size > AVATAR_MAX_BYTES) return "Image must be 2MB or smaller.";
+    return "";
+  }
+
+  /* ------------------------- settings ------------------------- */
+  function readonlyField(name, label, value, full) {
+    return '<div class="field field-locked' + (full ? " full" : "") + '"><label for="r-' + name + '">' + label + "</label>" +
+      '<input id="r-' + name + '" type="text" value="' + esc(value || "—") + '" readonly tabindex="-1" />' +
+      '<span class="error"></span></div>';
+  }
+
+  function settingsView(u) {
+    var joined = u.createdAt ? prettyDate(String(u.createdAt).slice(0, 10)) : "—";
+    return '<div class="page"><div class="page-head"><p class="eyebrow">Account</p><h1>Profile &amp; Settings</h1>' +
+      '<p class="dateline">Update your details, profile picture and password. Attendance records are not affected.</p></div>' +
+
+      '<div class="layout"><div>' +
+
+      '<section class="section"><div class="section-head"><h2>My Profile</h2><span>Editable details</span></div>' +
+      '<div class="photo-row">' + avatarHtml(u, "avatar-xl") +
+      '<div class="photo-copy"><h3>Profile picture</h3>' +
+      '<p>JPG, PNG or WebP · up to 2MB. Shown on your dashboard and staff profile.</p>' +
+      '<div class="photo-actions">' +
+      '<input id="avatarInput" type="file" accept="image/png,image/jpeg,image/webp" hidden />' +
+      '<button class="btn btn-ghost btn-sm" type="button" id="avatarPick">' + ICON.camera +
+      "<span>" + (u.avatarUrl ? "Change picture" : "Upload picture") + "</span></button>" +
+      '<button class="btn btn-primary btn-sm" type="button" id="avatarSave" hidden>Save picture</button>' +
+      '<button class="btn btn-ghost btn-sm" type="button" id="avatarCancel" hidden>Cancel</button>' +
+      (u.avatarUrl ? '<button class="btn btn-ghost btn-sm" type="button" id="avatarRemove">Remove</button>' : "") +
+      '</div><span class="error" id="avatarError"></span></div></div>' +
+
+      '<form id="profileForm" novalidate><div class="form-grid">' +
+      field("fullName", "Full Name", "text", "Adaeze Okonkwo") +
+      field("phone", "Phone Number", "tel", "+234 800 000 0000") +
+      field("position", "Position / Role", "text", POSITIONS_HINT, true) +
+      '</div><div class="form-foot form-foot-inline">' +
+      '<button class="btn btn-primary" type="submit"><span>Save changes</span></button>' +
+      '<button class="btn btn-ghost" type="button" id="profileReset">Discard</button>' +
+      "</div></form></section>" +
+
+      '<section class="section"><div class="section-head"><h2>Password &amp; Security</h2><span>Minimum 8 characters</span></div>' +
+      '<form id="passwordForm" novalidate><div class="form-grid">' +
+      passwordField("currentPassword", "Current Password", "Your current password", { full: true }) +
+      passwordField("newPassword", "New Password", "Minimum 8 characters", { strength: true }) +
+      passwordField("confirmNewPassword", "Confirm New Password", "Re-enter new password") +
+      '</div><div class="form-foot form-foot-inline">' +
+      '<button class="btn btn-dark" type="submit"><span>Update password</span></button>' +
+      "</div></form></section>" +
+
+      "</div>" +
+
+      '<aside><div class="panel"><div class="panel-head">' + ICON.userCard + 'Account Record</div><div class="panel-body">' +
+      '<p class="dateline" style="margin-bottom:16px">These details are maintained by the administration team and cannot be edited here.</p>' +
+      '<div class="form-grid form-grid-single">' +
+      readonlyField("staffId", "Staff ID", u.staffId) +
+      readonlyField("email", "Email Address", u.email) +
+      readonlyField("department", "Department", u.department) +
+      readonlyField("employmentType", "Employment Type", u.employmentType) +
+      readonlyField("role", "Account Role", u.role === "admin" ? "Administrator" : "Staff") +
+      readonlyField("joined", "Registered On", joined) +
+      "</div></div></div></aside></div></div>";
+  }
+
+  function bindSettings() {
+    var u = session();
+    if (!u) return;
+
+    /* ---- profile picture ---- */
+    var input = el("avatarInput"), pick = el("avatarPick"), save = el("avatarSave"),
+        cancel = el("avatarCancel"), remove = el("avatarRemove"), errBox = el("avatarError");
+    var preview = document.querySelector(".photo-row .avatar");
+    var pending = null, previousHtml = preview ? preview.outerHTML : "";
+
+    function resetPhoto() {
+      pending = null;
+      if (input) input.value = "";
+      errBox.textContent = "";
+      save.hidden = true; cancel.hidden = true;
+      if (remove) remove.hidden = false;
+      var current = document.querySelector(".photo-row .avatar");
+      if (current && previousHtml) current.outerHTML = previousHtml;
+    }
+
+    if (pick) pick.addEventListener("click", function () { input.click(); });
+    if (cancel) cancel.addEventListener("click", resetPhoto);
+
+    if (input) input.addEventListener("change", function () {
+      var file = input.files && input.files[0];
+      var msg = validateAvatar(file);
+      if (msg) { errBox.textContent = msg; input.value = ""; return; }
+      errBox.textContent = "";
+      pending = file;
+      var reader = new FileReader();
+      reader.onload = function () {
+        var current = document.querySelector(".photo-row .avatar");
+        if (current) {
+          current.outerHTML = '<span class="avatar avatar-xl avatar-photo"><img src="' +
+            reader.result + '" alt="Selected profile picture" /></span>';
+        }
+      };
+      reader.readAsDataURL(file);
+      save.hidden = false; cancel.hidden = false;
+      if (remove) remove.hidden = true;
+    });
+
+    if (save) save.addEventListener("click", async function () {
+      if (!pending) return;
+      var msg = validateAvatar(pending);
+      if (msg) { errBox.textContent = msg; return; }
+      setBtnLoading(save, true);
+      var ext = pending.type === "image/png" ? "png" : (pending.type === "image/webp" ? "webp" : "jpg");
+      var path = u.id + "/avatar-" + Date.now() + "." + ext;
+      var up = await supabaseClient.storage.from(AVATAR_BUCKET)
+        .upload(path, pending, { upsert: true, contentType: pending.type });
+      if (up.error) {
+        setBtnLoading(save, false);
+        errBox.textContent = up.error.message;
+        toast("Profile picture could not be uploaded.", "error");
+        return;
+      }
+      var pub = supabaseClient.storage.from(AVATAR_BUCKET).getPublicUrl(path);
+      var url = pub.data.publicUrl;
+      var res = await supabaseClient.from("profiles").update({ avatar_url: url }).eq("id", u.id);
+      if (res.error) {
+        setBtnLoading(save, false);
+        errBox.textContent = res.error.message;
+        toast("Profile picture could not be saved.", "error");
+        return;
+      }
+      await refreshData();
+      await refreshSessionUser();
+      toast("Profile picture updated.");
+      render();
+    });
+
+    if (remove) remove.addEventListener("click", function () {
+      confirmDialog("Remove profile picture", "Your picture will be removed and your initials shown instead.", async function () {
+        setBtnLoading(remove, true);
+        var res = await supabaseClient.from("profiles").update({ avatar_url: null }).eq("id", u.id);
+        if (res.error) {
+          setBtnLoading(remove, false);
+          toast(res.error.message, "error");
+          return;
+        }
+        await refreshData();
+        await refreshSessionUser();
+        toast("Profile picture removed.");
+        render();
+      });
+    });
+
+    /* ---- profile details ---- */
+    var pf = el("profileForm");
+    if (pf) {
+      function fillProfile() {
+        pf.querySelector('[name="fullName"]').value = u.fullName || "";
+        pf.querySelector('[name="phone"]').value = u.phone || "";
+        pf.querySelector('[name="position"]').value = u.position || "";
+        Array.prototype.forEach.call(pf.querySelectorAll(".field"), function (f) {
+          f.classList.remove("invalid");
+          var e = f.querySelector(".error"); if (e) e.textContent = "";
+        });
+      }
+      fillProfile();
+      el("profileReset").addEventListener("click", function () {
+        fillProfile();
+        toast("Changes discarded.");
+      });
+
+      pf.addEventListener("submit", async function (e) {
+        e.preventDefault();
+        var v = readForm(pf, {
+          fullName: function (x) { return x.length >= 3 ? "" : "Enter your full name."; },
+          phone: function (x) { return !x || /^[0-9+()\s-]{7,20}$/.test(x) ? "" : "Enter a valid phone number."; },
+          position: req("Position")
+        });
+        if (!v) { toast("Please correct the highlighted fields.", "error"); return; }
+
+        var btn = pf.querySelector('button[type="submit"]');
+        setBtnLoading(btn, true);
+        var res = await supabaseClient.from("profiles").update({
+          full_name: v.fullName, phone: v.phone || null, position: v.position
+        }).eq("id", u.id);
+        if (res.error) {
+          setBtnLoading(btn, false);
+          toast(res.error.message, "error");
+          return;
+        }
+        await refreshData();
+        await refreshSessionUser();
+        toast("Profile updated successfully.");
+        render();
+      });
+    }
+
+    /* ---- password ---- */
+    var qf = el("passwordForm");
+    if (qf) qf.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      var v = readForm(qf, {
+        currentPassword: req("Current password"),
+        newPassword: function (x, all) {
+          if (x.length < 8) return "Password must be at least 8 characters.";
+          if (x === all.currentPassword) return "Choose a password different from your current one.";
+          return "";
+        },
+        confirmNewPassword: function (x, all) { return x && x === all.newPassword ? "" : "Passwords do not match."; }
+      });
+      if (!v) { toast("Please correct the highlighted fields.", "error"); return; }
+
+      var btn = qf.querySelector('button[type="submit"]');
+      setBtnLoading(btn, true);
+
+      /* Verify the current password before changing it. */
+      var check = await supabaseClient.auth.signInWithPassword({ email: u.email, password: v.currentPassword });
+      if (check.error) {
+        setBtnLoading(btn, false);
+        var wrap = qf.querySelector('[name="currentPassword"]').closest(".field");
+        wrap.classList.add("invalid");
+        wrap.querySelector(".error").textContent = "Current password is incorrect.";
+        toast("Current password is incorrect.", "error");
+        return;
+      }
+
+      var upd = await supabaseClient.auth.updateUser({ password: v.newPassword });
+      if (upd.error) {
+        setBtnLoading(btn, false);
+        toast(upd.error.message, "error");
+        return;
+      }
+      qf.reset();
+      setBtnLoading(btn, false);
+      toast("Password updated successfully.");
+    });
+  }
+
   /* ------------------------- router ------------------------- */
   function render() {
     var u = session();
@@ -726,6 +989,9 @@
       view.innerHTML = hash === "#/admin" ? adminOverview() : adminManagement();
     } else if (hash === "#/history") {
       view.innerHTML = historyView(u);
+    } else if (hash === "#/settings") {
+      view.innerHTML = settingsView(u);
+      renderChrome(); bindAuth(); bindSettings(); window.scrollTo(0, 0); return;
     } else {
       if (hash !== "#/dashboard") { location.hash = "#/dashboard"; return; }
       view.innerHTML = dashboardView(u);
