@@ -65,8 +65,10 @@
       return "<div><dt>" + esc(r[0]) + "</dt><dd>" + (r[2] ? r[1] : esc(r[1])) + "</dd></div>";
     }).join("");
   }
+  /* Plain, functional status text — no badges or pills. */
   function pill(text, kind) {
-    return '<span class="pill pill-' + kind + '">' + esc(text) + "</span>";
+    var cls = kind === "ok" ? "status status-ok" : kind === "bad" ? "status status-bad" : "status status-warn";
+    return '<span class="' + cls + '">' + esc(text) + "</span>";
   }
 
   /* ------------------------- role resolution -------------------------
@@ -234,6 +236,30 @@
         only("loginView");
       });
     }
+    /* Navigation between support sections. */
+    var navEl = $("nav");
+    var toggle = $("menuToggle");
+    if (navEl) {
+      navEl.addEventListener("click", function (e) {
+        var btn = e.target.closest("button[data-tab]");
+        if (!btn) return;
+        Array.prototype.forEach.call(navEl.querySelectorAll("button[data-tab]"), function (b) {
+          b.classList.toggle("active", b === btn);
+          var panel = $("tab-" + b.getAttribute("data-tab"));
+          if (panel) panel.hidden = b !== btn;
+        });
+        navEl.classList.remove("open");
+        if (toggle) toggle.setAttribute("aria-expanded", "false");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
+    }
+    if (toggle) {
+      toggle.addEventListener("click", function () {
+        var open = navEl.classList.toggle("open");
+        toggle.setAttribute("aria-expanded", open ? "true" : "false");
+      });
+    }
+
     $("signOutBtn").addEventListener("click", signOut);
     $("deniedSignOut").addEventListener("click", signOut);
 

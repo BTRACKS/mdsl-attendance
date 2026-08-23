@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tech Support Portal | Multidigital Service Limited</title>
+<meta name="description" content="Restricted Tech Support / IT portal for Multidigital Service Limited. Authorised IT and administrative staff only." />
+<meta name="robots" content="noindex, nofollow" />
+<link rel="icon" type="image/png" sizes="256x256" href="favicon.png" />
+<link rel="apple-touch-icon" href="favicon.png" />
+<meta name="theme-color" content="#123a6b" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="support.css" />
+</head>
+<body>
+  <div class="top-loader" id="topLoader" hidden aria-hidden="true"></div>
+
+  <!-- Boot state: nothing is rendered until the session + role check finishes. -->
+  <div class="page-loader" id="boot">
+    <span class="spinner spinner-lg" aria-hidden="true"></span>
+    <p>Verifying your access…</p>
+  </div>
+
+  <!-- ===================== LOGIN ===================== -->
+  <main class="auth" id="loginView" hidden>
+    <aside class="auth-aside">
+      <div>
+        <div class="brand">
+          <img class="brand-logo" src="logo-mark.png" alt="Multidigital Service Limited logo" width="42" height="42" onerror="this.style.display='none'" />
+          <span class="brand-text">Multidigital Service Limited<em>Tech Support Portal</em></span>
+        </div>
+        <h1 class="auth-headline">Internal IT &amp; <span>technical support</span></h1>
+        <p class="auth-lede">A restricted workspace for the IT team. Access is granted by role and enforced in the database, not by hiding this page.</p>
+        <div class="aside-points">
+          <div class="aside-point">
+            <h3>Role-based access</h3>
+            <p>Admin and IT Support roles only. Staff accounts are refused.</p>
+          </div>
+          <div class="aside-point">
+            <h3>One shared account system</h3>
+            <p>Same sign-in credentials as the E-Attendance Platform. No duplicate users.</p>
+          </div>
+          <div class="aside-point">
+            <h3>Audited by design</h3>
+            <p>Every request runs as your own user under row level security.</p>
+          </div>
+        </div>
+      </div>
+      <p class="auth-foot">&copy; <span class="year"></span> Multidigital Service Limited — internal use only.</p>
+    </aside>
+
+    <section class="auth-main">
+      <div class="auth-card">
+        <h1>Sign in to Tech Support</h1>
+        <p class="auth-sub">Use your Multidigital work account. Unauthorised access attempts are logged.</p>
+
+        <form id="loginForm" novalidate>
+          <div class="field">
+            <label for="email">Work email</label>
+            <input id="email" type="email" autocomplete="username" placeholder="you@multidigitalng.com" required />
+          </div>
+          <div class="field">
+            <label for="password">Password</label>
+            <input id="password" type="password" autocomplete="current-password" placeholder="••••••••" required />
+          </div>
+          <div class="form-row">
+            <label class="check" for="showPw">
+              <input id="showPw" type="checkbox" /> Show password
+            </label>
+            <button type="button" class="link-muted" id="forgotBtn">Reset password</button>
+          </div>
+          <div id="loginMsg" class="alert" hidden></div>
+          <div class="form-foot">
+            <button class="btn btn-primary btn-lg btn-block" id="loginSubmit" type="submit">
+              <span>Sign in</span>
+            </button>
+          </div>
+          <p class="hint"><b>Restricted area.</b> This portal is for authorised IT and administrative staff of Multidigital Service Limited only.</p>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <!-- ===================== ACCESS DENIED ===================== -->
+  <main class="denied" id="deniedView" hidden>
+    <div class="denied-card">
+      <h1>You don't have Tech Support access</h1>
+      <p id="deniedBody">Your account is signed in, but it is not assigned an <strong>Admin</strong> or <strong>IT Support</strong> role. Contact the IT administrator if you believe this is a mistake.</p>
+      <div class="panel" style="margin-top:24px">
+        <div class="panel-head">Account</div>
+        <div class="panel-body">
+          <dl class="kv">
+            <div><dt>Signed in as</dt><dd id="deniedEmail">—</dd></div>
+            <div><dt>Detected role</dt><dd id="deniedRole">—</dd></div>
+          </dl>
+        </div>
+      </div>
+      <div class="denied-actions">
+        <button class="btn btn-dark" id="deniedSignOut" type="button">Sign out</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- ===================== PORTAL ===================== -->
+  <div id="portalView" hidden style="min-height:100vh;display:flex;flex-direction:column">
+    <header class="masthead">
+      <div class="masthead-inner">
+        <div class="brand">
+          <img class="brand-logo" src="logo-mark.png" alt="Multidigital Service Limited logo" width="42" height="42" onerror="this.style.display='none'" />
+          <span class="brand-text">Multidigital Service Limited<em>Tech Support Portal</em></span>
+        </div>
+        <nav class="nav" id="nav" aria-label="Support navigation">
+          <button type="button" class="active" data-tab="overview">Overview</button>
+          <button type="button" data-tab="checks">System checks</button>
+          <button type="button" data-tab="modules">Support modules</button>
+        </nav>
+        <div class="masthead-right">
+          <div class="who"><strong id="whoName">—</strong><span id="whoEmail">—</span></div>
+          <button class="btn btn-dark btn-sm" id="signOutBtn" type="button">Sign out</button>
+          <button class="menu-toggle" id="menuToggle" type="button" aria-label="Menu" aria-expanded="false"><span></span><span></span><span></span></button>
+        </div>
+      </div>
+    </header>
+
+    <main class="page">
+      <div class="page-head">
+        <h1>Welcome, <span id="heroName">colleague</span></h1>
+        <p class="dateline">Signed in as <span id="roleBadge">—</span> · Phase 1 establishes the portal, its sign-in and secure role checks. IT management tools arrive in the next phase.</p>
+      </div>
+
+      <!-- Overview -->
+      <section class="section" id="tab-overview">
+        <div class="section-head">
+          <h2>Overview</h2>
+          <span>Portal status</span>
+        </div>
+        <div class="grid-2">
+          <div class="panel">
+            <div class="panel-head">Authentication</div>
+            <div class="panel-body"><dl class="kv" id="kvAuth"></dl></div>
+          </div>
+          <div class="panel">
+            <div class="panel-head">Your profile record</div>
+            <div class="panel-body"><dl class="kv" id="kvProfile"></dl></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- System checks -->
+      <section class="section" id="tab-checks" hidden>
+        <div class="section-head">
+          <h2>System checks</h2>
+          <span>Database &amp; access</span>
+        </div>
+        <div class="panel">
+          <div class="panel-head">Database access</div>
+          <div class="panel-body"><dl class="kv" id="kvDb"></dl></div>
+        </div>
+      </section>
+
+      <!-- Support modules -->
+      <section class="section" id="tab-modules" hidden>
+        <div class="section-head">
+          <h2>Support modules</h2>
+          <span>Planned for phase 2</span>
+        </div>
+        <ul class="list">
+          <li>
+            <h3>Support tickets</h3>
+            <p>Raise, triage, assign and resolve internal IT requests.</p>
+            <small>Phase 2</small>
+          </li>
+          <li>
+            <h3>Device &amp; asset register</h3>
+            <p>Track laptops, phones and peripherals issued to staff.</p>
+            <small>Phase 2</small>
+          </li>
+          <li>
+            <h3>Access &amp; role management</h3>
+            <p>Grant or revoke portal roles with a full audit trail.</p>
+            <small>Phase 2</small>
+          </li>
+        </ul>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        <span>&copy; <span class="year"></span> Multidigital Service Limited — Tech Support Portal (internal).</span>
+        <span><a href="mailto:info@multidigitalng.com">info@multidigitalng.com</a></span>
+      </div>
+    </footer>
+  </div>
+
+  <div class="toasts" id="toasts"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="support.js"></script>
+</body>
+</html>
