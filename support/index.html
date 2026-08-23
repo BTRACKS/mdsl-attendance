@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tech Support Portal | Multidigital Service Limited</title>
+<meta name="description" content="Restricted Tech Support / IT portal for Multidigital Service Limited. Authorised IT and administrative staff only." />
+<meta name="robots" content="noindex, nofollow" />
+<link rel="icon" type="image/png" sizes="256x256" href="favicon.png" />
+<link rel="apple-touch-icon" href="favicon.png" />
+<meta name="theme-color" content="#123a6b" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="support.css" />
+</head>
+<body>
+  <div class="top-loader" id="topLoader" hidden aria-hidden="true"></div>
+
+  <!-- Boot state: nothing is rendered until the session + role check finishes. -->
+  <div class="page-loader" id="boot">
+    <span class="spinner spinner-lg" aria-hidden="true"></span>
+    <p>Verifying your access…</p>
+  </div>
+
+  <!-- ===================== LOGIN ===================== -->
+  <main class="auth" id="loginView" hidden>
+    <aside class="auth-aside">
+      <div>
+        <div class="brand">
+          <img class="brand-logo" src="logo-mark.png" alt="Multidigital Service Limited logo" width="42" height="42" onerror="this.style.display='none'" />
+          <span class="brand-text">Multidigital Service Limited<em>Tech Support Portal</em></span>
+        </div>
+        <h1>Internal IT &amp; Technical Support</h1>
+        <p class="lede">A restricted workspace for the IT team. Access is granted by role and enforced in the database, not by hiding this page.</p>
+        <div class="aside-points">
+          <div class="aside-point">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <div><h3>Role-based access</h3><p>Admin and IT Support roles only. Staff accounts are refused.</p></div>
+          </div>
+          <div class="aside-point">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.7 4 3 9 3s9-1.3 9-3V5"/><path d="M3 12c0 1.7 4 3 9 3s9-1.3 9-3"/></svg>
+            <div><h3>One shared account system</h3><p>Same sign-in credentials as the E-Attendance Platform. No duplicate users.</p></div>
+          </div>
+          <div class="aside-point">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <div><h3>Audited by design</h3><p>Every request runs as your own user under row level security.</p></div>
+          </div>
+        </div>
+      </div>
+      <p class="auth-foot">&copy; <span class="year"></span> Multidigital Service Limited — internal use only.</p>
+    </aside>
+
+    <section class="auth-main">
+      <div class="auth-card">
+        <p class="eyebrow">Restricted Area</p>
+        <h2>Sign in to Tech Support</h2>
+        <p class="sub">Use your Multidigital work account. Unauthorised access attempts are logged.</p>
+
+        <form id="loginForm" novalidate>
+          <label class="field">
+            <span>Work email</span>
+            <input id="email" type="email" autocomplete="username" placeholder="you@multidigitalng.com" required />
+          </label>
+          <label class="field">
+            <span>Password</span>
+            <input id="password" type="password" autocomplete="current-password" placeholder="••••••••" required />
+          </label>
+          <div class="form-row">
+            <label style="display:flex;align-items:center;gap:8px">
+              <input id="showPw" type="checkbox" style="width:auto" /> Show password
+            </label>
+            <button type="button" class="footer-link" id="forgotBtn" style="background:none;border:0;cursor:pointer;color:var(--navy);font-weight:700;font-size:13px">Reset password</button>
+          </div>
+          <div id="loginMsg" class="alert" hidden></div>
+          <div style="margin-top:22px">
+            <button class="btn btn-primary btn-lg btn-block" id="loginSubmit" type="submit">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+              <span>Sign in</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <!-- ===================== ACCESS DENIED ===================== -->
+  <main class="denied" id="deniedView" hidden>
+    <div class="denied-card">
+      <p class="eyebrow">Access denied</p>
+      <h1>You don't have Tech Support access</h1>
+      <p id="deniedBody">Your account is signed in, but it is not assigned an <strong>Admin</strong> or <strong>IT Support</strong> role. Contact the IT administrator if you believe this is a mistake.</p>
+      <div class="kv" style="margin-top:22px;text-align:left">
+        <div><dt>Signed in as</dt><dd id="deniedEmail">—</dd></div>
+        <div><dt>Detected role</dt><dd id="deniedRole">—</dd></div>
+      </div>
+      <div class="denied-actions">
+        <button class="btn btn-dark" id="deniedSignOut" type="button">Sign out</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- ===================== PORTAL ===================== -->
+  <div id="portalView" hidden style="min-height:100vh;display:flex;flex-direction:column">
+    <header class="masthead">
+      <div class="masthead-inner">
+        <div class="brand">
+          <img class="brand-logo" src="logo-mark.png" alt="Multidigital Service Limited logo" width="42" height="42" onerror="this.style.display='none'" />
+          <span class="brand-text">Multidigital Service Limited<em>Tech Support Portal</em></span>
+        </div>
+        <div class="masthead-right">
+          <span class="pill pill-navy" id="roleBadge">—</span>
+          <div class="who"><strong id="whoName">—</strong><span id="whoEmail">—</span></div>
+          <button class="btn btn-dark btn-sm" id="signOutBtn" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            <span>Sign out</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <section class="hero">
+      <div class="hero-inner">
+        <p class="eyebrow">Phase 1 — Foundation</p>
+        <h1>Welcome, <span id="heroName">colleague</span></h1>
+        <p>The Tech Support portal is live and connected to the company database. This phase establishes the portal, its sign-in, and secure role checks. IT management tools arrive in the next phase.</p>
+      </div>
+    </section>
+
+    <main class="wrap section">
+      <div class="section-head">
+        <h2>Connection &amp; identity checks</h2>
+        <p>Live verification that authentication, the signed-in identity and database access all work.</p>
+      </div>
+      <div class="grid">
+        <article class="card">
+          <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>
+          <h3>Authentication</h3>
+          <dl class="kv" id="kvAuth"></dl>
+        </article>
+        <article class="card">
+          <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div>
+          <h3>Your profile record</h3>
+          <dl class="kv" id="kvProfile"></dl>
+        </article>
+        <article class="card">
+          <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.7 4 3 9 3s9-1.3 9-3V5"/><path d="M3 12c0 1.7 4 3 9 3s9-1.3 9-3"/></svg></div>
+          <h3>Database access</h3>
+          <dl class="kv" id="kvDb"></dl>
+        </article>
+      </div>
+
+      <div class="section-head" style="margin-top:44px">
+        <h2>Coming in the next phase</h2>
+        <p>Placeholders only — no IT management features are implemented yet.</p>
+      </div>
+      <div class="grid">
+        <article class="card soon">
+          <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+          <h3>Support tickets</h3><p>Raise, triage, assign and resolve internal IT requests.</p><span class="pill pill-warn">Phase 2</span>
+        </article>
+        <article class="card soon">
+          <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 20h8"/></svg></div>
+          <h3>Device &amp; asset register</h3><p>Track laptops, phones and peripherals issued to staff.</p><span class="pill pill-warn">Phase 2</span>
+        </article>
+        <article class="card soon">
+          <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+          <h3>Access &amp; role management</h3><p>Grant or revoke portal roles with a full audit trail.</p><span class="pill pill-warn">Phase 2</span>
+        </article>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        <span>&copy; <span class="year"></span> Multidigital Service Limited — Tech Support Portal (internal).</span>
+        <span><a href="mailto:info@multidigitalng.com">info@multidigitalng.com</a></span>
+      </div>
+    </footer>
+  </div>
+
+  <div class="toasts" id="toasts"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="support.js"></script>
+</body>
+</html>

@@ -1,0 +1,246 @@
+/* Multidigital Service Limited — Tech Support / IT Portal (Phase 1)
+   Standalone front-end. Shares the company's existing Supabase project
+   (Auth + Postgres) — no duplicate database, no duplicate user system. */
+(function () {
+  "use strict";
+
+  /* ------------------------- Supabase ------------------------- */
+  /* Same project as the E-Attendance Platform. The publishable key is safe to
+     ship in the browser; all real protection comes from RLS policies (see
+     SUPABASE-SETUP.sql). */
+  var SUPABASE_URL = "https://wdrgcavxwamwqgxkdscn.supabase.co";
+  var SUPABASE_PUBLISHABLE_KEY = "sb_publishable_XlL1WvosmoBvl3vttrT-xw_nVvtMrQo";
+
+  var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
+  /* Roles allowed into this portal. "staff" is deliberately excluded. */
+  var ALLOWED_ROLES = ["admin", "it_support"];
+  var ROLE_LABEL = { admin: "Administrator", it_support: "IT Support", staff: "Staff" };
+
+  /* ------------------------- helpers ------------------------- */
+  var $ = function (id) { return document.getElementById(id); };
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function show(id) { var el = $(id); if (el) el.hidden = false; }
+  function hide(id) { var el = $(id); if (el) el.hidden = true; }
+  function only(id) {
+    ["boot", "loginView", "deniedView", "portalView"].forEach(function (v) {
+      var el = $(v); if (el) el.hidden = v !== id;
+    });
+  }
+  function toast(msg, kind) {
+    var box = $("toasts");
+    var el = document.createElement("div");
+    el.className = "toast " + (kind || "");
+    el.textContent = msg;
+    box.appendChild(el);
+    setTimeout(function () { el.remove(); }, 4800);
+  }
+  function loader(on) {
+    var el = $("topLoader");
+    el.hidden = false;
+    el.classList.toggle("visible", !!on);
+    if (!on) setTimeout(function () { el.hidden = true; }, 240);
+  }
+  function busy(btn, on) {
+    if (!on) { btn.classList.remove("is-loading"); btn.disabled = false; var s = btn.querySelector(".spinner"); if (s) s.remove(); return; }
+    btn.disabled = true;
+    btn.classList.add("is-loading");
+    var sp = document.createElement("span");
+    sp.className = "spinner";
+    btn.appendChild(sp);
+  }
+  function message(text, kind) {
+    var el = $("loginMsg");
+    if (!text) { el.hidden = true; return; }
+    el.hidden = false;
+    el.className = "alert alert-" + (kind || "error");
+    el.innerHTML = text;
+  }
+  function kv(target, rows) {
+    $(target).innerHTML = rows.map(function (r) {
+      return "<div><dt>" + esc(r[0]) + "</dt><dd>" + (r[2] ? r[1] : esc(r[1])) + "</dd></div>";
+    }).join("");
+  }
+  function pill(text, kind) {
+    return '<span class="pill pill-' + kind + '">' + esc(text) + "</span>";
+  }
+
+  /* ------------------------- role resolution -------------------------
+     Resolution order (all server-side, all subject to RLS):
+       1. public.has_portal_access()  — security-definer RPC, the source of truth
+       2. public.support_roles        — dedicated role table (admin/it_support/staff)
+       3. public.profiles.role        — legacy attendance role, admin only
+     Never trust anything held in the browser. */
+  async function resolveAccess(user) {
+    var result = { role: null, allowed: false, source: "none", error: null };
+
+    // 1. Preferred: a single security-definer function.
+    try {
+      var rpc = await sb.rpc("portal_role");
+      if (!rpc.error && rpc.data) {
+        result.role = String(rpc.data);
+        result.source = "portal_role() RPC";
+        result.allowed = ALLOWED_ROLES.indexOf(result.role) !== -1;
+        return result;
+      }
+    } catch (e) { /* function not deployed yet — fall through */ }
+
+    // 2. Dedicated roles table.
+    try {
+      var rolesRes = await sb.from("support_roles").select("role").eq("user_id", user.id);
+      if (!rolesRes.error && rolesRes.data && rolesRes.data.length) {
+        var roles = rolesRes.data.map(function (r) { return r.role; });
+        result.role = roles.indexOf("admin") !== -1 ? "admin" : roles[0];
+        result.source = "support_roles table";
+        result.allowed = roles.some(function (r) { return ALLOWED_ROLES.indexOf(r) !== -1; });
+        return result;
+      }
+      if (rolesRes.error) result.error = rolesRes.error.message;
+    } catch (e) { result.error = e.message; }
+
+    // 3. Fallback to the existing attendance profile role (admins only).
+    try {
+      var prof = await sb.from("profiles").select("role").eq("id", user.id).maybeSingle();
+      if (!prof.error && prof.data) {
+        result.role = prof.data.role || "staff";
+        result.source = "profiles.role (legacy)";
+        result.allowed = result.role === "admin";
+        return result;
+      }
+      if (prof.error) result.error = prof.error.message;
+    } catch (e) { result.error = e.message; }
+
+    return result;
+  }
+
+  /* ------------------------- portal render ------------------------- */
+  async function renderPortal(user, access) {
+    var profile = null;
+    var profileError = null;
+    try {
+      var res = await sb.from("profiles").select("*").eq("id", user.id).maybeSingle();
+      if (res.error) profileError = res.error.message; else profile = res.data;
+    } catch (e) { profileError = e.message; }
+
+    var name = (profile && (profile.full_name || profile.name)) || (user.email || "").split("@")[0];
+    $("whoName").textContent = name;
+    $("whoEmail").textContent = user.email || "";
+    $("heroName").textContent = name;
+    $("roleBadge").textContent = ROLE_LABEL[access.role] || access.role || "Unknown";
+
+    kv("kvAuth", [
+      ["Session", pill("Active", "ok"), true],
+      ["Provider", (user.app_metadata && user.app_metadata.provider) || "email"],
+      ["Email confirmed", user.email_confirmed_at ? "Yes" : "No"],
+      ["Last sign-in", user.last_sign_in_at ? new Date(user.last_sign_in_at).toLocaleString() : "—"]
+    ]);
+
+    kv("kvProfile", [
+      ["User ID", user.id],
+      ["Email", user.email || "—"],
+      ["Full name", (profile && (profile.full_name || profile.name)) || "—"],
+      ["Staff ID", (profile && profile.staff_id) || "—"],
+      ["Department", (profile && profile.department) || "—"],
+      ["Portal role", pill(ROLE_LABEL[access.role] || access.role || "none", access.allowed ? "ok" : "bad"), true]
+    ]);
+
+    kv("kvDb", [
+      ["Project", SUPABASE_URL.replace("https://", "")],
+      ["profiles read", profileError ? pill("Blocked", "bad") : pill("OK", "ok"), true],
+      ["Role source", access.source],
+      ["Row level security", pill("Enforced", "ok"), true],
+      ["Notes", profileError ? esc(profileError) : "All reads run as your own user."]
+    ]);
+
+    only("portalView");
+  }
+
+  /* ------------------------- gate ------------------------- */
+  async function gate() {
+    loader(true);
+    var sessionRes = await sb.auth.getSession();
+    var session = sessionRes.data && sessionRes.data.session;
+    if (!session) { loader(false); only("loginView"); return; }
+
+    var user = session.user;
+    var access = await resolveAccess(user);
+    loader(false);
+
+    if (!access.allowed) {
+      $("deniedEmail").textContent = user.email || user.id;
+      $("deniedRole").textContent = ROLE_LABEL[access.role] || access.role || "No role assigned";
+      if (access.error) {
+        $("deniedBody").innerHTML =
+          "We could not confirm your portal role. Ask the IT administrator to finish the portal database setup.<br /><small>" + esc(access.error) + "</small>";
+      }
+      only("deniedView");
+      return;
+    }
+
+    await renderPortal(user, access);
+  }
+
+  /* ------------------------- events ------------------------- */
+  document.addEventListener("DOMContentLoaded", function () {
+    Array.prototype.forEach.call(document.querySelectorAll(".year"), function (el) {
+      el.textContent = new Date().getFullYear();
+    });
+
+    $("showPw").addEventListener("change", function (e) {
+      $("password").type = e.target.checked ? "text" : "password";
+    });
+
+    $("loginForm").addEventListener("submit", async function (e) {
+      e.preventDefault();
+      message("");
+      var email = $("email").value.trim();
+      var password = $("password").value;
+      if (!email || !password) { message("Enter your work email and password."); return; }
+
+      var btn = $("loginSubmit");
+      busy(btn, true);
+      loader(true);
+      var res = await sb.auth.signInWithPassword({ email: email, password: password });
+      busy(btn, false);
+      loader(false);
+
+      if (res.error) {
+        message(esc(res.error.message) || "Sign in failed.");
+        return;
+      }
+      $("password").value = "";
+      toast("Signed in. Checking your access…", "good");
+      only("boot");
+      gate();
+    });
+
+    $("forgotBtn").addEventListener("click", async function () {
+      var email = $("email").value.trim();
+      if (!email) { message("Enter your work email first, then tap reset password.", "warn"); return; }
+      loader(true);
+      var res = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.href });
+      loader(false);
+      if (res.error) message(esc(res.error.message));
+      else message("If that account exists, a reset link is on its way.", "ok");
+    });
+
+    function signOut() {
+      return sb.auth.signOut().then(function () {
+        toast("Signed out.");
+        only("loginView");
+      });
+    }
+    $("signOutBtn").addEventListener("click", signOut);
+    $("deniedSignOut").addEventListener("click", signOut);
+
+    sb.auth.onAuthStateChange(function (event) {
+      if (event === "SIGNED_OUT") only("loginView");
+    });
+
+    gate();
+  });
+})();
