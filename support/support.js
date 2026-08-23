@@ -157,6 +157,8 @@
     ]);
 
     only("portalView");
+    var head = $("masthead");
+    if (head) document.documentElement.style.setProperty("--header-h", head.offsetHeight + "px");
   }
 
   /* ------------------------- gate ------------------------- */
@@ -289,11 +291,42 @@
         only("loginView");
       });
     }
-    /* Navigation between support sections. */
+
+    /* ------------------------- mobile nav (hamburger) -------------------------
+       Mirrors the E-Attendance Platform's masthead: on mobile the tab nav
+       becomes a fixed dropdown, the header sign-out button hides, and a
+       "Sign out" row appears inside the dropdown instead. */
     var navEl = $("nav");
     var toggle = $("menuToggle");
+    var backdrop = $("navBackdrop");
+
+    function syncHeaderHeight() {
+      var head = $("masthead");
+      if (head) document.documentElement.style.setProperty("--header-h", head.offsetHeight + "px");
+    }
+    function openNav() {
+      syncHeaderHeight();
+      navEl.classList.add("open");
+      document.body.classList.add("nav-open");
+      backdrop.hidden = false;
+      backdrop.classList.add("show");
+      if (toggle) toggle.setAttribute("aria-expanded", "true");
+    }
+    function closeNav() {
+      navEl.classList.remove("open");
+      document.body.classList.remove("nav-open");
+      backdrop.hidden = true;
+      backdrop.classList.remove("show");
+      if (toggle) toggle.setAttribute("aria-expanded", "false");
+    }
+
     if (navEl) {
       navEl.addEventListener("click", function (e) {
+        if (e.target.closest("#navSignout")) {
+          closeNav();
+          signOut();
+          return;
+        }
         var btn = e.target.closest("button[data-tab]");
         if (!btn) return;
         Array.prototype.forEach.call(navEl.querySelectorAll("button[data-tab]"), function (b) {
@@ -301,17 +334,33 @@
           var panel = $("tab-" + b.getAttribute("data-tab"));
           if (panel) panel.hidden = b !== btn;
         });
-        navEl.classList.remove("open");
-        if (toggle) toggle.setAttribute("aria-expanded", "false");
+        closeNav();
         window.scrollTo({ top: 0, behavior: "smooth" });
       });
     }
     if (toggle) {
-      toggle.addEventListener("click", function () {
-        var open = navEl.classList.toggle("open");
-        toggle.setAttribute("aria-expanded", open ? "true" : "false");
+      toggle.addEventListener("click", function (e) {
+        e.stopPropagation();
+        if (navEl.classList.contains("open")) closeNav(); else openNav();
       });
     }
+    if (backdrop) backdrop.addEventListener("click", closeNav);
+    document.addEventListener("click", function (e) {
+      if (!navEl || !navEl.classList.contains("open")) return;
+      if (navEl.contains(e.target) || (toggle && toggle.contains(e.target))) return;
+      closeNav();
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && navEl && navEl.classList.contains("open")) closeNav();
+    });
+    window.addEventListener("resize", function () {
+      syncHeaderHeight();
+      if (window.innerWidth > 760) closeNav();
+    });
+    syncHeaderHeight();
+
+    var logoutBtn = $("logoutBtn");
+    if (logoutBtn) logoutBtn.addEventListener("click", signOut);
 
     $("deniedSignOut").addEventListener("click", signOut);
 
