@@ -286,7 +286,9 @@ img{max-width:100%;display:block}
 }
 .page-head h1{font-size:clamp(28px,3.4vw,44px);color:var(--ink)}
 .page-head .dateline{margin-top:12px;font-size:13.5px;color:var(--ink-2);font-weight:500}
-.greeting-line{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.greeting-line{display:flex;align-items:center;gap:0 10px;flex-wrap:wrap;max-width:100%}
+.greeting-salutation{white-space:nowrap}
+.greeting-name{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;max-width:100%}
 .greeting-icon{display:inline-flex;flex:0 0 auto}
 .greeting-icon svg{width:1em;height:1em}
 .layout{display:grid;grid-template-columns:minmax(0,1fr) 348px;gap:28px;align-items:start}

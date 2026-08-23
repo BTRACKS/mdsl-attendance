@@ -437,8 +437,11 @@
 
     var greeting = greetingInfo(now);
     return '<div class="page"><div class="page-head"><p class="eyebrow">Staff Dashboard</p>' +
-      '<h1 class="greeting-line">' + esc(greeting.text) + ", " + esc(u.fullName.split(" ")[0]) +
-      '<span class="greeting-icon" aria-hidden="true">' + greeting.icon + "</span></h1></div>" +
+      '<h1 class="greeting-line">' +
+      '<span class="greeting-salutation">' + esc(greeting.text) + ",</span>" +
+      '<span class="greeting-name">' + esc(u.fullName.split(" ")[0]) +
+      '<span class="greeting-icon" aria-hidden="true">' + greeting.icon + "</span></span>" +
+      "</h1></div>" +
       '<div class="layout"><div>' +
 
       '<section class="section"><div class="section-head"><h2>Today\'s Attendance</h2><span>' + longDate(now) + "</span></div>" +
