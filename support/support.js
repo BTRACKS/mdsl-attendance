@@ -119,6 +119,223 @@
     return result;
   }
 
+
+  /* ------------------------- Users & profiles (Phase 2) -------------------------
+     Read-only. Every query runs as the signed-in user under RLS; no records are
+     created, duplicated or modified here. */
+  var USERS = { rows: [], loaded: false, loading: false, current: null };
+
+  var NAME_KEYS = ["full_name", "name", "fullname", "display_name"];
+  var EMAIL_KEYS = ["email", "work_email", "email_address"];
+  var PHONE_KEYS = ["phone", "phone_number", "mobile", "telephone", "msisdn"];
+  var TITLE_KEYS = ["position", "job_title", "title", "designation", "role_title"];
+  var STAFF_KEYS = ["staff_id", "staff_no", "employee_id", "staff_number"];
+  var DEPT_KEYS = ["department", "dept", "unit", "branch"];
+  var STATUS_KEYS = ["status", "account_status", "is_active", "active", "employment_status"];
+  var TYPE_KEYS = ["employment_type", "staff_type", "category"];
+  var AVATAR_KEYS = ["avatar_url", "photo_url", "profile_picture", "picture_url", "image_url", "avatar", "photo"];
+  var ROLE_KEYS = ["role", "user_role", "account_role"];
+
+  function pick(row, keys) {
+    for (var i = 0; i < keys.length; i++) {
+      var v = row[keys[i]];
+      if (v !== undefined && v !== null && String(v).trim() !== "") return v;
+    }
+    return null;
+  }
+  function labelize(key) {
+    return key.replace(/_/g, " ").replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+  }
+  function fmtValue(v) {
+    if (v === null || v === undefined || String(v).trim() === "") return "—";
+    if (typeof v === "boolean") return v ? "Yes" : "No";
+    if (typeof v === "object") return JSON.stringify(v);
+    var s = String(v);
+    if (/^\d{4}-\d{2}-\d{2}T/.test(s)) { var dt = new Date(s); if (!isNaN(dt)) return dt.toLocaleString(); }
+    return s;
+  }
+  function statusText(row) {
+    var v = pick(row, STATUS_KEYS);
+    if (v === null) return "Active";
+    if (typeof v === "boolean") return v ? "Active" : "Inactive";
+    return String(v).replace(/_/g, " ");
+  }
+  function displayName(row) {
+    var n = pick(row, NAME_KEYS);
+    if (n) return String(n);
+    var e = pick(row, EMAIL_KEYS);
+    return e ? String(e).split("@")[0] : "Unnamed user";
+  }
+  function initials(name) {
+    var parts = String(name).trim().split(/\s+/).slice(0, 2);
+    return parts.map(function (p) { return p.charAt(0).toUpperCase(); }).join("") || "?";
+  }
+  /* Uses the same picture the main website stores — an absolute URL is used as
+     is, a storage path is resolved through the shared avatars bucket. */
+  function avatarUrl(row) {
+    var raw = pick(row, AVATAR_KEYS);
+    if (!raw) return null;
+    var s = String(raw);
+    if (/^https?:\/\//i.test(s) || s.indexOf("data:") === 0) return s;
+    var path = s.replace(/^\/+/, "");
+    var bucket = "avatars";
+    if (path.indexOf("/") !== -1) {
+      var head = path.split("/")[0];
+      if (["avatars", "profile-pictures", "profiles", "public"].indexOf(head) !== -1) {
+        bucket = head;
+        path = path.slice(head.length + 1);
+      }
+    }
+    try {
+      var pub = sb.storage.from(bucket).getPublicUrl(path);
+      return (pub && pub.data && pub.data.publicUrl) || null;
+    } catch (e) { return null; }
+  }
+  function avatarHtml(row, big) {
+    var name = displayName(row);
+    var url = avatarUrl(row);
+    var cls = "avatar" + (big ? " avatar-lg" : "");
+    if (url) {
+      return '<div class="' + cls + '"><img src="' + esc(url) + '" alt="' + esc(name) +
+        '" loading="lazy" onerror="this.parentNode.textContent=\'' + esc(initials(name)) + '\'" /></div>';
+    }
+    return '<div class="' + cls + '">' + esc(initials(name)) + "</div>";
+  }
+
+  function matchesQuery(row, q) {
+    if (!q) return true;
+    var hay = [displayName(row), pick(row, EMAIL_KEYS), pick(row, STAFF_KEYS)]
+      .map(function (v) { return String(v == null ? "" : v).toLowerCase(); }).join(" ");
+    return hay.indexOf(q) !== -1;
+  }
+
+  function renderUsers() {
+    var q = ($("userSearch").value || "").trim().toLowerCase();
+    var rows = USERS.rows.filter(function (r) { return matchesQuery(r, q); });
+    var grid = $("usersGrid");
+    var state = $("usersState");
+
+    if (!rows.length) {
+      grid.innerHTML = "";
+      state.textContent = USERS.rows.length
+        ? "No staff member matches “" + q + "”."
+        : "No staff records are visible to your account.";
+      $("usersCount").textContent = "";
+      return;
+    }
+
+    state.textContent = q
+      ? rows.length + " of " + USERS.rows.length + " staff records match your search."
+      : "Showing " + rows.length + " staff record" + (rows.length === 1 ? "" : "s") + " from the database.";
+    $("usersCount").textContent = USERS.rows.length + " total";
+
+    grid.innerHTML = rows.map(function (r, i) {
+      var idx = USERS.rows.indexOf(r);
+      var email = pick(r, EMAIL_KEYS);
+      var title = pick(r, TITLE_KEYS);
+      var dept = pick(r, DEPT_KEYS);
+      var staff = pick(r, STAFF_KEYS);
+      var second = [title, dept].filter(Boolean).join(" · ") || "Position not recorded";
+      var third = [staff ? "Staff ID " + staff : null, statusText(r), ROLE_LABEL[pick(r, ROLE_KEYS)] || pick(r, ROLE_KEYS)]
+        .filter(Boolean).join(" · ");
+      return '<button type="button" class="user-card" data-user="' + idx + '">' +
+        avatarHtml(r) +
+        '<span class="u-body">' +
+          '<span class="u-name">' + esc(displayName(r)) + "</span>" +
+          '<span class="u-line">' + esc(email || "No email on record") + "</span>" +
+          '<span class="u-line">' + esc(second) + "</span>" +
+          '<span class="u-line-2">' + esc(third) + "</span>" +
+        "</span></button>";
+    }).join("");
+  }
+
+  function openUserProfile(row) {
+    USERS.current = row;
+    var name = displayName(row);
+    $("profileAvatar").outerHTML = avatarHtml(row, true).replace('class="avatar avatar-lg"', 'class="avatar avatar-lg" id="profileAvatar"');
+    $("profileName").textContent = name;
+    $("profileMeta").textContent = [pick(row, TITLE_KEYS), pick(row, DEPT_KEYS), pick(row, EMAIL_KEYS)]
+      .filter(Boolean).join(" · ") || "No additional details recorded";
+
+    kv("kvUserContact", [
+      ["Email", fmtValue(pick(row, EMAIL_KEYS))],
+      ["Phone number", fmtValue(pick(row, PHONE_KEYS))],
+      ["Address", fmtValue(row.address)]
+    ]);
+    kv("kvUserWork", [
+      ["Position", fmtValue(pick(row, TITLE_KEYS))],
+      ["Department", fmtValue(pick(row, DEPT_KEYS))],
+      ["Staff ID", fmtValue(pick(row, STAFF_KEYS))],
+      ["Employment type", fmtValue(pick(row, TYPE_KEYS))]
+    ]);
+    kv("kvUserAccount", [
+      ["Account status", fmtValue(statusText(row))],
+      ["Current role", fmtValue(ROLE_LABEL[pick(row, ROLE_KEYS)] || pick(row, ROLE_KEYS))],
+      ["User ID", fmtValue(row.id || row.user_id)],
+      ["Created", fmtValue(row.created_at)],
+      ["Last updated", fmtValue(row.updated_at)]
+    ]);
+
+    var known = {};
+    [NAME_KEYS, EMAIL_KEYS, PHONE_KEYS, TITLE_KEYS, STAFF_KEYS, DEPT_KEYS, STATUS_KEYS, TYPE_KEYS, AVATAR_KEYS, ROLE_KEYS]
+      .forEach(function (g) { g.forEach(function (k) { known[k] = 1; }); });
+    ["id", "user_id", "created_at", "updated_at", "address"].forEach(function (k) { known[k] = 1; });
+    var extras = Object.keys(row).filter(function (k) {
+      return !known[k] && row[k] !== null && String(row[k]).trim() !== "";
+    }).map(function (k) { return [labelize(k), fmtValue(row[k])]; });
+    kv("kvUserOther", extras.length ? extras : [["Additional fields", "Nothing further stored for this user."]]);
+
+    $("usersListView").hidden = true;
+    $("userProfileView").hidden = false;
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function closeUserProfile() {
+    $("userProfileView").hidden = true;
+    $("usersListView").hidden = false;
+  }
+
+  async function loadUsers(force) {
+    if (USERS.loading || (USERS.loaded && !force)) return;
+    USERS.loading = true;
+    $("usersState").textContent = "Loading staff records…";
+    $("usersGrid").innerHTML = "";
+    loader(true);
+    var res = await sb.from("profiles").select("*").limit(1000);
+    loader(false);
+    USERS.loading = false;
+
+    if (res.error) {
+      USERS.rows = [];
+      $("usersState").textContent = "Staff records could not be loaded: " + res.error.message;
+      return;
+    }
+    USERS.rows = (res.data || []).sort(function (a, b) {
+      return displayName(a).localeCompare(displayName(b));
+    });
+    USERS.loaded = true;
+    renderUsers();
+  }
+
+  function initUsers() {
+    var grid = $("usersGrid");
+    if (grid.getAttribute("data-ready") === "1") return;
+    grid.setAttribute("data-ready", "1");
+    grid.addEventListener("click", function (e) {
+      var card = e.target.closest("[data-user]");
+      if (!card) return;
+      var row = USERS.rows[Number(card.getAttribute("data-user"))];
+      if (row) openUserProfile(row);
+    });
+    $("userBack").addEventListener("click", closeUserProfile);
+    $("usersRefresh").addEventListener("click", function () { closeUserProfile(); loadUsers(true); });
+    var t;
+    $("userSearch").addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(renderUsers, 140);
+    });
+  }
+
   /* ------------------------- portal render ------------------------- */
   async function renderPortal(user, access) {
     var profile = null;
@@ -155,6 +372,9 @@
       ["Row level security", pill("Enforced", "ok"), true],
       ["Notes", profileError ? esc(profileError) : "All reads run as your own user."]
     ]);
+
+    initUsers();
+    loadUsers();
 
     only("portalView");
     var head = $("masthead");

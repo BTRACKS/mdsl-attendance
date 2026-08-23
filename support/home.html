@@ -109,6 +109,7 @@
       <div class="masthead-inner">
         <nav class="nav" id="nav" aria-label="Support navigation">
           <button type="button" class="active" data-tab="overview">Overview</button>
+          <button type="button" data-tab="users">Users</button>
           <button type="button" data-tab="checks">System checks</button>
           <button type="button" data-tab="modules">Support modules</button>
           <button type="button" class="nav-signout" id="navSignout">
@@ -131,7 +132,7 @@
     <main class="page">
       <div class="page-head">
         <h1>Welcome, <span id="heroName">colleague</span></h1>
-        <p class="dateline">Signed in as <span id="roleBadge">—</span> · Phase 1 establishes the portal, its sign-in and secure role checks. IT management tools arrive in the next phase.</p>
+        <p class="dateline">Signed in as <span id="roleBadge">—</span> · Phase 2 adds read-only access to staff users and profiles, sourced live from the company database.</p>
       </div>
 
       <!-- Overview -->
@@ -148,6 +149,56 @@
           <div class="panel">
             <div class="panel-head">Your profile record</div>
             <div class="panel-body"><dl class="kv" id="kvProfile"></dl></div>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- Users & profiles -->
+      <section class="section" id="tab-users" hidden>
+        <div class="section-head">
+          <h2>Users &amp; profiles</h2>
+          <span id="usersCount">&nbsp;</span>
+        </div>
+
+        <div id="usersListView">
+          <div class="users-toolbar">
+            <div class="field search-field">
+              <label for="userSearch">Search staff</label>
+              <input id="userSearch" type="search" placeholder="Search by name, email or staff ID" autocomplete="off" />
+            </div>
+            <button class="btn btn-ghost btn-sm" id="usersRefresh" type="button">Refresh</button>
+          </div>
+          <p class="users-state" id="usersState">Loading staff records…</p>
+          <div class="users-grid" id="usersGrid"></div>
+        </div>
+
+        <div id="userProfileView" hidden>
+          <button class="link-muted users-back" id="userBack" type="button">&larr; Back to all users</button>
+          <div class="profile-head">
+            <div class="avatar avatar-lg" id="profileAvatar"></div>
+            <div class="profile-ident">
+              <h3 id="profileName">—</h3>
+              <p id="profileMeta">—</p>
+            </div>
+          </div>
+          <div class="grid-2 profile-grid">
+            <div class="panel">
+              <div class="panel-head">Contact</div>
+              <div class="panel-body"><dl class="kv" id="kvUserContact"></dl></div>
+            </div>
+            <div class="panel">
+              <div class="panel-head">Employment</div>
+              <div class="panel-body"><dl class="kv" id="kvUserWork"></dl></div>
+            </div>
+            <div class="panel">
+              <div class="panel-head">Account</div>
+              <div class="panel-body"><dl class="kv" id="kvUserAccount"></dl></div>
+            </div>
+            <div class="panel">
+              <div class="panel-head">Other stored information</div>
+              <div class="panel-body"><dl class="kv" id="kvUserOther"></dl></div>
+            </div>
           </div>
         </div>
       </section>
