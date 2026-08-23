@@ -132,7 +132,7 @@
     <main class="page">
       <div class="page-head">
         <h1>Welcome, <span id="heroName">colleague</span></h1>
-        <p class="dateline">Signed in as <span id="roleBadge">—</span> · Phase 2 adds read-only access to staff users and profiles, sourced live from the company database.</p>
+        <p class="dateline">Signed in as <span id="roleBadge">—</span> · Phase 3 adds role management for administrators, enforced in the database.</p>
       </div>
 
       <!-- Overview -->
@@ -195,6 +195,24 @@
               <div class="panel-head">Account</div>
               <div class="panel-body"><dl class="kv" id="kvUserAccount"></dl></div>
             </div>
+            <div class="panel" id="rolePanel">
+              <div class="panel-head">Role management</div>
+              <div class="panel-body">
+                <dl class="kv" id="kvUserRole"></dl>
+                <div class="role-form" id="roleForm" hidden>
+                  <div class="field">
+                    <label for="roleSelect">Portal role</label>
+                    <select id="roleSelect">
+                      <option value="staff">Staff</option>
+                      <option value="it_support">IT Support</option>
+                      <option value="admin">Administrator</option>
+                    </select>
+                  </div>
+                  <button class="btn btn-primary btn-sm" id="roleSave" type="button">Save role</button>
+                </div>
+                <p class="role-note" id="roleNote"></p>
+              </div>
+            </div>
             <div class="panel">
               <div class="panel-head">Other stored information</div>
               <div class="panel-body"><dl class="kv" id="kvUserOther"></dl></div>
@@ -234,8 +252,8 @@
           </li>
           <li>
             <h3>Access &amp; role management</h3>
-            <p>Grant or revoke portal roles with a full audit trail.</p>
-            <small>Phase 2</small>
+            <p>Change a user's portal role from their profile. Enforced by database policies.</p>
+            <small>Available now</small>
           </li>
         </ul>
       </section>
@@ -292,6 +310,18 @@
       </div>
     </div>
   </footer>
+
+  <!-- ===================== ROLE CHANGE CONFIRMATION ===================== -->
+  <div class="modal-backdrop" id="confirmBackdrop" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+      <h2 id="confirmTitle">Confirm role change</h2>
+      <p id="confirmBody">—</p>
+      <div class="modal-actions">
+        <button class="btn btn-ghost btn-sm" id="confirmCancel" type="button">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="confirmOk" type="button">Yes, change role</button>
+      </div>
+    </div>
+  </div>
 
   <div class="toasts" id="toasts"></div>
 

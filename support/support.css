@@ -388,3 +388,43 @@ img{max-width:100%;display:block}
   .kv dd{text-align:left}
   .avatar-lg{width:64px;height:64px;font-size:20px}
 }
+
+/* ---------- Phase 3: role management ---------- */
+.role-form{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px;margin-top:14px}
+.role-form .field{margin:0;flex:1 1 200px;min-width:0}
+.role-form select{
+  width:100%;padding:11px 12px;border:1px solid var(--rule-strong);border-radius:var(--radius);
+  background:var(--paper);color:var(--ink);font-size:15px;line-height:1.3;appearance:none;
+  background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235b6577' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 12px center;padding-right:36px;
+  transition:border-color var(--t),box-shadow var(--t)
+}
+.role-form select:focus{outline:none;border-color:var(--navy);box-shadow:0 0 0 3px rgba(18,58,107,.12)}
+.role-form .btn{flex:0 0 auto}
+.role-note{margin-top:12px;font-size:13.5px;color:var(--ink-3);line-height:1.5}
+
+/* ---------- Modal ---------- */
+.modal-backdrop{
+  position:fixed;inset:0;z-index:120;background:rgba(16,24,40,.55);
+  display:flex;align-items:center;justify-content:center;padding:20px;
+  -webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);overflow-y:auto
+}
+.modal{
+  width:100%;max-width:460px;background:var(--paper);border:1px solid var(--rule);
+  border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);padding:26px;margin:auto
+}
+.modal h2{font-size:19px;color:var(--ink)}
+.modal p{margin-top:10px;color:var(--ink-2);font-size:15px;line-height:1.6}
+.modal p strong{color:var(--ink)}
+.modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:22px;flex-wrap:wrap}
+.modal-actions .btn{min-height:44px}
+body.modal-open{overflow:hidden}
+
+@media (max-width:560px){
+  .role-form{display:block}
+  .role-form .field{width:100%;margin-bottom:12px}
+  .role-form .btn{width:100%;min-height:46px}
+  .modal{padding:20px;border-radius:var(--radius)}
+  .modal-actions{flex-direction:column-reverse}
+  .modal-actions .btn{width:100%}
+}

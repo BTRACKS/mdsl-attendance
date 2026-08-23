@@ -13,6 +13,10 @@
 
   var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
+  /* Current session context. Convenience only — never used for authorisation:
+     every privileged action is re-checked in Postgres. */
+  var ME = { user: null, role: null, allowed: false };
+
   /* Roles allowed into this portal. "staff" is deliberately excluded. */
   var ALLOWED_ROLES = ["admin", "it_support"];
   var ROLE_LABEL = { admin: "Administrator", it_support: "IT Support", staff: "Staff" };
@@ -91,13 +95,14 @@
       }
     } catch (e) { /* function not deployed yet — fall through */ }
 
-    // 2. Dedicated roles table.
+    // 2. Dedicated roles table (user_roles, falling back to legacy support_roles).
     try {
-      var rolesRes = await sb.from("support_roles").select("role").eq("user_id", user.id);
+      var rolesRes = await sb.from("user_roles").select("role").eq("user_id", user.id);
+      if (rolesRes.error) rolesRes = await sb.from("support_roles").select("role").eq("user_id", user.id);
       if (!rolesRes.error && rolesRes.data && rolesRes.data.length) {
         var roles = rolesRes.data.map(function (r) { return r.role; });
         result.role = roles.indexOf("admin") !== -1 ? "admin" : roles[0];
-        result.source = "support_roles table";
+        result.source = "user_roles table";
         result.allowed = roles.some(function (r) { return ALLOWED_ROLES.indexOf(r) !== -1; });
         return result;
       }
@@ -236,7 +241,7 @@
       var dept = pick(r, DEPT_KEYS);
       var staff = pick(r, STAFF_KEYS);
       var second = [title, dept].filter(Boolean).join(" · ") || "Position not recorded";
-      var third = [staff ? "Staff ID " + staff : null, statusText(r), ROLE_LABEL[pick(r, ROLE_KEYS)] || pick(r, ROLE_KEYS)]
+      var third = [staff ? "Staff ID " + staff : null, statusText(r), roleLabel(roleOf(r))]
         .filter(Boolean).join(" · ");
       return '<button type="button" class="user-card" data-user="' + idx + '">' +
         avatarHtml(r) +
@@ -270,7 +275,7 @@
     ]);
     kv("kvUserAccount", [
       ["Account status", fmtValue(statusText(row))],
-      ["Current role", fmtValue(ROLE_LABEL[pick(row, ROLE_KEYS)] || pick(row, ROLE_KEYS))],
+      ["Current role", roleLabel(roleOf(row))],
       ["User ID", fmtValue(row.id || row.user_id)],
       ["Created", fmtValue(row.created_at)],
       ["Last updated", fmtValue(row.updated_at)]
@@ -284,6 +289,8 @@
       return !known[k] && row[k] !== null && String(row[k]).trim() !== "";
     }).map(function (k) { return [labelize(k), fmtValue(row[k])]; });
     kv("kvUserOther", extras.length ? extras : [["Additional fields", "Nothing further stored for this user."]]);
+
+    renderRolePanel(row);
 
     $("usersListView").hidden = true;
     $("userProfileView").hidden = false;
@@ -302,6 +309,7 @@
     $("usersGrid").innerHTML = "";
     loader(true);
     var res = await sb.from("profiles").select("*").limit(1000);
+    await loadRoles();
     loader(false);
     USERS.loading = false;
 
@@ -336,8 +344,177 @@
     });
   }
 
+  /* ------------------------- Phase 3: role management -------------------------
+     The UI below is a convenience layer only. Every role change is executed by
+     public.set_user_role(), a security-definer function that re-checks the
+     caller is an administrator, refuses to strip the last administrator, and
+     is the only path permitted by the row level security policies on
+     public.user_roles. Hiding a button here protects nothing on its own. */
+  var ROLES = {};          /* user_id -> role, as stored in the database */
+  var ADMIN_COUNT = 0;     /* administrators currently on record */
+  var PENDING = null;      /* role change awaiting confirmation */
+
+  function roleOf(row) {
+    var id = row.id || row.user_id;
+    return ROLES[id] || pick(row, ROLE_KEYS) || "staff";
+  }
+  function roleLabel(r) { return ROLE_LABEL[r] || r || "Staff"; }
+  function isAdmin() { return ME.role === "admin"; }
+
+  async function loadRoles() {
+    ROLES = {};
+    ADMIN_COUNT = 0;
+    var res = await sb.rpc("list_portal_roles");
+    if (res.error || !res.data) {
+      res = await sb.from("user_roles").select("user_id, role");
+      if (res.error) res = await sb.from("support_roles").select("user_id, role");
+    }
+    if (res.error || !res.data) return;
+    (res.data || []).forEach(function (r) {
+      var id = r.user_id || r.id;
+      if (!id) return;
+      /* admin always wins if several rows exist for one user */
+      if (ROLES[id] === "admin") return;
+      ROLES[id] = r.role;
+    });
+    ADMIN_COUNT = Object.keys(ROLES).filter(function (k) { return ROLES[k] === "admin"; }).length;
+  }
+
+  function renderRolePanel(row) {
+    var id = row.id || row.user_id;
+    var current = roleOf(row);
+    var name = displayName(row);
+    var self = ME.user && id === ME.user.id;
+
+    kv("kvUserRole", [
+      ["Current portal role", roleLabel(current)],
+      ["Portal access", ALLOWED_ROLES.indexOf(current) !== -1 ? "Granted" : "Not granted"],
+      ["Changed by", "Administrators only"]
+    ]);
+
+    var form = $("roleForm");
+    var note = $("roleNote");
+    var sel = $("roleSelect");
+
+    if (!isAdmin()) {
+      form.hidden = true;
+      note.textContent = "Only an administrator can change portal roles. Your account has read-only access to this section.";
+      return;
+    }
+    if (!id) {
+      form.hidden = true;
+      note.textContent = "This record has no linked user account, so a portal role cannot be assigned to it.";
+      return;
+    }
+
+    form.hidden = false;
+    sel.value = current === "admin" || current === "it_support" ? current : "staff";
+    sel.setAttribute("data-user", id);
+    sel.setAttribute("data-name", name);
+    sel.setAttribute("data-current", current);
+
+    if (self && current === "admin" && ADMIN_COUNT <= 1) {
+      note.textContent = "You are the only administrator on record. Promote another user to Administrator before changing your own role.";
+    } else if (self) {
+      note.textContent = "You are editing your own account. Reducing your role will immediately limit your access to this portal.";
+    } else {
+      note.textContent = "Changing a role takes effect immediately for " + name + ". You will be asked to confirm first.";
+    }
+  }
+
+  function closeConfirm() {
+    PENDING = null;
+    $("confirmBackdrop").hidden = true;
+    document.body.classList.remove("modal-open");
+  }
+
+  function askConfirm(userId, name, from, to) {
+    PENDING = { userId: userId, name: name, from: from, to: to };
+    $("confirmBody").innerHTML =
+      "Change <strong>" + esc(name) + "</strong>'s role from <strong>" + esc(roleLabel(from)) +
+      "</strong> to <strong>" + esc(roleLabel(to)) + "</strong>?" +
+      (to === "staff"
+        ? "<br /><br />This removes their access to the Tech Support portal."
+        : to === "admin"
+          ? "<br /><br />Administrators can manage users, profiles and roles."
+          : "");
+    $("confirmBackdrop").hidden = false;
+    document.body.classList.add("modal-open");
+    $("confirmOk").focus();
+  }
+
+  async function applyRoleChange() {
+    if (!PENDING) return;
+    var job = PENDING;
+    var btn = $("confirmOk");
+    busy(btn, true);
+    loader(true);
+
+    var res = await sb.rpc("set_user_role", { target_user: job.userId, new_role: job.to });
+
+    busy(btn, false);
+    loader(false);
+
+    if (res.error) {
+      closeConfirm();
+      toast(res.error.message || "The role change was refused by the database.", "bad");
+      return;
+    }
+
+    closeConfirm();
+    ROLES[job.userId] = job.to;
+    ADMIN_COUNT = ADMIN_COUNT + (job.to === "admin" ? 1 : 0) - (job.from === "admin" ? 1 : 0);
+    toast(job.name + " is now " + roleLabel(job.to) + ".", "good");
+
+    /* If an administrator changed their own role, re-run the access gate. */
+    if (ME.user && job.userId === ME.user.id && job.to !== ME.role) {
+      only("boot");
+      await gate();
+      return;
+    }
+
+    await loadRoles();
+    renderUsers();
+    if (USERS.current) renderRolePanel(USERS.current);
+  }
+
+  function initRoleUi() {
+    var save = $("roleSave");
+    if (save.getAttribute("data-ready") === "1") return;
+    save.setAttribute("data-ready", "1");
+
+    save.addEventListener("click", function () {
+      var sel = $("roleSelect");
+      var id = sel.getAttribute("data-user");
+      var name = sel.getAttribute("data-name") || "this user";
+      var from = sel.getAttribute("data-current");
+      var to = sel.value;
+      if (!id) return;
+      if (to === from) { toast("That is already " + name + "'s role."); return; }
+      if (!isAdmin()) { toast("Only an administrator can change portal roles.", "bad"); return; }
+      if (ME.user && id === ME.user.id && from === "admin" && ADMIN_COUNT <= 1) {
+        toast("You are the last administrator. Promote another user first.", "bad");
+        return;
+      }
+      askConfirm(id, name, from, to);
+    });
+
+    $("confirmCancel").addEventListener("click", closeConfirm);
+    $("confirmOk").addEventListener("click", applyRoleChange);
+    $("confirmBackdrop").addEventListener("click", function (e) {
+      if (e.target === $("confirmBackdrop")) closeConfirm();
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && !$("confirmBackdrop").hidden) closeConfirm();
+    });
+  }
+
   /* ------------------------- portal render ------------------------- */
   async function renderPortal(user, access) {
+    ME.user = user;
+    ME.role = access.role;
+    ME.allowed = access.allowed;
+
     var profile = null;
     var profileError = null;
     try {
@@ -374,6 +551,7 @@
     ]);
 
     initUsers();
+    initRoleUi();
     loadUsers();
 
     only("portalView");
@@ -386,7 +564,12 @@
     loader(true);
     var sessionRes = await sb.auth.getSession();
     var session = sessionRes.data && sessionRes.data.session;
-    if (!session) { loader(false); only("loginView"); return; }
+    if (!session) {
+      ME = { user: null, role: null, allowed: false };
+      loader(false);
+      only("loginView");
+      return;
+    }
 
     var user = session.user;
     var access = await resolveAccess(user);
