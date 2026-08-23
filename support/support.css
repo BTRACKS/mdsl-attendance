@@ -51,7 +51,7 @@ img{max-width:100%;display:block}
 
 /* ---------- Masthead ---------- */
 .masthead{position:sticky;top:0;z-index:40;background:rgba(255,255,255,.85);backdrop-filter:blur(14px);border-bottom:1px solid var(--rule)}
-.masthead-inner{max-width:var(--maxw);margin:0 auto;padding:14px 24px;display:flex;align-items:center;gap:24px;min-height:56px}
+.masthead-inner{max-width:var(--maxw);margin:0 auto;padding:14px 24px;display:flex;align-items:center;justify-content:center;gap:24px;min-height:56px}
 .brand{display:flex;align-items:center;gap:12px;flex:0 0 auto;min-width:0}
 .brand-logo{
   width:42px;height:42px;object-fit:contain;flex:0 0 auto;padding:4px;border-radius:11px;
@@ -66,7 +66,7 @@ img{max-width:100%;display:block}
   text-transform:uppercase;color:var(--ink-4)
 }
 .nav{
-  display:flex;gap:4px;align-items:center;margin:0 auto;flex-wrap:wrap;justify-content:center;max-width:100%;
+  display:flex;gap:4px;align-items:center;margin:0;flex-wrap:wrap;justify-content:center;max-width:100%;
   background:var(--paper-2);border:1px solid var(--rule);border-radius:var(--radius-pill);padding:5px
 }
 .nav button{
@@ -235,9 +235,59 @@ img{max-width:100%;display:block}
 .denied-actions{display:flex;gap:10px;margin-top:26px;flex-wrap:wrap}
 
 /* ---------- Footer ---------- */
-.footer{border-top:1px solid var(--rule);background:var(--paper-2);margin-top:auto}
-.footer-inner{max-width:var(--maxw);margin:0 auto;padding:34px 24px;display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;font-size:13.5px;color:var(--ink-3)}
-.footer a{color:var(--navy);font-weight:600}
+.faq{background:var(--paper);border-top:1px solid var(--rule);margin-top:40px;flex:1 0 auto}
+.faq-inner{max-width:900px;margin:0 auto;padding:64px 24px}
+.faq-head{text-align:center;margin-bottom:28px}
+.faq-head h2{font-size:clamp(24px,3.2vw,34px);color:var(--ink)}
+.faq-lede{margin-top:10px;color:var(--ink-3);font-size:15px}
+.faq-list{display:flex;flex-direction:column;gap:12px}
+.faq-item{border:1px solid var(--rule);border-radius:var(--radius);background:var(--paper);box-shadow:var(--shadow-xs);transition:border-color var(--t),box-shadow var(--t)}
+.faq-item.open{border-color:var(--rule-strong);box-shadow:var(--shadow-sm)}
+.faq-q{width:100%;display:flex;align-items:center;justify-content:space-between;gap:16px;
+  background:none;border:0;cursor:pointer;text-align:left;padding:18px 20px;
+  font-weight:700;font-size:15.5px;letter-spacing:-.01em;color:var(--ink)}
+.faq-q:hover{color:var(--navy)}
+.faq-icon{position:relative;flex:0 0 auto;width:22px;height:22px;border-radius:50%;background:var(--paper-3);transition:background var(--t),transform var(--t)}
+.faq-icon::before,.faq-icon::after{content:"";position:absolute;left:50%;top:50%;background:var(--navy);border-radius:2px;transform:translate(-50%,-50%);transition:opacity var(--t)}
+.faq-icon::before{width:10px;height:2px}
+.faq-icon::after{width:2px;height:10px}
+.faq-item.open .faq-icon{background:var(--amber-soft)}
+.faq-item.open .faq-icon::after{opacity:0}
+.faq-a{display:grid;grid-template-rows:0fr;transition:grid-template-rows 260ms cubic-bezier(.2,.7,.3,1)}
+.faq-a>div{overflow:hidden}
+.faq-item.open .faq-a{grid-template-rows:1fr}
+.faq-a p{padding:0 20px 20px;color:var(--ink-3);font-size:15px;max-width:70ch}
+
+.footer{border-top:1px solid var(--rule);background:var(--paper-2)}
+.footer-inner{max-width:var(--maxw);margin:0 auto;padding:56px 24px 28px}
+.footer-top{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr) minmax(0,1.2fr);gap:44px}
+.footer-title{font-family:inherit;font-weight:800;font-size:17px;letter-spacing:-.02em;color:var(--navy)}
+.footer-copy{margin-top:10px;color:var(--ink-3);font-size:14.5px;max-width:44ch}
+.footer-nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px}
+.footer-nav h3,.footer-offices h3{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-4);margin-bottom:14px}
+.footer-nav a,.footer-nav span,.footer-link,.footer-offices a{display:block;font-size:14.5px;color:var(--ink-2);padding:5px 0;transition:color var(--t);word-break:break-word}
+.footer-nav span{color:var(--ink-3)}
+.footer-link{background:none;border:0;padding:5px 0;cursor:pointer;text-align:left;font:inherit;font-size:14.5px;color:var(--ink-2)}
+.footer-nav a:hover,.footer-link:hover,.footer-offices a:hover{color:var(--navy)}
+.footer-offices{display:grid;gap:22px;min-width:0}
+.footer-offices address{font-style:normal;font-size:14.5px;line-height:1.6;color:var(--ink-3)}
+.footer-legal{margin-top:18px;font-size:12.5px;color:var(--ink-4)}
+@media (max-width:1024px){
+  .footer-top{grid-template-columns:1fr 1fr;gap:36px}
+  .footer-offices{grid-column:1 / -1;grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:900px){
+  .footer-top{grid-template-columns:1fr;gap:32px}
+  .footer-offices{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .faq-inner{padding:52px 20px}
+}
+@media (max-width:560px){
+  .footer-inner{padding:40px 20px 24px}
+  .footer-nav{grid-template-columns:1fr 1fr;gap:22px}
+  .footer-offices{grid-template-columns:1fr;gap:18px}
+  .faq-q{font-size:15px;padding:16px}
+  .faq-a p{padding:0 16px 16px}
+}
 
 /* ---------- Toasts ---------- */
 .toasts{position:fixed;right:20px;bottom:20px;display:flex;flex-direction:column;gap:10px;z-index:90}
@@ -262,18 +312,9 @@ img{max-width:100%;display:block}
   .page-head{padding:26px 22px}
 }
 @media (max-width:760px){
-  .masthead-inner{padding:12px 18px;gap:12px;flex-wrap:nowrap}
-  .brand-text{font-size:13px}
-  .who{display:none}
-  .menu-toggle{display:block}
-  .nav{
-    position:fixed;top:70px;left:0;right:0;background:var(--paper);border:0;border-radius:0;
-    flex-direction:column;align-items:stretch;gap:0;padding:0 20px;display:none;
-    box-shadow:0 24px 32px -20px rgba(16,24,40,.25);z-index:39
-  }
-  .nav.open{display:flex}
-  .nav button{width:100%;justify-content:flex-start;padding:16px 4px;border-radius:0;border-bottom:1px solid var(--rule);font-size:15px}
-  .nav button.active{background:none;box-shadow:none}
+  .masthead-inner{padding:12px 14px;gap:12px}
+  .nav{width:100%;justify-content:center;flex-wrap:wrap}
+  .nav button{padding:9px 12px;font-size:12.5px}
   .page{padding:20px 18px 56px}
   .section{padding:20px 18px}
   .kv div{flex-direction:column;gap:2px}

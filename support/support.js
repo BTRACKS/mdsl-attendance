@@ -129,8 +129,6 @@
     } catch (e) { profileError = e.message; }
 
     var name = (profile && (profile.full_name || profile.name)) || (user.email || "").split("@")[0];
-    $("whoName").textContent = name;
-    $("whoEmail").textContent = user.email || "";
     $("heroName").textContent = name;
     $("roleBadge").textContent = ROLE_LABEL[access.role] || access.role || "Unknown";
 
@@ -186,10 +184,65 @@
     await renderPortal(user, access);
   }
 
+
+  /* ------------------------- FAQ ------------------------- */
+  var FAQS = [
+    ["What is the E-Attendance System?",
+     "The E-Attendance System is Multidigital Service Limited's internal platform for recording daily staff attendance. It replaces paper registers and spreadsheets with a single, time-stamped digital record."],
+    ["How does the E-Attendance System work?",
+     "Each member of staff signs in, submits a morning resumption time when the day begins and an evening closing time when it ends. Every submission is time-stamped and locked, so records stay accurate and final."],
+    ["Who can use the platform?",
+     "All Multidigital Service Limited personnel, interns and full staff across every department, plus administrators who monitor and report on attendance."],
+    ["How does attendance tracking work?",
+     "The platform captures two windows per working day: resumption and closing. Submitted entries cannot be edited or resubmitted, and every record is stored against your staff ID and department."],
+    ["Can administrators manage attendance records?",
+     "Yes. Administrators have an overview dashboard and a management view where records can be searched and filtered by staff, department, employment type and date."],
+    ["Is the platform accessible on mobile devices?",
+     "Yes. The interface is fully responsive and works on phones, tablets and desktops, so staff can log attendance from any device."],
+    ["How does the system help organizations manage attendance?",
+     "It removes manual record-keeping, gives leadership real-time visibility of punctuality and presence, and produces a reliable history for payroll, reviews and compliance."]
+  ];
+
+  function escFaq(s) {
+    return String(s).replace(/[&<>"]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+    });
+  }
+
+  function renderFaq() {
+    var list = document.getElementById("faqList");
+    if (!list || list.getAttribute("data-ready") === "1") return;
+    list.innerHTML = FAQS.map(function (f, i) {
+      return '<div class="faq-item"><button class="faq-q" type="button" aria-expanded="false" data-faq="' + i + '">' +
+        "<span>" + escFaq(f[0]) + '</span><span class="faq-icon" aria-hidden="true"></span></button>' +
+        '<div class="faq-a"><div><p>' + escFaq(f[1]) + "</p></div></div></div>";
+    }).join("");
+    list.setAttribute("data-ready", "1");
+    list.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-faq]");
+      if (!b) return;
+      var item = b.parentNode, open = item.classList.contains("open");
+      Array.prototype.forEach.call(list.querySelectorAll(".faq-item"), function (it) {
+        it.classList.remove("open");
+        it.querySelector(".faq-q").setAttribute("aria-expanded", "false");
+      });
+      if (!open) { item.classList.add("open"); b.setAttribute("aria-expanded", "true"); }
+    });
+  }
+
   /* ------------------------- events ------------------------- */
   document.addEventListener("DOMContentLoaded", function () {
     Array.prototype.forEach.call(document.querySelectorAll(".year"), function (el) {
       el.textContent = new Date().getFullYear();
+    });
+
+    renderFaq();
+
+    Array.prototype.forEach.call(document.querySelectorAll("[data-scroll]"), function (b) {
+      b.addEventListener("click", function () {
+        var t = document.getElementById(b.getAttribute("data-scroll"));
+        if (t) t.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
     });
 
     $("showPw").addEventListener("change", function (e) {
@@ -260,7 +313,6 @@
       });
     }
 
-    $("signOutBtn").addEventListener("click", signOut);
     $("deniedSignOut").addEventListener("click", signOut);
 
     sb.auth.onAuthStateChange(function (event) {
