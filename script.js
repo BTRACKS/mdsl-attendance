@@ -763,7 +763,7 @@
   }
 
   var filters = { q: "", dept: "", type: "", date: "" };
-  var historyCollapsed = false;
+  var historyCollapsed = true;
 
   function adminTable(staff, key) {
     if (!staff.length) return '<div class="table-wrap"><p class="empty">No staff match the selected filters.</p></div>';
@@ -842,7 +842,7 @@
       staff.map(function (u) {
         var recs = db.attendance.filter(function (a) { return a.userId === u.id; }).sort(function (a, b) { return a.date < b.date ? 1 : -1; }).slice(0, 10);
         return '<div class="panel" style="margin-bottom:18px"><div class="panel-head panel-head-staff">' + avatarHtml(u, "avatar-sm") +
-          "<span>" + esc(u.fullName) + " — " + esc(u.staffId) + "</span></div>" +
+          "<span>" + esc(u.fullName) + "</span></div>" +
           '<div class="panel-body panel-body-history">' +
           (recs.length ? '<div class="history-list">' +
             recs.map(function (a) {
