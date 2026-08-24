@@ -236,21 +236,10 @@
 
     grid.innerHTML = rows.map(function (r, i) {
       var idx = USERS.rows.indexOf(r);
-      var email = pick(r, EMAIL_KEYS);
-      var title = pick(r, TITLE_KEYS);
-      var dept = pick(r, DEPT_KEYS);
-      var staff = pick(r, STAFF_KEYS);
-      var second = [title, dept].filter(Boolean).join(" · ") || "Position not recorded";
-      var third = [staff ? "Staff ID " + staff : null, statusText(r), roleLabel(roleOf(r))]
-        .filter(Boolean).join(" · ");
       return '<button type="button" class="user-card" data-user="' + idx + '">' +
         avatarHtml(r) +
-        '<span class="u-body">' +
-          '<span class="u-name">' + esc(displayName(r)) + "</span>" +
-          '<span class="u-line">' + esc(email || "No email on record") + "</span>" +
-          '<span class="u-line">' + esc(second) + "</span>" +
-          '<span class="u-line-2">' + esc(third) + "</span>" +
-        "</span></button>";
+        '<span class="u-body"><span class="u-name">' + esc(displayName(r)) + "</span></span>" +
+        "</button>";
     }).join("");
   }
 
@@ -753,7 +742,7 @@
     $("attSelected").hidden = false;
     var selectedAvatar = $("attSelectedAvatar");
     if (selectedAvatar) {
-      selectedAvatar.outerHTML = avatarHtml(row, "avatar-sm").replace('class="avatar avatar-sm"', 'class="avatar avatar-sm" id="attSelectedAvatar"');
+      selectedAvatar.outerHTML = avatarHtml(row).replace('class="avatar"', 'class="avatar avatar-sm" id="attSelectedAvatar"');
     }
     $("attSelectedName").textContent = displayName(row);
     loadAttendance();
