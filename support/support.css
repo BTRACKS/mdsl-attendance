@@ -507,7 +507,20 @@ body.modal-open{overflow:hidden}
 .edit-hint{margin-top:8px;font-size:12.5px;color:var(--ink-4)}
 .edit-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
 
-.sys-groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
+/* Two explicit columns on desktop/tablet so the row fills the section width.
+   (auto-fit/minmax was leaving a phantom empty column because the full-width
+   "Application settings" panel below counted as content in a 3rd auto-fit
+   track, shrinking the two visible cards and stranding empty space to the
+   right of them.) Collapses to a single column on narrow viewports. */
+.sys-groups{
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:20px;
+  align-items:stretch;
+}
+@media (max-width:760px){
+  .sys-groups{grid-template-columns:1fr;gap:16px}
+}
 .sys-list{list-style:none;margin:0;padding:0;display:grid;gap:16px}
 .sys-list li{padding-bottom:16px;border-bottom:1px solid var(--rule)}
 .sys-list li:last-child{padding-bottom:0;border-bottom:0}
