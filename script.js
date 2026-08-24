@@ -485,7 +485,7 @@
   function profilePanel(u) {
     return '<aside><div class="panel"><div class="panel-head">' + ICON.userCard + 'Staff Profile</div><div class="panel-body">' +
       '<div class="identity">' + avatarHtml(u) +
-      "<div><h3>" + esc(u.fullName) + "</h3><p>" + esc(u.position) + "</p></div></div>" +
+      "<div><h3>" + esc(u.fullName) + "</h3></div></div>" +
       '<dl class="dl">' +
       row("Staff ID", u.staffId) + row("Employment Type", u.employmentType) +
       row("Department", u.department) + row("Position", u.position) + row("Email", u.email) +
