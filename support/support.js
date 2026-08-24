@@ -544,20 +544,38 @@
   };
 
   /* Some deployments store the morning/evening check as a JSONB object on the
-     row (e.g. {"time":"08:12:00"}) rather than a flat timestamp column. These
-     are detected and DISPLAYED below so both periods are always visible, but
-     are intentionally read-only for now — correcting a value nested inside a
-     JSONB column would need to go through correct_attendance_timestamp() (or
-     a JSONB-aware equivalent) in a way this file can't safely guess at
-     without knowing the exact key your RPC expects. */
+     row — confirmed shape here is {"at": <epoch ms>, "time": "7:23 AM"}.
+     These are detected and DISPLAYED below so both periods are always
+     visible, but are intentionally read-only for now — correcting a value
+     nested inside a JSONB column would need to go through
+     correct_attendance_timestamp() (or a JSONB-aware equivalent) in a way
+     this file can't safely guess at without knowing the exact key your RPC
+     expects. */
   var ATT_JSON_PAIR_KEYS = [["morning", "Morning attendance"], ["evening", "Evening attendance"]];
-  var JSON_TIME_SUBKEYS = ["time", "clock_in", "clock_out", "timestamp", "recorded_at", "checked_at", "time_in", "time_out", "value"];
+  /* Fallback subkeys, in case a row doesn't have "at" — tried in order. */
+  var JSON_TIME_SUBKEYS = ["clock_in", "clock_out", "timestamp", "recorded_at", "checked_at", "time_in", "time_out", "value", "time"];
   function jsonTimeText(obj, fallbackDate) {
     if (obj === null || obj === undefined || obj === "") return "Not recorded";
     if (typeof obj !== "object") return stampText(obj, fallbackDate);
+    /* "at" is an epoch-millisecond timestamp — the only unambiguous field,
+       so prefer it over the human-readable "time" string (e.g. "7:23 AM"),
+       which JS's Date parser can't reliably parse back on its own. */
+    if (obj.at !== undefined && obj.at !== null && String(obj.at).trim() !== "") {
+      var n = Number(obj.at);
+      if (!isNaN(n)) {
+        var dt = new Date(n);
+        if (!isNaN(dt.getTime())) {
+          var iso = dt.getFullYear() + "-" + pad(dt.getMonth() + 1) + "-" + pad(dt.getDate());
+          return ukDate(iso) + " — " + pad(dt.getHours()) + ":" + pad(dt.getMinutes());
+        }
+      }
+    }
     for (var i = 0; i < JSON_TIME_SUBKEYS.length; i++) {
       var v = obj[JSON_TIME_SUBKEYS[i]];
-      if (v !== undefined && v !== null && String(v).trim() !== "") return stampText(v, fallbackDate);
+      if (v !== undefined && v !== null && String(v).trim() !== "") {
+        var parsed = stampText(v, fallbackDate);
+        return parsed !== "Not recorded" ? parsed : String(v); /* show the raw string rather than hide real data */
+      }
     }
     try { return JSON.stringify(obj); } catch (e) { return "Recorded"; }
   }
