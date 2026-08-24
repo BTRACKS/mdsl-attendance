@@ -572,10 +572,11 @@ body.modal-open{overflow:hidden}
   display:grid;
   grid-template-columns:repeat(2, minmax(0, 1fr));
   gap:20px;
+  margin-top:20px;
   align-items:stretch;
 }
 @media (max-width:760px){
-  .sys-groups{grid-template-columns:1fr;gap:16px}
+  .sys-groups{grid-template-columns:1fr;gap:16px;margin-top:20px}
 }
 .sys-list{list-style:none;margin:0;padding:0;display:grid;gap:16px}
 .sys-list li{padding-bottom:16px;border-bottom:1px solid var(--rule)}
