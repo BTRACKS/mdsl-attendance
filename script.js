@@ -486,7 +486,7 @@
   function profilePanel(u) {
     return '<aside><div class="panel"><div class="panel-head">' + ICON.userCard + 'Staff Profile</div><div class="panel-body">' +
       '<div class="identity">' + avatarHtml(u) +
-      "<div><h3>" + esc(u.fullName) + "</h3><p>" + esc(u.position) + "</p></div></div>" +
+      "<div><h3>" + esc(u.fullName) + "</h3></div></div>" +
       '<dl class="dl">' +
       row("Staff ID", u.staffId) + row("Employment Type", u.employmentType) +
       row("Department", u.department) + row("Position", u.position) + row("Email", u.email) +
@@ -771,7 +771,7 @@
       staff.map(function (u) {
         var a = record(u.id, key);
         return '<tr><td><div class="staff-cell">' + avatarHtml(u, "avatar-sm") +
-          '<div class="staff-cell-info"><div class="who">' + esc(u.fullName) + '</div><div class="sub">' + esc(u.staffId) + " · " + esc(u.position) + "</div></div></div></td>" +
+          '<div class="staff-cell-info"><div class="who">' + esc(u.fullName) + '</div></div></div></td>' +
           "<td>" + esc(u.department) + "</td><td>" + esc(u.employmentType) + "</td>" +
           '<td class="num">' + (a && a.morning ? esc(a.morning.time) : "—") + "</td>" +
           '<td class="num">' + (a && a.evening ? esc(a.evening.time) : "—") + "</td>" +
