@@ -28,6 +28,8 @@
 
   /* ------------------------- icons ------------------------- */
   var ICON = {
+    download: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
+    sheet: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>',
     grid: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>',
     list: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>',
     clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 16 14"/></svg>',
@@ -521,6 +523,183 @@
       historyTable(u) + "</section></div>";
   }
 
+  /* ------------------------- attendance export ------------------------- */
+  var exportState = { preset: "today", from: "", to: "" };
+
+  var EXPORT_PRESETS = [
+    ["today", "Today"], ["week", "This Week"], ["2weeks", "2 Weeks"], ["3weeks", "3 Weeks"],
+    ["month", "This Month"], ["year", "This Year"], ["custom", "Custom Date Range"]
+  ];
+
+  function startOfWeek(d) {
+    var x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    var day = (x.getDay() + 6) % 7; /* Monday start */
+    x.setDate(x.getDate() - day);
+    return x;
+  }
+
+  function exportRange() {
+    var now = new Date();
+    var end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    var start;
+    switch (exportState.preset) {
+      case "today": start = new Date(end); break;
+      case "week": start = startOfWeek(now); break;
+      case "2weeks": start = startOfWeek(now); start.setDate(start.getDate() - 7); break;
+      case "3weeks": start = startOfWeek(now); start.setDate(start.getDate() - 14); break;
+      case "month": start = new Date(now.getFullYear(), now.getMonth(), 1); break;
+      case "year": start = new Date(now.getFullYear(), 0, 1); break;
+      case "custom":
+        if (!exportState.from || !exportState.to) return null;
+        return exportState.from <= exportState.to
+          ? { from: exportState.from, to: exportState.to }
+          : { from: exportState.to, to: exportState.from };
+      default: start = new Date(end);
+    }
+    return { from: dateKey(start), to: dateKey(end) };
+  }
+
+  function exportRows() {
+    var range = exportRange();
+    if (!range) return [];
+    var byId = {};
+    db.users.forEach(function (u) { byId[u.id] = u; });
+
+    return db.attendance
+      .filter(function (a) {
+        if (!a.date || a.date < range.from || a.date > range.to) return false;
+        var u = byId[a.userId];
+        return !!u && u.role !== "admin" && !!(a.morning || a.evening);
+      })
+      .map(function (a) {
+        var u = byId[a.userId];
+        return {
+          name: u.fullName,
+          staffId: u.staffId,
+          employmentType: u.employmentType,
+          department: u.department,
+          position: u.position,
+          date: a.date,
+          signIn: a.morning ? a.morning.time : "",
+          signOut: a.evening ? a.evening.time : "",
+          status: a.morning && a.evening ? "Complete" : (a.morning ? "Awaiting closing" : "Incomplete")
+        };
+      })
+      .sort(function (x, y) {
+        if (x.date !== y.date) return x.date < y.date ? -1 : 1;
+        return x.name.toLowerCase() < y.name.toLowerCase() ? -1 : 1;
+      });
+  }
+
+  var EXPORT_HEADERS = ["Staff Name", "Staff ID", "Employment Type", "Department", "Position",
+    "Attendance Date", "Sign-in Time", "Sign-out Time", "Attendance Status"];
+
+  function exportMatrix() {
+    return exportRows().map(function (r) {
+      return [r.name, r.staffId, r.employmentType, r.department, r.position,
+        prettyDate(r.date), r.signIn || "—", r.signOut || "—", r.status];
+    });
+  }
+
+  function csvCell(v) {
+    var s = String(v == null ? "" : v);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+
+  function exportFileName(ext) {
+    var r = exportRange();
+    return "attendance_" + (r ? r.from + "_to_" + r.to : "records") + "." + ext;
+  }
+
+  function downloadCsv() {
+    var r = exportRange();
+    if (!r) { toast("Select both start and end dates for the custom range.", "error"); return; }
+    var rows = exportMatrix();
+    if (!rows.length) { toast("No attendance records in the selected period.", "error"); return; }
+    var csv = [EXPORT_HEADERS].concat(rows).map(function (row) {
+      return row.map(csvCell).join(",");
+    }).join("\r\n");
+    var blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement("a");
+    link.href = url; link.download = exportFileName("csv");
+    document.body.appendChild(link); link.click(); link.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    toast(rows.length + " attendance record" + (rows.length === 1 ? "" : "s") + " exported.");
+  }
+
+  function openInGoogleSheets() {
+    var r = exportRange();
+    if (!r) { toast("Select both start and end dates for the custom range.", "error"); return; }
+    var rows = exportMatrix();
+    if (!rows.length) { toast("No attendance records in the selected period.", "error"); return; }
+    var tsv = [EXPORT_HEADERS].concat(rows).map(function (row) {
+      return row.map(function (c) { return String(c).replace(/[\t\r\n]+/g, " "); }).join("\t");
+    }).join("\n");
+
+    function opened() {
+      window.open("https://docs.google.com/spreadsheets/create", "_blank", "noopener");
+      toast("Data copied. Paste (Ctrl/Cmd + V) into the new Google Sheet.");
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(tsv).then(opened, function () {
+        legacyCopy(tsv); opened();
+      });
+    } else { legacyCopy(tsv); opened(); }
+  }
+
+  function legacyCopy(text) {
+    var ta = document.createElement("textarea");
+    ta.value = text; ta.setAttribute("readonly", "");
+    ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); } catch (err) { /* ignore */ }
+    ta.remove();
+  }
+
+  function exportPanel() {
+    var r = exportRange();
+    var count = exportRows().length;
+    return '<div class="export-card" id="exportCard">' +
+      '<div class="export-head"><div><p class="export-title">' + ICON.download + 'Attendance Export</p>' +
+      '<p class="export-sub">Download every staff attendance record for the selected period.</p></div>' +
+      '<span class="export-count">' + count + " record" + (count === 1 ? "" : "s") + "</span></div>" +
+      '<div class="export-chips">' + EXPORT_PRESETS.map(function (p) {
+        return '<button type="button" class="export-chip' + (exportState.preset === p[0] ? " active" : "") +
+          '" data-export-preset="' + p[0] + '">' + esc(p[1]) + "</button>";
+      }).join("") + "</div>" +
+      (exportState.preset === "custom"
+        ? '<div class="export-dates"><div class="field"><label for="exportFrom">From</label>' +
+          '<input type="date" id="exportFrom" value="' + esc(exportState.from) + '" /></div>' +
+          '<div class="field"><label for="exportTo">To</label>' +
+          '<input type="date" id="exportTo" value="' + esc(exportState.to) + '" /></div></div>'
+        : "") +
+      '<p class="export-range">' + (r ? "Period: " + esc(prettyDate(r.from)) + " — " + esc(prettyDate(r.to))
+        : "Select a start and end date to continue.") + "</p>" +
+      '<div class="export-actions">' +
+      '<button type="button" class="btn btn-primary" id="exportCsvBtn">' + ICON.download + "<span>Download CSV</span></button>" +
+      '<button type="button" class="btn btn-ghost" id="exportSheetsBtn">' + ICON.sheet + "<span>Open in Google Sheets</span></button>" +
+      "</div></div>";
+  }
+
+  function bindExport() {
+    var card = el("exportCard");
+    if (!card) return;
+    Array.prototype.forEach.call(card.querySelectorAll("[data-export-preset]"), function (b) {
+      b.addEventListener("click", function () {
+        exportState.preset = b.getAttribute("data-export-preset");
+        render();
+      });
+    });
+    var from = el("exportFrom"), to = el("exportTo");
+    if (from) from.addEventListener("change", function () { exportState.from = from.value; render(); });
+    if (to) to.addEventListener("change", function () { exportState.to = to.value; render(); });
+    var csvBtn = el("exportCsvBtn");
+    if (csvBtn) csvBtn.addEventListener("click", downloadCsv);
+    var sheetBtn = el("exportSheetsBtn");
+    if (sheetBtn) sheetBtn.addEventListener("click", openInGoogleSheets);
+  }
+
   /* ---------- admin ---------- */
   function adminOverview() {
     var now = new Date(), key = dateKey(now);
@@ -636,6 +815,7 @@
       'aria-expanded="' + (historyCollapsed ? "false" : "true") + '" aria-controls="historyContent" ' +
       'aria-label="' + (historyCollapsed ? "Expand" : "Collapse") + ' individual attendance history">' +
       ICON.chevronDown + "</button></div></div>" +
+      exportPanel() +
       '<div class="history-content' + (historyCollapsed ? " collapsed" : "") + '" id="historyContent"' +
       (historyCollapsed ? ' style="max-height:0;opacity:0"' : "") + ">" +
       staff.map(function (u) {
@@ -1088,6 +1268,7 @@
     }
     var historyToggle = el("historyToggle");
     if (historyToggle) historyToggle.addEventListener("click", toggleHistoryContent);
+    bindExport();
   }
 
   function bindAuth() {
