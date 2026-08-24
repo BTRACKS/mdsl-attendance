@@ -218,7 +218,18 @@ img{max-width:100%;display:block}
 .kv div{display:flex;justify-content:space-between;gap:16px;padding:11px 0;border-bottom:1px solid var(--rule);font-size:14px}
 .kv div:last-child{border-bottom:0}
 .kv dt{color:var(--ink-4);font-weight:600;flex:0 0 auto}
-.kv dd{margin:0;font-weight:600;text-align:right;word-break:break-word;min-width:0}
+.kv dd{margin:0;font-weight:600;text-align:right;overflow-wrap:anywhere;word-break:break-word;min-width:0}
+/* Cards can end up narrow (3-up on desktop, 2-up on tablet). Once a card is
+   too tight for a long value to sit comfortably on the right, drop the
+   label above the value instead of right-aligning a ragged multi-line
+   wrap — this reacts to the card's own width, not just the viewport, so it
+   works the same whether the card is narrow because of the screen or
+   because of the grid column count. */
+.panel{container-type:inline-size}
+@container (max-width:360px){
+  .kv div{flex-direction:column;gap:4px}
+  .kv dd{text-align:left}
+}
 .status{font-weight:700}
 .status-ok{color:var(--ok)}
 .status-bad{color:var(--danger)}
@@ -381,7 +392,32 @@ img{max-width:100%;display:block}
 .profile-ident{min-width:0}
 .profile-ident h3{font-size:22px;letter-spacing:-.03em}
 .profile-ident p{margin-top:6px;font-size:14px;color:var(--ink-3);font-weight:500;word-break:break-word}
-.profile-grid{align-items:start}
+/* Same approach as the System management grid: explicit column counts per
+   breakpoint (not auto-fit) so full-width cards below (role management,
+   account & password support, profile management, other stored info) never
+   force a phantom extra track that strands empty space beside the row-1
+   cards. Contact / Employment / Account fill row 1 on their own; every
+   .panel-span card always takes the full row. */
+.profile-grid{
+  align-items:start;
+  grid-template-columns:repeat(3, minmax(0, 1fr));
+  gap:20px;
+}
+@media (max-width:1024px){
+  .profile-grid{grid-template-columns:repeat(2, minmax(0, 1fr))}
+  /* Third info card (Account) would otherwise sit alone next to an empty
+     cell at 2 columns — give it the full row instead. */
+  .profile-grid > .panel:nth-child(3){grid-column:1 / -1}
+}
+@media (max-width:760px){
+  .profile-grid{grid-template-columns:1fr;gap:16px}
+}
+/* Role management and "Other stored information" span the full row so their
+   card never leaves empty space beside it, but their content (a short kv
+   list, a dropdown and a button) shouldn't stretch edge-to-edge on a wide
+   card — keep it a comfortable reading width, left-aligned, like the rest
+   of the portal's forms. */
+.panel-body-compact{max-width:560px}
 @media (max-width:560px){
   .users-grid{grid-template-columns:1fr}
   .kv div{flex-direction:column;gap:2px}
