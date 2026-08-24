@@ -727,7 +727,8 @@
              (Math.max((a.evening && a.evening.at) || 0, (a.morning && a.morning.at) || 0));
     }).slice(0, 8);
 
-    return '<div class="page"><div class="page-head"><p class="eyebrow">Administration</p><h1>Attendance Overview</h1></div>' +
+    return '<div class="page"><div class="page-head"><p class="eyebrow">Administration</p><h1>Attendance Overview</h1>' +
+      '<p class="dateline">' + longDate(now) + " · organisation-wide monitoring</p></div>" +
       '<div class="stats">' +
       stat("Total Staff", staff.length, "", ICON.users) + stat("Staff Present", morning.length, "ok", ICON.check) +
       stat("Morning Submitted", morning.length, "ok", ICON.sunrise) + stat("Evening Submitted", evening.length, "accent", ICON.sunset) +
@@ -808,7 +809,8 @@
       return match && (!filters.dept || u.department === filters.dept) && (!filters.type || u.employmentType === filters.type);
     });
 
-    return '<div class="page"><div class="page-head"><p class="eyebrow">Administration</p><h1>Attendance Management</h1></div>' +
+    return '<div class="page"><div class="page-head"><p class="eyebrow">Administration</p><h1>Attendance Management</h1>' +
+      '<p class="dateline">Search staff, filter by department, employment type or date, and review individual records.</p></div>' +
       '<form class="filters" id="filterForm">' +
       '<div class="field"><label>Search name, staff ID or email</label><input name="q" value="' + esc(filters.q) + '" placeholder="e.g. MD-0102" /></div>' +
       '<div class="field"><label>Department</label><select name="dept"><option value="">All departments</option>' +
@@ -929,7 +931,7 @@
     }
     return '<div class="page about"><div class="page-head"><p class="eyebrow">About Us</p>' +
       "<h1>The E-Attendance Platform by Multidigital Service Limited.</h1>" +
-      '<p class="dateline">A purpose-built internal system for accurate, transparent daily attendance.</p></div>' +
+      '</div>' +
 
       '<section class="about-hero"><div><h2>What the system is</h2>' +
       "<p>The E-Attendance Platform is Multidigital Service Limited's internal system for capturing, storing and reviewing staff attendance. " +
@@ -1002,7 +1004,8 @@
 
   function settingsView(u) {
     var joined = u.createdAt ? prettyDate(String(u.createdAt).slice(0, 10)) : "—";
-    return '<div class="page"><div class="page-head"><p class="eyebrow">Account</p><h1>Profile &amp; Settings</h1></div>' +
+    return '<div class="page"><div class="page-head"><p class="eyebrow">Account</p><h1>Profile &amp; Settings</h1>' +
+      '<p class="dateline">Update your details, profile picture and password. Attendance records are not affected.</p></div>' +
 
       '<div class="layout"><div>' +
 
