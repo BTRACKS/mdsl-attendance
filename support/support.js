@@ -75,115 +75,51 @@
     return '<span class="' + cls + '">' + esc(text) + "</span>";
   }
 
-
-  /* ------------------------- Leave tab bootstrap ------------------------- */
-  function ensureLeavePortalTab() {
-    var nav = $("nav");
-    var portal = $("portalView");
-    if (!nav || !portal) return;
-
-    var btn = nav.querySelector('button[data-tab="leave"]');
-    if (!btn) {
-      btn = document.createElement("button");
-      btn.type = "button";
-      btn.setAttribute("data-tab", "leave");
-      btn.textContent = "Leave";
-      var settingsBtn = nav.querySelector('button[data-tab="settings"]');
-      if (settingsBtn) nav.insertBefore(btn, settingsBtn);
-      else nav.appendChild(btn);
-    }
-
-    var panel = $("tab-leave");
-    if (!panel) {
-      panel = document.createElement("section");
-      panel.id = "tab-leave";
-      panel.className = "support-leave-page";
-      panel.hidden = true;
-      portal.appendChild(panel);
-    }
-  }
-
   /* ------------------------- role resolution -------------------------
      Resolution order (all server-side, all subject to RLS):
        1. public.has_portal_access()  — security-definer RPC, the source of truth
        2. public.support_roles        — dedicated role table (admin/it_support/staff)
        3. public.profiles.role        — legacy attendance role, admin only
      Never trust anything held in the browser. */
-  function accessTimeout(promise, ms) {
-    return Promise.race([
-      promise,
-      new Promise(function (_, reject) {
-        setTimeout(function () { reject(new Error("Access check timed out.")); }, ms);
-      })
-    ]);
-  }
-
   async function resolveAccess(user) {
     var result = { role: null, allowed: false, source: "none", error: null };
 
-    // 1. Preferred: the portal_role RPC. If it returns an old/unallowed role,
-    // continue to the other sources instead of stopping the access check.
+    // 1. Preferred: a single security-definer function.
     try {
-      var rpc = await accessTimeout(sb.rpc("portal_role"), 7000);
+      var rpc = await sb.rpc("portal_role");
       if (!rpc.error && rpc.data) {
-        var rpcRole = String(rpc.data).trim().toLowerCase();
-        if (ALLOWED_ROLES.indexOf(rpcRole) !== -1) {
-          result.role = rpcRole;
-          result.source = "portal_role() RPC";
-          result.allowed = true;
-          return result;
-        }
-        result.error = "portal_role() returned " + rpcRole + ".";
+        result.role = String(rpc.data);
+        result.source = "portal_role() RPC";
+        result.allowed = ALLOWED_ROLES.indexOf(result.role) !== -1;
+        return result;
       }
-    } catch (e) {
-      result.error = e.message;
-    }
+    } catch (e) { /* function not deployed yet — fall through */ }
 
-    // 2. Dedicated role tables.
+    // 2. Dedicated roles table (user_roles, falling back to legacy support_roles).
     try {
-      var rolesRes = await accessTimeout(
-        sb.from("user_roles").select("role").eq("user_id", user.id),
-        7000
-      );
-      if (rolesRes.error) {
-        rolesRes = await accessTimeout(
-          sb.from("support_roles").select("role").eq("user_id", user.id),
-          7000
-        );
-      }
+      var rolesRes = await sb.from("user_roles").select("role").eq("user_id", user.id);
+      if (rolesRes.error) rolesRes = await sb.from("support_roles").select("role").eq("user_id", user.id);
       if (!rolesRes.error && rolesRes.data && rolesRes.data.length) {
-        var roles = rolesRes.data.map(function (r) {
-          return String(r.role || "").trim().toLowerCase();
-        });
+        var roles = rolesRes.data.map(function (r) { return r.role; });
         result.role = roles.indexOf("admin") !== -1 ? "admin" : roles[0];
-        result.source = "user_roles/support_roles table";
-        result.allowed = roles.some(function (r) {
-          return ALLOWED_ROLES.indexOf(r) !== -1;
-        });
-        if (result.allowed) return result;
+        result.source = "user_roles table";
+        result.allowed = roles.some(function (r) { return ALLOWED_ROLES.indexOf(r) !== -1; });
+        return result;
       }
       if (rolesRes.error) result.error = rolesRes.error.message;
-    } catch (e) {
-      result.error = e.message;
-    }
+    } catch (e) { result.error = e.message; }
 
-    // 3. Legacy profiles.role fallback. Both Admin and IT Support are allowed.
+    // 3. Fallback to the existing attendance profile role (admins only).
     try {
-      var prof = await accessTimeout(
-        sb.from("profiles").select("role").eq("id", user.id).maybeSingle(),
-        7000
-      );
+      var prof = await sb.from("profiles").select("role").eq("id", user.id).maybeSingle();
       if (!prof.error && prof.data) {
-        var profileRole = String(prof.data.role || "staff").trim().toLowerCase();
-        result.role = profileRole;
+        result.role = prof.data.role || "staff";
         result.source = "profiles.role (legacy)";
-        result.allowed = ALLOWED_ROLES.indexOf(profileRole) !== -1;
+        result.allowed = result.role === "admin";
         return result;
       }
       if (prof.error) result.error = prof.error.message;
-    } catch (e) {
-      result.error = e.message;
-    }
+    } catch (e) { result.error = e.message; }
 
     return result;
   }
@@ -272,7 +208,7 @@
   }
 
   var LEAVE_TYPES = ["Annual Leave", "Sick Leave", "Casual Leave", "Maternity Leave", "Paternity Leave", "Study Leave", "Compassionate Leave", "Other"];
-  var LEAVES = { rows: [], loaded: false };
+  var LEAVES = { rows: [], loaded: false, error: null };
 
   function leaveForDate(userId, key) {
     return (LEAVES.rows || []).find(function(l) {
@@ -291,6 +227,7 @@
   }
   async function loadLeaves() {
     var res = await sb.from("staff_leave").select("*").order("start_date",{ascending:false});
+    LEAVES.error = res.error ? res.error.message : null;
     LEAVES.rows = res.error ? [] : (res.data || []);
     LEAVES.loaded = true;
     return res;
@@ -316,6 +253,119 @@
       (rows.length ? '<div class="table-wrap"><table><thead><tr><th>Type</th><th>Start</th><th>End</th><th>Reason</th><th>Status</th></tr></thead><tbody>'+
         rows.map(function(l){var activeNow=l.status!=="cancelled"&&l.start_date<=today&&today<=l.end_date;var future=l.status!=="cancelled"&&l.start_date>today;var st=l.status==="cancelled"?"Cancelled":activeNow?"Active":future?"Scheduled":"Completed";return '<tr><td>'+esc(leaveTypeLabel(l.leave_type))+'</td><td>'+esc(dashboardDateOnly(l.start_date))+'</td><td>'+esc(dashboardDateOnly(l.end_date))+'</td><td>'+esc(l.reason||"—")+'</td><td>'+esc(st)+'</td></tr>';}).join("")+
         '</tbody></table></div>' : '<p class="empty">No leave history recorded.</p>');
+  }
+
+  /* ------------------------- Tech Support Leave page ------------------------- */
+  function ensureLeavePortalTab() {
+    var nav = $("nav");
+    var portal = $("portalView");
+    if (!nav || !portal) return null;
+
+    var btn = nav.querySelector('button[data-tab="leave"]');
+    if (!btn) {
+      btn = document.createElement("button");
+      btn.type = "button";
+      btn.setAttribute("data-tab", "leave");
+      btn.textContent = "Leave";
+      var settingsBtn = nav.querySelector('button[data-tab="settings"]');
+      if (settingsBtn) nav.insertBefore(btn, settingsBtn);
+      else nav.appendChild(btn);
+    }
+
+    var panel = $("tab-leave");
+    if (!panel) {
+      panel = document.createElement("section");
+      panel.id = "tab-leave";
+      panel.className = "support-leave-page";
+      panel.hidden = true;
+      portal.appendChild(panel);
+    }
+    return panel;
+  }
+
+  function leavePortalStatus(row, today) {
+    var status = String(row.status || "active").toLowerCase();
+    if (status === "cancelled") return "Cancelled";
+    if (row.start_date <= today && today <= row.end_date) return "Active";
+    if (row.start_date > today) return "Scheduled";
+    return "Completed";
+  }
+
+  async function renderSupportLeave() {
+    var root = ensureLeavePortalTab();
+    if (!root) return;
+    root.hidden = false;
+
+    if (!LEAVES.loaded) {
+      root.innerHTML = '<div class="page"><div class="page-head"><p class="eyebrow">Time Away</p><h1>Leave</h1><p class="dateline">Loading staff leave information…</p></div></div>';
+      await loadLeaves();
+    }
+
+    if (LEAVES.error) {
+      root.innerHTML = '<div class="page"><div class="page-head"><p class="eyebrow">Time Away</p><h1>Leave</h1><p class="dateline">View-only leave information for Tech Support.</p></div>' +
+        '<section class="section leave-empty-state leave-error-state"><strong>Leave records could not be loaded</strong><p>' + esc(LEAVES.error) + '</p><button type="button" class="btn btn-secondary" id="leaveRetry">Retry</button></section></div>';
+      var retry = $("leaveRetry");
+      if (retry) retry.addEventListener("click", async function(){ LEAVES.loaded=false; await renderSupportLeave(); });
+      return;
+    }
+
+    if (!USERS.loaded) {
+      try { await loadUsers(false); } catch (e) {}
+    }
+
+    var today = localDateIso();
+    var qEl = $("leaveSupportSearch");
+    var q = qEl ? qEl.value.trim().toLowerCase() : "";
+    var rows = (LEAVES.rows || []).filter(function(l) {
+      var id = l.staff_id || l.user_id;
+      var user = (USERS.rows || []).find(function(u){ return String(rowId(u)) === String(id); });
+      var hay = [
+        user ? displayName(user) : "Staff member",
+        user ? pick(user, STAFF_KEYS) : "",
+        user ? pick(user, DEPT_KEYS) : "",
+        leaveTypeLabel(l.leave_type),
+        l.reason || "",
+        leavePortalStatus(l, today)
+      ].join(" ").toLowerCase();
+      return !q || hay.indexOf(q) !== -1;
+    });
+
+    var activeCount = (LEAVES.rows || []).filter(function(l){
+      return leavePortalStatus(l, today) === "Active";
+    }).length;
+    var scheduledCount = (LEAVES.rows || []).filter(function(l){
+      return leavePortalStatus(l, today) === "Scheduled";
+    }).length;
+
+    var body;
+    if (!LEAVES.rows.length) {
+      body = '<div class="leave-empty-state"><strong>No staff are currently on leave</strong><p>There are no leave records in the system at the moment.</p><p class="leave-empty-note">When a staff member activates leave, it will appear here automatically.</p></div>';
+    } else if (!rows.length) {
+      body = '<div class="leave-empty-state"><strong>No leave records found</strong><p>No staff leave records match your search.</p></div>';
+    } else {
+      body = '<div class="table-wrap"><table><thead><tr><th>Staff</th><th>Leave type</th><th>Start</th><th>End</th><th>Reason</th><th>Status</th></tr></thead><tbody>' +
+        rows.map(function(l){
+          var id = l.staff_id || l.user_id;
+          var user = (USERS.rows || []).find(function(u){ return String(rowId(u)) === String(id); });
+          var name = user ? displayName(user) : "Staff member";
+          var avatar = user ? avatarHtml(user) : '<div class="avatar">?</div>';
+          var status = leavePortalStatus(l, today);
+          return '<tr><td><div class="leave-staff-cell">' + avatar + '<div><strong>' + esc(name) + '</strong>' + (user && pick(user, STAFF_KEYS) ? '<small>' + esc(pick(user, STAFF_KEYS)) + '</small>' : '') + '</div></div></td>' +
+            '<td>' + esc(leaveTypeLabel(l.leave_type)) + '</td>' +
+            '<td>' + esc(dashboardDateOnly(l.start_date)) + '</td>' +
+            '<td>' + esc(dashboardDateOnly(l.end_date)) + '</td>' +
+            '<td>' + esc(l.reason || "—") + '</td>' +
+            '<td><span class="leave-status leave-status-' + status.toLowerCase() + '">' + esc(status) + '</span></td></tr>';
+        }).join("") + '</tbody></table></div>';
+    }
+
+    root.innerHTML = '<div class="page"><div class="page-head"><p class="eyebrow">Time Away</p><h1>Leave</h1><p class="dateline">View-only staff leave information. Tech Support cannot approve, reject, edit or cancel leave.</p></div>' +
+      '<section class="section"><div class="leave-summary-grid"><div><span>Currently on leave</span><strong>' + activeCount + '</strong></div><div><span>Scheduled</span><strong>' + scheduledCount + '</strong></div><div><span>Total records</span><strong>' + LEAVES.rows.length + '</strong></div></div>' +
+      '<div class="leave-support-toolbar"><label class="search-field"><span>Search staff or leave</span><input id="leaveSupportSearch" type="search" placeholder="Search name, staff ID, department, leave type…" value="' + esc(q) + '"></label><span class="leave-view-note">View only</span></div>' +
+      body + '</section></div>';
+
+    var search = $("leaveSupportSearch");
+    if (search) search.addEventListener("input", function(){ renderSupportLeave(); });
   }
 
   function matchesQuery(row, q) {
@@ -425,8 +475,6 @@
     });
     USERS.loaded = true;
     renderUsers();
-    ensureLeavePortalTab();
-    renderSupportLeave();
     var restoredStaffId = null;
     try { restoredStaffId = sessionStorage.getItem("tech_support_attendance_staff_id"); } catch (e) {}
     if (!ATT.staff && restoredStaffId) {
@@ -2133,7 +2181,6 @@
       ["Notes", profileError ? esc(profileError) : "All reads run as your own user."]
     ]);
 
-    ensureLeavePortalTab();
     initDashboard();
     initUsers();
     initRoleUi();
@@ -2147,105 +2194,34 @@
     if (head) document.documentElement.style.setProperty("--header-h", head.offsetHeight + "px");
   }
 
-/* ------------------------- Leave portal section ------------------------- */
-  function leaveRecordStatus(l, today) {
-if (String(l.status || "").toLowerCase() === "cancelled") return "Cancelled";
-if (l.start_date <= today && today <= l.end_date) return "Active";
-if (l.start_date > today) return "Scheduled";
-return "Completed";
-  }
-
-  function renderSupportLeave() {
-ensureLeavePortalTab();
-var root = $("tab-leave");
-if (!root) return;
-
-if (!LEAVES.loaded) {
-  root.innerHTML =
-    '<div class="page-head"><p class="eyebrow">Time Away</p><h1>Leave</h1>' +
-    '<p class="dateline">Loading staff leave records…</p></div>';
-  loadLeaves().then(function(){ renderSupportLeave(); }).catch(function(e){
-    root.innerHTML =
-      '<div class="page-head"><p class="eyebrow">Time Away</p><h1>Leave</h1>' +
-      '<p class="dateline">Leave records could not be loaded.</p>' +
-      '<p class="empty">' + esc(e && e.message ? e.message : "Unable to load leave records.") + '</p></div>';
-  });
-  return;
-}
-
-var today = localDateIso();
-var leaves = (LEAVES.rows || []).slice().sort(function(a,b){
-  return String(b.start_date || "").localeCompare(String(a.start_date || ""));
-});
-var search = $("supportLeaveSearch");
-var q = search ? String(search.value || "").trim().toLowerCase() : "";
-var rows = leaves.filter(function(l){
-  var staffId = String(l.staff_id || l.user_id || "");
-  var user = (USERS.rows || []).find(function(u){ return String(u.id || u.user_id || "") === staffId; });
-  var hay = [user ? displayName(user) : "Staff member", user ? pick(user, STAFF_KEYS) : "", leaveTypeLabel(l.leave_type), l.reason || "", leaveRecordStatus(l,today)].join(" ").toLowerCase();
-  return !q || hay.indexOf(q) !== -1;
-});
-root.innerHTML =
-  '<div class="page-head"><p class="eyebrow">Time Away</p><h1>Leave</h1>' +
-  '<p class="dateline">View-only leave information for staff. Administrators and IT Support cannot approve, reject, edit or cancel leave from this page.</p></div>' +
-  '<section class="section"><div class="section-head"><h2>Staff Leave Records</h2><span>' + rows.length + ' record' + (rows.length === 1 ? "" : "s") + '</span></div>' +
-  '<div class="users-toolbar leave-support-toolbar"><div class="field search-field"><label for="supportLeaveSearch">Search staff or leave</label><input id="supportLeaveSearch" type="search" placeholder="Name, staff ID, leave type or reason" value="' + esc(q) + '"></div><button type="button" class="btn btn-ghost btn-sm" id="supportLeaveRefresh">Refresh</button></div>' +
-  (rows.length ? '<div class="table-wrap leave-support-table"><table><thead><tr><th>Staff</th><th>Leave Type</th><th>Start</th><th>End</th><th>Reason</th><th>Status</th></tr></thead><tbody>' +
-    rows.map(function(l){
-      var staffId=String(l.staff_id||l.user_id||"");
-      var user=(USERS.rows||[]).find(function(u){return String(u.id||u.user_id||"")===staffId;});
-      var name=user?displayName(user):"Staff member", status=leaveRecordStatus(l,today);
-      return '<tr><td><div class="leave-staff-cell">'+(user?avatarHtml(user):'<div class="avatar">?</div>')+'<div><strong>'+esc(name)+'</strong><span>'+esc(user?(pick(user,STAFF_KEYS)||""):"")+'</span></div></div></td><td>'+esc(leaveTypeLabel(l.leave_type))+'</td><td>'+esc(dashboardDateOnly(l.start_date))+'</td><td>'+esc(dashboardDateOnly(l.end_date))+'</td><td>'+esc(l.reason||"—")+'</td><td><span class="tag '+(status==="Active"?"tag-leave":status==="Cancelled"?"tag-miss":"tag-pending")+'">'+esc(status)+'</span></td></tr>';
-    }).join("") + '</tbody></table></div>' : (
-        q
-          ? '<div class="leave-empty-state"><strong>No leave records found</strong><p>No staff leave records match your search.</p></div>'
-          : '<div class="leave-empty-state"><strong>No staff are currently on leave</strong><p>There are no active leave records to display at the moment.</p></div>'
-      )) +
-  '</section>';
-var nextSearch=$("supportLeaveSearch");
-if(nextSearch) nextSearch.addEventListener("input",function(){ renderSupportLeave(); var n=$("supportLeaveSearch"); if(n){n.focus();n.setSelectionRange(n.value.length,n.value.length);} });
-var refresh=$("supportLeaveRefresh");
-if(refresh) refresh.addEventListener("click",async function(){ await loadUsers(true); renderSupportLeave(); });
-  }
-
-
   /* ------------------------- gate ------------------------- */
   async function gate() {
     loader(true);
-    try {
-      var sessionRes = await accessTimeout(sb.auth.getSession(), 10000);
-      var session = sessionRes.data && sessionRes.data.session;
-      if (!session) {
-        ME = { user: null, role: null, allowed: false };
-        loader(false);
-        only("loginView");
-        return;
-      }
-
-      var user = session.user;
-      var access = await resolveAccess(user);
+    var sessionRes = await sb.auth.getSession();
+    var session = sessionRes.data && sessionRes.data.session;
+    if (!session) {
+      ME = { user: null, role: null, allowed: false };
       loader(false);
-
-      if (!access.allowed) {
-        $("deniedEmail").textContent = user.email || user.id;
-        $("deniedRole").textContent = ROLE_LABEL[access.role] || access.role || "No role assigned";
-        $("deniedBody").innerHTML =
-          "We could not confirm your portal role. Ask the IT administrator to finish the portal database setup." +
-          (access.error ? "<br><small>" + esc(access.error) + "</small>" : "");
-        only("deniedView");
-        return;
-      }
-
-      await renderPortal(user, access);
-    } catch (e) {
-      loader(false);
-      $("deniedEmail").textContent = (ME.user && (ME.user.email || ME.user.id)) || "Signed-in account";
-      $("deniedRole").textContent = "Access check failed";
-      $("deniedBody").innerHTML =
-        "The Tech Support portal could not finish its access check. Please refresh and try again." +
-        "<br><small>" + esc(e && e.message ? e.message : "Unknown access error") + "</small>";
-      only("deniedView");
+      only("loginView");
+      return;
     }
+
+    var user = session.user;
+    var access = await resolveAccess(user);
+    loader(false);
+
+    if (!access.allowed) {
+      $("deniedEmail").textContent = user.email || user.id;
+      $("deniedRole").textContent = ROLE_LABEL[access.role] || access.role || "No role assigned";
+      if (access.error) {
+        $("deniedBody").innerHTML =
+          "We could not confirm your portal role. Ask the IT administrator to finish the portal database setup.<br /><small>" + esc(access.error) + "</small>";
+      }
+      only("deniedView");
+      return;
+    }
+
+    await renderPortal(user, access);
   }
 
 
@@ -2354,10 +2330,10 @@ if(refresh) refresh.addEventListener("click",async function(){ await loadUsers(t
       });
     }
 
-  /* ------------------------- persistent portal section ------------------------- */
+    /* ------------------------- persistent portal section ------------------------- */
     var PORTAL_SECTION_KEY = "tech_support_active_section";
     function validPortalSection(name) {
-      return ["overview", "users", "attendance", "leave", "system", "settings", "checks"].indexOf(name) !== -1;
+      return ["overview", "users", "attendance", "system", "leave", "settings", "checks"].indexOf(name) !== -1;
     }
     function getPortalSection() {
       var hash = String(location.hash || "").replace(/^#\/?/, "").toLowerCase();
@@ -2386,9 +2362,7 @@ if(refresh) refresh.addEventListener("click",async function(){ await loadUsers(t
         if (panel) panel.hidden = b !== btn;
       });
       if (!options.skipPersist) setPortalSection(name, !!options.replace);
-      if (name === "leave") {
-        renderSupportLeave();
-      }
+      if (name === "leave") renderSupportLeave();
       if (options.closeNav && typeof closeNav === "function") closeNav();
     }
 

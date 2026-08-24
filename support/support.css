@@ -963,17 +963,6 @@ body.modal-open{overflow:hidden}
 }
 
 
-/* ---------- Support Leave tab ---------- */
-.leave-support-toolbar{align-items:flex-end}
-.leave-support-toolbar .search-field{margin-top:0;flex:1 1 320px}
-.leave-support-table{overflow-x:auto}
-.leave-staff-cell{display:flex;align-items:center;gap:10px;min-width:190px}
-.leave-staff-cell .avatar{width:36px;height:36px;font-size:12px}
-.leave-staff-cell strong{display:block;font-size:13px}
-.leave-staff-cell span{display:block;font-size:11px;color:var(--ink-4);margin-top:1px}
-.support-leave-page .page-head{max-width:var(--maxw);margin:0 auto}
-@media (max-width:760px){.leave-support-toolbar{align-items:stretch}.leave-support-toolbar .btn{width:100%}}
-
 /* ---------- Leave Management ---------- */
 .tag-leave{background:#efe9ff;color:#5b3ea6;border:1px solid #d8cdfa}
 .leave-active-banner{
@@ -983,7 +972,7 @@ body.modal-open{overflow:hidden}
 }
 .leave-active-banner strong{font-size:15px;color:#5b3ea6}
 .leave-active-banner span{font-size:13px;color:var(--ink-2);text-align:right}
-.leave-active-card{border-left:0}
+.leave-active-card{border-left:4px solid #8b6ed8}
 .leave-detail-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
 .leave-detail-grid>div{padding:14px;border:1px solid var(--rule);border-radius:12px;background:var(--paper-2)}
 .leave-detail-grid span{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-4);margin-bottom:4px}
@@ -1001,41 +990,35 @@ body.modal-open{overflow:hidden}
   .leave-history-mini>div{flex-direction:column;gap:2px}
 }
 
-/* Quick Actions spacing */
-#tab-overview [class*="quick-actions"] {
-  display:flex;
-  flex-wrap:wrap;
-  gap:12px;
-}
-#tab-overview [class*="quick-actions"] .btn {
-  margin:0;
-}
 
-/* Complete Leave page layout */
-#tab-leave { width:100%; }
-#tab-leave .page-head { margin-bottom:18px; }
-#tab-leave .section { margin-bottom:18px; }
-#tab-leave .leave-support-toolbar { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; }
-#tab-leave .leave-support-toolbar .search-field { flex:1 1 320px; }
-#tab-leave .leave-support-toolbar .btn { margin:0; }
+/* Tech Support Quick Actions spacing */
+#tab-overview .quick-actions,
+#tab-overview .quick-actions-row,
+#tab-overview .quick-actions-list{display:flex;flex-wrap:wrap;gap:12px}
+#tab-overview .quick-actions .btn,
+#tab-overview .quick-actions-row .btn,
+#tab-overview .quick-actions-list .btn{margin:0}
 
-/* Clear Leave empty state */
-#tab-leave .leave-empty-state{
-  padding:32px 20px;
-  text-align:center;
-  border:1px dashed var(--rule);
-  border-radius:14px;
-  background:var(--paper-2);
-  margin-top:14px;
-}
-#tab-leave .leave-empty-state strong{
-  display:block;
-  font-size:16px;
-  color:var(--ink);
-  margin-bottom:6px;
-}
-#tab-leave .leave-empty-state p{
-  margin:0;
-  color:var(--ink-4);
-  font-size:13px;
-}
+/* Tech Support Leave page */
+#tab-leave.support-leave-page{width:100%;min-height:240px}
+#tab-leave .leave-summary-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:18px}
+#tab-leave .leave-summary-grid>div{padding:16px;border:1px solid var(--rule);border-radius:12px;background:var(--paper-2)}
+#tab-leave .leave-summary-grid span{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-4);margin-bottom:5px}
+#tab-leave .leave-summary-grid strong{font-size:22px;color:var(--ink)}
+#tab-leave .leave-support-toolbar{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+#tab-leave .leave-support-toolbar .search-field{flex:1 1 360px;margin:0}
+#tab-leave .leave-view-note{font-size:12px;font-weight:700;color:var(--ink-4);padding-bottom:11px}
+#tab-leave .leave-staff-cell{display:flex;align-items:center;gap:10px;min-width:190px}
+#tab-leave .leave-staff-cell .avatar{flex:0 0 auto}
+#tab-leave .leave-staff-cell small{display:block;color:var(--ink-4);font-size:11px;margin-top:2px}
+#tab-leave .leave-status{display:inline-flex;padding:5px 9px;border-radius:999px;font-size:11px;font-weight:700;border:1px solid var(--rule)}
+#tab-leave .leave-status-active{background:#eef8f0;color:#1d6b35}
+#tab-leave .leave-status-scheduled{background:#fff6df;color:#8a5a00}
+#tab-leave .leave-status-completed{background:var(--paper-2);color:var(--ink-3)}
+#tab-leave .leave-status-cancelled{background:#fff0ee;color:#a33a2f}
+#tab-leave .leave-empty-state{display:block;text-align:center;padding:38px 24px;border:1px dashed var(--rule);border-radius:14px;background:var(--paper-2)}
+#tab-leave .leave-empty-state strong{display:block;font-size:17px;margin-bottom:7px;color:var(--ink)}
+#tab-leave .leave-empty-state p{margin:0;color:var(--ink-3);font-size:13px}
+#tab-leave .leave-empty-note{margin-top:8px!important;font-size:12px!important;color:var(--ink-4)!important}
+#tab-leave .leave-error-state{border-color:#e6b8b2;background:#fff8f7}
+@media(max-width:760px){#tab-leave .leave-summary-grid{grid-template-columns:1fr}#tab-leave .leave-support-toolbar{align-items:stretch}#tab-leave .leave-view-note{padding:0}}
