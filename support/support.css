@@ -527,12 +527,6 @@ img{max-width:100%;display:block}
 .status-bad{color:var(--danger)}
 .status-warn{color:var(--warn)}
 
-/* Plain, functional list of upcoming modules — no decorative components. */
-.list{display:grid;margin:0;padding:0;list-style:none}
-.list li{padding:14px 0;border-bottom:1px solid var(--rule)}
-.list li:last-child{border-bottom:0}
-.list h3{font-size:15px}
-.list p{font-size:14px;color:var(--ink-3);margin-top:4px;max-width:70ch}
 .list small{display:block;margin-top:6px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-4)}
 
 /* ---------- Denied ---------- */
