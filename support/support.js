@@ -57,6 +57,16 @@
     sp.className = "spinner";
     btn.appendChild(sp);
   }
+  function safeError(err, fallback) {
+    var raw = "";
+    if (err) {
+      if (typeof err === "string") raw = err;
+      else raw = err.message || err.error_description || err.details || "";
+    }
+    try { if (raw) console.warn("Tech Support operation failed:", raw); } catch (e) {}
+    return fallback || "The requested operation could not be completed.";
+  }
+
   function message(text, kind) {
     var el = $("loginMsg");
     if (!text) { el.hidden = true; return; }
@@ -285,10 +295,9 @@
     [NAME_KEYS, EMAIL_KEYS, PHONE_KEYS, TITLE_KEYS, STAFF_KEYS, DEPT_KEYS, STATUS_KEYS, TYPE_KEYS, AVATAR_KEYS, ROLE_KEYS]
       .forEach(function (g) { g.forEach(function (k) { known[k] = 1; }); });
     ["id", "user_id", "created_at", "updated_at", "address"].forEach(function (k) { known[k] = 1; });
-    var extras = Object.keys(row).filter(function (k) {
-      return !known[k] && row[k] !== null && String(row[k]).trim() !== "";
-    }).map(function (k) { return [labelize(k), fmtValue(row[k])]; });
-    kv("kvUserOther", extras.length ? extras : [["Additional fields", "Nothing further stored for this user."]]);
+    /* Phase 10: do not dump unknown database columns into the UI.
+       Only explicitly supported profile fields are displayed. */
+    kv("kvUserOther", [["Additional fields", "Only supported profile fields are displayed."]]);
 
     renderRolePanel(row);
     renderAccountPanel(row);
@@ -317,7 +326,7 @@
 
     if (res.error) {
       USERS.rows = [];
-      $("usersState").textContent = "Staff records could not be loaded: " + res.error.message;
+      $("usersState").textContent = "Staff records could not be loaded. Please retry.";
       return;
     }
     USERS.rows = (res.data || []).sort(function (a, b) {
@@ -460,7 +469,7 @@
 
     if (res.error) {
       closeConfirm();
-      toast(res.error.message || "The role change was refused by the database.", "bad");
+      toast(safeError(res.error, "The role change was refused by the database."), "bad");
       return;
     }
 
@@ -763,7 +772,7 @@
 
     if (res.error) {
       ATT.rows = [];
-      $("attState").textContent = "Attendance records could not be loaded: " + res.error.message;
+      $("attState").textContent = "Attendance records could not be loaded. Please retry.";
       return;
     }
     ATT.rows = res.data || [];
@@ -1037,8 +1046,8 @@
       var err = $("attCorrError");
       err.hidden = false;
       err.textContent = (p.jsonField && /function .*correct_attendance_period_timestamp.* does not exist/i.test(res.error.message || ""))
-        ? "This database doesn't have the correct_attendance_period_timestamp function yet — it needs to be added in the Supabase SQL editor before Morning/Evening corrections can be saved."
-        : (res.error.message || "The correction was refused by the database.");
+        ? "This attendance correction is not available in the current database configuration."
+        : safeError(res.error, "The correction was refused by the database.");
       $("attStep1").hidden = false;
       $("attStep2").hidden = true;
       $("attContinue").hidden = false;
@@ -1778,7 +1787,7 @@
         SETTINGS.rows = [];
         $("settingsList").innerHTML = "";
         $("settingsActions").hidden = true;
-        $("settingsState").textContent = "Settings could not be loaded: " + res.error.message;
+        $("settingsState").textContent = "Settings could not be loaded. Please retry.";
         return;
       }
 
@@ -1917,19 +1926,6 @@
 
   }
 
-  /* ------------------------- Phase 9: IT administration dashboard ------------------------- */
-  var DASH = { loading:false, attendanceRows:[] };
-  function localDateIso(){var d=new Date();return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());}
-  function dashStatus(t,k){return '<strong class="'+(k==='ok'?'service-ok':k==='bad'?'service-bad':'service-warn')+'">'+esc(t)+'</strong>';}
-  function renderDashboardStats(){var r=USERS.rows||[],c={admin:0,it_support:0,staff:0,active:0,inactive:0};r.forEach(function(x){var role=roleOf(x);if(role==='admin')c.admin++;else if(role==='it_support')c.it_support++;else c.staff++;var s=statusText(x).toLowerCase().replace(/[\s-]+/g,'_');if(s==='inactive'||s==='disabled'||s==='deactivated'||s==='false')c.inactive++;else c.active++;});$("statUsers").textContent=r.length;$("statAdmins").textContent=c.admin;$("statSupport").textContent=c.it_support;$("statStaff").textContent=c.staff;$("statActive").textContent=c.active;$("statInactive").textContent=c.inactive;}
-  function attFlags(r){var i=false,o=false;ATT.fields.forEach(function(f){var v=r[f[0]];if(v==null||String(v).trim()==='')return;var l=f[1].toLowerCase();if(l.indexOf('clock-in')!==-1)i=true;if(l.indexOf('clock-out')!==-1)o=true;});['check_in','clock_in','time_in','resumption_time','resumption','sign_in_time'].forEach(function(k){if(r[k]!=null&&String(r[k]).trim()!=='')i=true;});['check_out','clock_out','time_out','closing_time','closing','sign_out_time'].forEach(function(k){if(r[k]!=null&&String(r[k]).trim()!=='')o=true;});if(r.morning!=null&&r.morning!=='')i=true;if(r.evening!=null&&r.evening!=='')o=true;return{in:i,out:o};}
-  function renderRecentAttendance(rows){var b=$("recentAttendance"),s=$("recentAttendanceState");if(!rows.length){b.innerHTML='';s.textContent='No attendance activity was found for today.';return;}s.textContent='';b.innerHTML=rows.slice(0,6).map(function(r){var id=attStaffId(r),u=(USERS.rows||[]).find(function(x){return String(x.id||x.user_id)===String(id);}),f=attFlags(r),l=f.in&&f.out?'Clock-in and clock-out recorded':f.in?'Clock-in recorded':f.out?'Clock-out recorded':'Attendance record';return '<div class="activity-item"><div class="activity-main"><strong>'+esc(u?displayName(u):'Staff member')+'</strong><span>'+esc(l)+'</span></div><span class="activity-time">'+esc(rowDate(r)?ukDate(rowDate(r)):'Today')+'</span></div>';}).join('');}
-  function renderRecentProfiles(){var b=$("recentProfiles"),s=$("recentProfilesState"),r=(USERS.rows||[]).slice().sort(function(a,b){return new Date(b.updated_at||b.created_at||0)-new Date(a.updated_at||a.created_at||0);}).slice(0,6);if(!r.length){b.innerHTML='';s.textContent='No profile or account updates are visible.';return;}s.textContent='';b.innerHTML=r.map(function(x){var w=x.updated_at||x.created_at,l=x.updated_at?'Profile updated':'Account created';return '<div class="activity-item"><div class="activity-main"><strong>'+esc(displayName(x))+'</strong><span>'+esc(l)+' · '+esc(roleLabel(roleOf(x)))+'</span></div><span class="activity-time">'+esc(fmtValue(w))+'</span></div>';}).join('');}
-  async function loadDashboardAttendance(){await detectAttendance();if(ATT.error){$("dashboardAttendanceState").textContent='Attendance service is not available to this account.';return{ok:false};}var q=sb.from(ATT.table).select('*').limit(1000);if(ATT.dateKey)q=q.eq(ATT.dateKey,localDateIso()).order(ATT.dateKey,{ascending:false});var r=await q;if(r.error){$("dashboardAttendanceState").textContent="Today's attendance could not be loaded.";return{ok:false};}DASH.attendanceRows=r.data||[];var i=0,o=0,m=0;DASH.attendanceRows.forEach(function(x){var f=attFlags(x);if(f.in)i++;if(f.out)o++;if(f.in&&!f.out)m++;});$("attendanceSummary").innerHTML='<div><span>Clock-ins</span><strong>'+i+'</strong></div><div><span>Clock-outs</span><strong>'+o+'</strong></div><div><span>Missing clock-outs</span><strong>'+m+'</strong></div>';$("dashboardAttendanceState").textContent=DASH.attendanceRows.length?DASH.attendanceRows.length+' attendance record'+(DASH.attendanceRows.length===1?'':'s')+' found today.':'No attendance records found for today.';renderRecentAttendance(DASH.attendanceRows);return{ok:true};}
-  async function runDashboardChecks(){$("systemStatusList").innerHTML='<div class="service-row"><span>Authentication</span>'+dashStatus('Checking…','warn')+'</div><div class="service-row"><span>Supabase</span>'+dashStatus('Checking…','warn')+'</div><div class="service-row"><span>Database queries</span>'+dashStatus('Checking…','warn')+'</div>';var aok=!!(ME.user&&ME.allowed),sok=false,dok=false;try{var p=await sb.from('profiles').select('id').eq('id',ME.user.id).maybeSingle();sok=!p.error;dok=sok;}catch(e){}var a=await loadDashboardAttendance();dok=dok&&a.ok;$("systemStatusList").innerHTML='<div class="service-row"><span>Authentication</span>'+dashStatus(aok?'Connected':'Unavailable',aok?'ok':'bad')+'</div><div class="service-row"><span>Supabase</span>'+dashStatus(sok?'Connected':'Unavailable',sok?'ok':'bad')+'</div><div class="service-row"><span>Database queries</span>'+dashStatus(dok?'Available':'Partial / unavailable',dok?'ok':'warn')+'</div>';}
-  async function loadDashboard(force){if(DASH.loading)return;DASH.loading=true;loader(true);try{if(force)await loadUsers(true);else if(!USERS.loaded)await loadUsers(false);renderDashboardStats();renderRecentProfiles();await runDashboardChecks();}catch(e){$("dashboardAttendanceState").textContent='Some dashboard information could not be loaded. Please retry.';}finally{DASH.loading=false;loader(false);}}
-  function initDashboard(){var root=$("tab-overview");if(!root||root.getAttribute('data-ready')==='1')return;root.setAttribute('data-ready','1');$("dashboardRefresh").addEventListener('click',function(){loadDashboard(true);});$("dashboardRetry").addEventListener('click',function(){runDashboardChecks();});root.addEventListener('click',function(e){var b=e.target.closest('[data-goto]');if(!b)return;var t=document.querySelector('.nav button[data-tab="'+b.getAttribute('data-goto')+'"]');if(t)t.click();});}
-
   /* ------------------------- portal render ------------------------- */
   async function renderPortal(user, access) {
     ME.user = user;
@@ -1940,7 +1936,7 @@
     var profileError = null;
     try {
       var res = await sb.from("profiles").select("*").eq("id", user.id).maybeSingle();
-      if (res.error) profileError = res.error.message; else profile = res.data;
+      if (res.error) profileError = "Profile information is unavailable."; else profile = res.data;
     } catch (e) { profileError = e.message; }
 
     var name = (profile && (profile.full_name || profile.name)) || (user.email || "").split("@")[0];
@@ -1968,16 +1964,15 @@
       ["profiles read", profileError ? pill("Blocked", "bad") : pill("OK", "ok"), true],
       ["Role source", access.source],
       ["Row level security", pill("Enforced", "ok"), true],
-      ["Notes", profileError ? esc(profileError) : "All reads run as your own user."]
+      ["Notes", profileError ? "Some profile data is unavailable to this account." : "All reads run as your own user."]
     ]);
 
-    initDashboard();
     initUsers();
     initRoleUi();
     initAttendance();
     initSystem();
     initSettings();
-    loadDashboard(false);
+    loadUsers();
 
     only("portalView");
     var head = $("masthead");
@@ -2094,7 +2089,8 @@
       loader(false);
 
       if (res.error) {
-        message(esc(res.error.message) || "Sign in failed.");
+        message("Sign-in failed. Check your email and password and try again.");
+        try { console.warn("Tech Support sign-in failed:", res.error.message || res.error); } catch (e) {}
         return;
       }
       $("password").value = "";
@@ -2109,14 +2105,22 @@
       loader(true);
       var res = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.href });
       loader(false);
-      if (res.error) message(esc(res.error.message));
-      else message("If that account exists, a reset link is on its way.", "ok");
+      if (res.error) {
+        message("We could not start the password reset. Please try again.");
+        try { console.warn("Password reset failed:", res.error.message || res.error); } catch (e) {}
+      } else message("If that account exists, a reset link is on its way.", "ok");
     });
 
     function signOut() {
       return sb.auth.signOut().then(function () {
-        toast("Signed out.");
+        ME = { user: null, role: null, allowed: false };
         only("loginView");
+        toast("Signed out.");
+      }).catch(function (err) {
+        try { console.warn("Sign-out failed:", err && err.message ? err.message : err); } catch (e) {}
+        ME = { user: null, role: null, allowed: false };
+        only("loginView");
+        message("Your local portal session was closed. Please sign in again.", "warn");
       });
     }
 
@@ -2193,7 +2197,10 @@
     $("deniedSignOut").addEventListener("click", signOut);
 
     sb.auth.onAuthStateChange(function (event) {
-      if (event === "SIGNED_OUT") only("loginView");
+      if (event === "SIGNED_OUT" || event === "TOKEN_REFRESH_FAILURE") {
+        ME = { user: null, role: null, allowed: false };
+        only("loginView");
+      }
     });
 
     gate();
