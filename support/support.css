@@ -600,28 +600,76 @@ img{max-width:100%;display:block}
   .masthead-inner{padding:12px 14px;gap:12px;flex-wrap:nowrap}
   .menu-toggle{display:flex}
   #logoutBtn{display:none}
+
+  /* Mobile support menu: match the clean full-width menu treatment used by
+     the main E-Attendance menu (white panel, simple rows, no row icons). */
   .nav{
-    position:fixed;top:var(--header-h,64px);left:0;right:0;background:var(--paper);border:0;
-    border-radius:0;flex-direction:column;align-items:stretch;gap:0;padding:0 20px;display:none;
-    box-shadow:0 24px 32px -20px rgba(16,24,40,.25);max-height:calc(100vh - var(--header-h,64px));
-    overflow-y:auto;z-index:39
+    position:fixed;
+    top:var(--header-h,64px);
+    left:0;
+    right:0;
+    width:100vw;
+    max-width:none;
+    background:var(--paper);
+    border:0;
+    border-top:1px solid var(--rule);
+    border-radius:0;
+    flex-direction:column;
+    align-items:stretch;
+    gap:0;
+    padding:0 20px;
+    display:none;
+    box-shadow:0 18px 30px -24px rgba(16,24,40,.28);
+    max-height:calc(100vh - var(--header-h,64px));
+    overflow-y:auto;
+    z-index:39;
   }
   .nav.open{display:flex}
   .nav button{
-    display:flex;align-items:center;gap:10px;padding:18px 4px;width:100%;border-radius:0;
-    border-bottom:1px solid var(--rule);font-size:15px;font-weight:700;justify-content:flex-start
+    display:flex;
+    align-items:center;
+    gap:0;
+    padding:18px 4px;
+    width:100%;
+    min-height:61px;
+    border-radius:0;
+    border:0;
+    border-bottom:1px solid var(--rule);
+    background:none;
+    font-size:15px;
+    font-weight:700;
+    justify-content:flex-start;
+    text-align:left;
+    color:var(--ink-2);
   }
-  .nav button.active{background:none;box-shadow:none}
+  .nav button.active{background:none;box-shadow:none;color:var(--navy)}
+  .nav button:hover{background:none;color:var(--navy)}
   .nav button.nav-signout{
-    display:flex;align-items:center;gap:10px;width:100%;padding:18px 4px;
-    border:0;background:none;font-size:15px;font-weight:700;
-    color:#c0392b;text-align:left;cursor:pointer
+    display:flex;
+    align-items:center;
+    gap:0;
+    width:100%;
+    min-height:61px;
+    padding:18px 4px;
+    border:0;
+    background:none;
+    font-size:15px;
+    font-weight:700;
+    color:#c0392b;
+    text-align:left;
+    cursor:pointer;
   }
   .nav button.nav-signout:hover{background:none;color:#c0392b}
-  .nav button.nav-signout svg{width:16px;height:16px;flex:0 0 auto}
+  .nav button.nav-signout svg{display:none}
   .nav-backdrop{
-    display:none;position:fixed;top:var(--header-h,64px);left:0;right:0;bottom:0;
-    background:rgba(16,24,40,.35);z-index:38
+    display:none;
+    position:fixed;
+    top:var(--header-h,64px);
+    left:0;
+    right:0;
+    bottom:0;
+    background:rgba(16,24,40,.35);
+    z-index:38;
   }
   .nav-backdrop.show{display:block}
   body.nav-open{overflow:hidden}
