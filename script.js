@@ -52,7 +52,8 @@
     eyeOff: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19.5C5 19.5 1 12 1 12a19.4 19.4 0 0 1 5.06-5.94M9.9 4.24A10.6 10.6 0 0 1 12 4.5c7 0 11 7.5 11 7.5a19.5 19.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>',
     sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M3 12h1m8 -9v1m8 8h1m-9 8v1m-6.4 -15.4l.7 .7m12.1 -.7l-.7 .7m0 11.4l.7 .7m-12.1 -.7l-.7 .7"/></svg>',
     moon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z"/></svg>',
-    sunriseTabler: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v3"/><path d="M5.6 7.6 7 9"/><path d="M18.4 7.6 17 9"/><path d="M3 17h3"/><path d="M18 17h3"/><path d="M8 17a4 4 0 0 1 8 0"/><path d="M2 21h20"/></svg>'
+    sunriseTabler: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v3"/><path d="M5.6 7.6 7 9"/><path d="M18.4 7.6 17 9"/><path d="M3 17h3"/><path d="M18 17h3"/><path d="M8 17a4 4 0 0 1 8 0"/><path d="M2 21h20"/></svg>',
+    chevronDown: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>'
   };
   /* Only "Overview" and "Settings" carried nav icons before; those icons
      are now removed. Other nav icons (e.g. Attendance History) are unchanged. */
@@ -561,6 +562,7 @@
   }
 
   var filters = { q: "", dept: "", type: "", date: "" };
+  var historyCollapsed = false;
 
   function adminTable(staff, key) {
     if (!staff.length) return '<div class="table-wrap"><p class="empty">No staff match the selected filters.</p></div>';
@@ -574,6 +576,37 @@
           '<td class="num">' + (a && a.evening ? esc(a.evening.time) : "—") + "</td>" +
           "<td>" + (a ? statusOf(a) : '<span class="tag tag-miss">Not submitted</span>') + "</td></tr>";
       }).join("") + "</tbody></table></div>";
+  }
+
+  function toggleHistoryContent() {
+    historyCollapsed = !historyCollapsed;
+    var content = el("historyContent");
+    var btn = el("historyToggle");
+    if (content) {
+      if (historyCollapsed) {
+        content.style.maxHeight = content.scrollHeight + "px";
+        /* force reflow so the browser registers the start height before animating to 0 */
+        content.offsetHeight;
+        content.classList.add("collapsed");
+        content.style.maxHeight = "0px";
+        content.style.opacity = "0";
+      } else {
+        content.classList.remove("collapsed");
+        content.style.opacity = "1";
+        content.style.maxHeight = content.scrollHeight + "px";
+        content.addEventListener("transitionend", function handler(e) {
+          if (e.propertyName === "max-height") {
+            content.style.maxHeight = "";
+            content.removeEventListener("transitionend", handler);
+          }
+        });
+      }
+    }
+    if (btn) {
+      btn.classList.toggle("collapsed", historyCollapsed);
+      btn.setAttribute("aria-expanded", historyCollapsed ? "false" : "true");
+      btn.setAttribute("aria-label", (historyCollapsed ? "Expand" : "Collapse") + " individual attendance history");
+    }
   }
 
   function adminManagement() {
@@ -597,7 +630,14 @@
       "</form>" +
       '<section class="section"><div class="section-head"><h2>Register — ' + esc(prettyDate(key)) + "</h2><span>" + staff.length + " staff</span></div>" +
       adminTable(staff, key) + "</section>" +
-      '<section class="section"><div class="section-head"><h2>Individual Attendance History</h2><span>Last 10 records per staff</span></div>' +
+      '<section class="section"><div class="section-head"><h2>Individual Attendance History</h2>' +
+      '<div class="section-head-actions"><span>Last 10 records per staff</span>' +
+      '<button class="collapse-toggle' + (historyCollapsed ? " collapsed" : "") + '" id="historyToggle" type="button" ' +
+      'aria-expanded="' + (historyCollapsed ? "false" : "true") + '" aria-controls="historyContent" ' +
+      'aria-label="' + (historyCollapsed ? "Expand" : "Collapse") + ' individual attendance history">' +
+      ICON.chevronDown + "</button></div></div>" +
+      '<div class="history-content' + (historyCollapsed ? " collapsed" : "") + '" id="historyContent"' +
+      (historyCollapsed ? ' style="max-height:0;opacity:0"' : "") + ">" +
       staff.map(function (u) {
         var recs = db.attendance.filter(function (a) { return a.userId === u.id; }).sort(function (a, b) { return a.date < b.date ? 1 : -1; }).slice(0, 10);
         return '<div class="panel" style="margin-bottom:18px"><div class="panel-head panel-head-staff">' + avatarHtml(u, "avatar-sm") +
@@ -612,7 +652,7 @@
                 '<div class="history-item history-item-status"><span class="history-label">Status</span>' + statusOf(a) + "</div>" +
                 "</div>";
             }).join("") + "</div>" : '<p class="empty">No records.</p>') + "</div></div>";
-      }).join("") + "</section></div>";
+      }).join("") + "</div></section></div>";
   }
 
   /* ------------------------- actions ------------------------- */
@@ -1046,6 +1086,8 @@
         filters = { q: "", dept: "", type: "", date: "" }; render();
       });
     }
+    var historyToggle = el("historyToggle");
+    if (historyToggle) historyToggle.addEventListener("click", toggleHistoryContent);
   }
 
   function bindAuth() {
