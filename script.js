@@ -74,7 +74,7 @@
      Views read synchronously from this cache; actions that change data
      (sign up, sign in, submit attendance) await refreshData() before
      re-rendering, so the UI code below stays largely unchanged. */
-  var db = { users: [], attendance: [], staffCount: null };
+  var db = { users: [], attendance: [], staffCount: null, hse: [], hseSettings: null };
   var authUser = null;     // the raw Supabase auth user (has .id, .email)
   var currentUser = null;  // the matching row from db.users (profile + role)
   var dataError = null;
@@ -101,6 +101,13 @@
       if (attendanceRes.error) dataError = attendanceRes.error.message;
       db.users = (profilesRes.data || []).map(mapProfile);
       db.attendance = (attendanceRes.data || []).map(mapAttendance);
+
+      // HSE module data. Errors here are non-fatal so the core attendance
+      // system keeps working even before the HSE tables are created.
+      var hseRes = await supabaseClient.from("hse_attendance").select("*");
+      db.hse = (hseRes.error ? [] : (hseRes.data || [])).map(mapHse);
+      var hseSetRes = await supabaseClient.from("hse_settings").select("*").limit(1);
+      db.hseSettings = (!hseSetRes.error && hseSetRes.data && hseSetRes.data[0]) ? hseSetRes.data[0] : null;
 
       // profiles select() is RLS-restricted before login, so db.users can be
       // empty pre-auth. staff_count() is a SECURITY DEFINER RPC that returns
@@ -260,7 +267,7 @@
       links = [["#/login", "Sign in"], ["#/signup", "Register"]];
     } else {
       links = u.role === "admin"
-        ? [["#/admin", "Overview"], ["#/admin/attendance", "Attendance Management"], ["#/dashboard", "My Dashboard"], ["#/settings", "Settings"]]
+        ? [["#/admin", "Overview"], ["#/admin/attendance", "Attendance Management"], ["#/admin/hse", "HSE Attendance"], ["#/dashboard", "My Dashboard"], ["#/settings", "Settings"]]
         : [["#/dashboard", "Dashboard"], ["#/history", "Attendance History"], ["#/settings", "Settings"]];
 
     }
@@ -453,6 +460,8 @@
       "</div>" +
       (!m ? '<p class="dateline" style="margin-top:12px">Closing time unlocks once your morning resumption has been submitted.</p>' : "") +
       "</section>" +
+
+      hseStaffCard(u) +
 
       '<section class="section"><div class="section-head"><h2>Recent Records</h2><span><a class="link-muted" href="#/history">View full history</a></span></div>' +
       historyTable(u, 5) + "</section>" +
@@ -883,6 +892,283 @@
   }
 
 
+  /* =========================================================================
+     HSE ATTENDANCE MODULE
+     HSE holds every Monday. The current Monday session is derived from the
+     device/system date — no admin has to create a session each week.
+     Records live in the `hse_attendance` table; the attendance window and
+     weekly topic live in `hse_settings` (single row, admin editable).
+     ========================================================================= */
+
+  var HSE_DEFAULTS = { open_time: "08:00", close_time: "10:00", topic: "" };
+
+  function hseSettings() {
+    var s = db.hseSettings || {};
+    return {
+      open_time: s.open_time || HSE_DEFAULTS.open_time,
+      close_time: s.close_time || HSE_DEFAULTS.close_time,
+      topic: s.topic || ""
+    };
+  }
+
+  /* Monday of the week containing d */
+  function mondayOf(d) {
+    var x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+    return x;
+  }
+  function nextMonday(d) {
+    var x = mondayOf(d); x.setDate(x.getDate() + 7); return x;
+  }
+  function isMondayKey(key) {
+    var p = String(key || "").split("-");
+    if (p.length !== 3) return false;
+    return new Date(+p[0], +p[1] - 1, +p[2]).getDay() === 1;
+  }
+  /* ISO week identifier, e.g. 2026-W35 — the HSE session/week id */
+  function hseWeekId(key) {
+    var p = String(key).split("-");
+    var t = new Date(+p[0], +p[1] - 1, +p[2]);
+    t.setDate(t.getDate() + 3 - ((t.getDay() + 6) % 7));
+    var week1 = new Date(t.getFullYear(), 0, 4);
+    var n = 1 + Math.round(((t - week1) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
+    return t.getFullYear() + "-W" + pad(n);
+  }
+  function currentHseDate() { return dateKey(mondayOf(new Date())); }
+
+  function minutesOf(hhmm) {
+    var m = String(hhmm || "").match(/^(\d{1,2}):(\d{2})/);
+    return m ? (+m[1]) * 60 + (+m[2]) : 0;
+  }
+  function prettyClock(hhmm) {
+    var m = String(hhmm || "").match(/^(\d{1,2}):(\d{2})/);
+    if (!m) return hhmm || "";
+    var h = +m[1], mer = h >= 12 ? "PM" : "AM";
+    return (h % 12 || 12) + ":" + m[2] + " " + mer;
+  }
+
+  /* Current state of today's HSE session */
+  function hseWindowState() {
+    var now = new Date();
+    var s = hseSettings();
+    if (now.getDay() !== 1) return { phase: "not-monday", next: dateKey(nextMonday(now)), settings: s };
+    var mins = now.getHours() * 60 + now.getMinutes();
+    var open = minutesOf(s.open_time), close = minutesOf(s.close_time);
+    if (mins < open) return { phase: "before", settings: s };
+    if (mins > close) return { phase: "closed", settings: s };
+    return { phase: "open", settings: s };
+  }
+
+  function mapHse(r) {
+    return {
+      id: r.id, userId: r.user_id, name: r.staff_name || "", staffId: r.staff_id || "",
+      department: r.department || "", date: r.session_date, weekId: r.week_id || "",
+      time: r.check_in_time || "", status: r.status || "Present", topic: r.topic || ""
+    };
+  }
+  function hseRecordFor(userId, key) {
+    return db.hse.find(function (r) { return r.userId === userId && r.date === key; }) || null;
+  }
+  function hseRecordsFor(key) {
+    return db.hse.filter(function (r) { return r.date === key; })
+      .sort(function (a, b) { return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1; });
+  }
+  function hseSessionDates() {
+    var seen = {};
+    db.hse.forEach(function (r) { if (r.date) seen[r.date] = (seen[r.date] || 0) + 1; });
+    var cur = currentHseDate();
+    if (!seen[cur]) seen[cur] = 0;
+    return Object.keys(seen).sort().reverse().map(function (d) { return { date: d, count: seen[d] }; });
+  }
+
+  /* ---------- staff dashboard card ---------- */
+  function hseStaffCard(u) {
+    var key = currentHseDate();
+    var st = hseWindowState();
+    var rec = hseRecordFor(u.id, key);
+    var s = st.settings;
+    var body;
+
+    if (rec) {
+      body = '<div class="hse-done"><span class="hse-done-mark" aria-hidden="true">' + ICON.check + "</span>" +
+        "<div><p class=\"hse-done-title\">HSE Attendance Recorded</p>" +
+        '<p class="hse-done-sub">Checked in at ' + esc(rec.time) + "</p></div></div>" +
+        '<div class="locked-note"><span class="lock-icon"></span> Locked — one check-in per HSE session</div>';
+    } else if (st.phase === "not-monday") {
+      body = '<p class="hse-note">HSE holds every Monday. The next session is ' +
+        esc(prettyDate(st.next)) + ', ' + esc(prettyClock(s.open_time)) + " – " + esc(prettyClock(s.close_time)) + ".</p>";
+    } else if (st.phase === "before") {
+      body = '<p class="hse-note warn">HSE attendance has not opened yet.</p>' +
+        '<p class="hse-sub">Check-in opens at ' + esc(prettyClock(s.open_time)) + " today.</p>";
+    } else if (st.phase === "closed") {
+      body = '<p class="hse-note danger">HSE attendance is closed for today.</p>' +
+        '<p class="hse-sub">The window ran from ' + esc(prettyClock(s.open_time)) + " to " + esc(prettyClock(s.close_time)) + ".</p>";
+    } else {
+      body = '<p class="hse-sub">You are signed in as <b>' + esc(u.fullName) + "</b> (" + esc(u.staffId) +
+        "). Your details are recorded automatically.</p>" +
+        '<button class="btn btn-primary btn-lg btn-block" id="hseCheckIn" type="button">Check In for HSE</button>' +
+        '<p class="hse-sub muted">Window: ' + esc(prettyClock(s.open_time)) + " – " + esc(prettyClock(s.close_time)) + "</p>";
+    }
+
+    return '<section class="section hse-card"><div class="section-head"><h2>HSE Attendance</h2>' +
+      "<span>" + esc(prettyDate(key)) + "</span></div>" +
+      (s.topic ? '<p class="hse-topic">' + ICON.shield + "<span>Topic: " + esc(s.topic) + "</span></p>" : "") +
+      '<div class="hse-body">' + body + "</div></section>";
+  }
+
+  async function hseCheckIn(btn) {
+    var u = session(); if (!u) return;
+    var key = currentHseDate();
+    var st = hseWindowState();
+    if (st.phase !== "open") { toast("HSE attendance is not open right now.", "error"); return; }
+    if (hseRecordFor(u.id, key)) { toast("You have already checked in for this HSE session.", "error"); return; }
+
+    setBtnLoading(btn, true);
+    try {
+      var now = new Date();
+      var res = await supabaseClient.from("hse_attendance").insert({
+        user_id: u.id,
+        staff_name: u.fullName,
+        staff_id: u.staffId,
+        department: u.department,
+        session_date: key,
+        week_id: hseWeekId(key),
+        check_in_time: clockTime(now),
+        status: "Present",
+        topic: st.settings.topic || null
+      });
+      if (res.error) {
+        var msg = /duplicate|unique/i.test(res.error.message)
+          ? "You have already checked in for this HSE session."
+          : res.error.message;
+        toast(msg, "error");
+        return;
+      }
+      await refreshData();
+      toast("HSE attendance recorded successfully.");
+      render();
+    } finally {
+      setBtnLoading(btn, false);
+    }
+  }
+
+  /* ---------- admin ---------- */
+  var hseAdmin = { date: "" };
+
+  function hseAdminView() {
+    var key = hseAdmin.date || currentHseDate();
+    var s = hseSettings();
+    var staff = db.users.filter(function (u) { return u.role !== "admin"; });
+    var recs = hseRecordsFor(key);
+    var presentIds = {};
+    recs.forEach(function (r) { presentIds[r.userId] = true; });
+    var missing = staff.filter(function (u) { return !presentIds[u.id]; });
+    var pct = staff.length ? Math.round((recs.length / staff.length) * 100) : 0;
+
+    return '<div class="page"><div class="page-head"><p class="eyebrow">Administration</p><h1>HSE Attendance</h1>' +
+      '<p class="dateline">HSE holds every Monday. Session: ' + esc(prettyDate(key)) +
+      (isMondayKey(key) ? "" : " (non-Monday session)") + "</p></div>" +
+
+      '<div class="stats">' +
+      stat("Total Staff", staff.length, "", ICON.users) +
+      stat("Present", recs.length, "ok", ICON.check) +
+      stat("Not Checked In", missing.length, missing.length ? "danger" : "", ICON.alert) +
+      stat("Attendance", pct + "%", "accent", ICON.activity) + "</div>" +
+
+      '<section class="section"><div class="section-head"><h2>Session Records</h2>' +
+      '<div class="section-head-actions"><span>' + recs.length + " record" + (recs.length === 1 ? "" : "s") + "</span>" +
+      '<button class="btn btn-primary btn-sm" type="button" id="hseCsvBtn">' + ICON.download + "<span>Download CSV</span></button>" +
+      "</div></div>" +
+      (s.topic ? '<p class="hse-topic">' + ICON.shield + "<span>Topic: " + esc(s.topic) + "</span></p>" : "") +
+      hseTable(recs) + "</section>" +
+
+      '<div class="layout"><div>' +
+      '<section class="section"><div class="section-head"><h2>HSE Attendance History</h2><span>Previous Mondays</span></div>' +
+      '<div class="hse-history">' + hseSessionDates().map(function (d) {
+        return '<button type="button" class="hse-session' + (d.date === key ? " active" : "") + '" data-hse-date="' + esc(d.date) + '">' +
+          "<span>" + esc(prettyDate(d.date)) + "</span><b>" + d.count + " Present</b></button>";
+      }).join("") + "</div></section></div>" +
+
+      '<aside><div class="panel"><div class="panel-head">' + ICON.settings + "HSE Session Settings</div>" +
+      '<div class="panel-body"><form id="hseSettingsForm" novalidate>' +
+      '<div class="field"><label for="hseOpen">Window opens</label><input type="time" id="hseOpen" value="' + esc(s.open_time) + '" /></div>' +
+      '<div class="field"><label for="hseClose">Window closes</label><input type="time" id="hseClose" value="' + esc(s.close_time) + '" /></div>' +
+      '<div class="field"><label for="hseTopic">HSE topic (optional)</label><input type="text" id="hseTopic" value="' + esc(s.topic) + '" placeholder="e.g. Fire Safety Drill" /></div>' +
+      '<button class="btn btn-dark btn-block" type="submit">Save settings</button>' +
+      "</form></div></div>" +
+      '<div class="panel" style="margin-top:20px"><div class="panel-head">' + ICON.alert + "Not Checked In</div><div class=\"panel-body\">" +
+      (missing.length ? '<dl class="dl">' + missing.map(function (u) { return row(u.fullName, u.staffId); }).join("") + "</dl>"
+        : '<p class="dateline">All staff checked in for this session.</p>') +
+      "</div></div></aside></div></div>";
+  }
+
+  function hseTable(recs) {
+    if (!recs.length) return '<div class="table-wrap"><p class="empty">No HSE check-ins recorded for this session.</p></div>';
+    return '<div class="table-wrap"><table><thead><tr><th>Staff Name</th><th>Staff ID</th><th>Department</th><th>Date</th><th>Check-in Time</th><th>Status</th></tr></thead><tbody>' +
+      recs.map(function (r) {
+        return "<tr><td>" + esc(r.name) + "</td><td>" + esc(r.staffId) + "</td><td>" + esc(r.department) + "</td>" +
+          "<td>" + esc(csvDate(r.date)) + '</td><td class="num">' + esc(r.time) + "</td>" +
+          '<td><span class="tag tag-ok">' + esc(r.status) + "</span></td></tr>";
+      }).join("") + "</tbody></table></div>";
+  }
+
+  var HSE_CSV_HEADERS = ["Staff Name", "Staff ID", "Department", "HSE Date", "HSE Topic", "Check-in Time", "Status"];
+
+  function downloadHseCsv() {
+    var key = hseAdmin.date || currentHseDate();
+    var recs = hseRecordsFor(key);
+    if (!recs.length) { toast("No HSE records for the selected session.", "error"); return; }
+    var topic = hseSettings().topic;
+    var rows = recs.map(function (r) {
+      return [r.name, r.staffId, r.department, csvDate(r.date), r.topic || topic || "", csvTime(r.time), r.status];
+    });
+    var csv = [HSE_CSV_HEADERS].concat(rows).map(function (line) {
+      return line.map(csvCell).join(",");
+    }).join("\r\n");
+    var blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement("a");
+    link.href = url; link.download = "HSE_Attendance_" + key + ".csv";
+    document.body.appendChild(link); link.click(); link.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    toast(rows.length + " HSE record" + (rows.length === 1 ? "" : "s") + " exported.");
+  }
+
+  function bindHse() {
+    var checkIn = el("hseCheckIn");
+    if (checkIn) checkIn.addEventListener("click", function () { hseCheckIn(checkIn); });
+
+    Array.prototype.forEach.call(document.querySelectorAll("[data-hse-date]"), function (b) {
+      b.addEventListener("click", function () {
+        hseAdmin.date = b.getAttribute("data-hse-date");
+        render();
+      });
+    });
+
+    var csvBtn = el("hseCsvBtn");
+    if (csvBtn) csvBtn.addEventListener("click", downloadHseCsv);
+
+    var form = el("hseSettingsForm");
+    if (form) form.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      var btn = form.querySelector('button[type="submit"]');
+      var open = el("hseOpen").value, close = el("hseClose").value;
+      if (!open || !close) { toast("Set both an opening and closing time.", "error"); return; }
+      if (minutesOf(open) >= minutesOf(close)) { toast("The closing time must be after the opening time.", "error"); return; }
+      setBtnLoading(btn, true);
+      try {
+        var res = await supabaseClient.from("hse_settings")
+          .upsert({ id: 1, open_time: open, close_time: close, topic: el("hseTopic").value.trim() || null });
+        if (res.error) { toast(res.error.message, "error"); return; }
+        await refreshData();
+        toast("HSE settings saved.");
+        render();
+      } finally {
+        setBtnLoading(btn, false);
+      }
+    });
+  }
+
   /* ------------------------- FAQ ------------------------- */
   var FAQS = [
     ["What is the E-Attendance System?",
@@ -1240,9 +1526,11 @@
       renderChrome(); bindAuth(); window.scrollTo(0, 0); return;
     }
 
-    if (hash === "#/admin" || hash === "#/admin/attendance") {
+    if (hash === "#/admin" || hash === "#/admin/attendance" || hash === "#/admin/hse") {
       if (u.role !== "admin") { location.hash = "#/dashboard"; return; }
-      view.innerHTML = hash === "#/admin" ? adminOverview() : adminManagement();
+      view.innerHTML = hash === "#/admin" ? adminOverview()
+        : hash === "#/admin/hse" ? hseAdminView()
+        : adminManagement();
     } else if (hash === "#/history") {
       view.innerHTML = historyView(u);
     } else if (hash === "#/settings") {
@@ -1279,6 +1567,7 @@
     var historyToggle = el("historyToggle");
     if (historyToggle) historyToggle.addEventListener("click", toggleHistoryContent);
     bindExport();
+    bindHse();
   }
 
   function bindAuth() {

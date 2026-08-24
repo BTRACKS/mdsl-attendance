@@ -763,3 +763,41 @@ body.maintenance-page{background:var(--gradient-hero);min-height:100vh}
   .export-card{padding:16px}
   .export-actions .btn{flex:1 1 100%;justify-content:center}
 }
+
+/* ---------- HSE Attendance module ---------- */
+.hse-card{border-left:4px solid var(--amber)}
+.hse-topic{
+  display:flex;align-items:center;gap:10px;margin:0 0 16px;
+  background:var(--warn-soft);border:1px solid var(--amber-soft);color:var(--warn);
+  border-radius:var(--radius);padding:10px 14px;font-weight:600;font-size:14px
+}
+.hse-topic svg{width:18px;height:18px;flex:0 0 auto}
+.hse-body{display:flex;flex-direction:column;gap:12px}
+.hse-note{font-weight:700;font-size:16px;color:var(--ink);margin:0}
+.hse-note.warn{color:var(--warn)}
+.hse-note.danger{color:var(--danger)}
+.hse-sub{font-size:14px;color:var(--ink-3);margin:0}
+.hse-sub.muted{color:var(--ink-4);font-size:12.5px}
+.hse-done{
+  display:flex;align-items:center;gap:14px;background:var(--ok-soft);
+  border:1px solid #c6ead8;border-radius:var(--radius-lg);padding:16px 18px
+}
+.hse-done-mark{display:flex;color:var(--ok)}
+.hse-done-mark svg{width:34px;height:34px}
+.hse-done-title{margin:0;font-weight:800;font-size:17px;color:var(--ok);letter-spacing:-.02em}
+.hse-done-sub{margin:2px 0 0;font-size:14px;color:var(--ink-2)}
+.hse-history{display:flex;flex-direction:column;gap:10px}
+.hse-session{
+  display:flex;align-items:center;justify-content:space-between;gap:14px;width:100%;
+  text-align:left;cursor:pointer;background:var(--paper);border:1px solid var(--rule);
+  border-radius:var(--radius);padding:14px 16px;transition:var(--t);box-shadow:var(--shadow-xs)
+}
+.hse-session:hover{border-color:var(--rule-strong);transform:translateY(-1px);box-shadow:var(--shadow-sm)}
+.hse-session span{font-weight:600;color:var(--ink)}
+.hse-session b{
+  font-size:12.5px;font-weight:700;color:var(--navy);background:var(--paper-3);
+  border-radius:var(--radius-pill);padding:5px 12px;white-space:nowrap
+}
+.hse-session.active{border-color:var(--navy);box-shadow:0 0 0 3px rgba(18,58,107,.1)}
+.hse-session.active b{background:var(--navy);color:#fff}
+#hseSettingsForm{display:flex;flex-direction:column;gap:14px}
