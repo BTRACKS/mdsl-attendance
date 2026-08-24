@@ -770,7 +770,7 @@
       staff.map(function (u) {
         var a = record(u.id, key);
         return '<tr><td><div class="staff-cell">' + avatarHtml(u, "avatar-sm") +
-          '<div class="staff-cell-info"><div class="who">' + esc(u.fullName) + '</div><div class="sub">' + esc(u.staffId) + " · " + esc(u.position) + "</div></div></div></td>" +
+          '<div class="staff-cell-info"><div class="who">' + esc(u.fullName) + '</div></div></div></td>' +
           "<td>" + esc(u.department) + "</td><td>" + esc(u.employmentType) + "</td>" +
           '<td class="num">' + (a && a.morning ? esc(a.morning.time) : "—") + "</td>" +
           '<td class="num">' + (a && a.evening ? esc(a.evening.time) : "—") + "</td>" +
