@@ -817,11 +817,14 @@ body.modal-open{overflow:hidden}
 @media (max-width:420px){ .att-staff-results{grid-template-columns:1fr} }
 
 .att-selected{
-  display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;
-  padding:14px 16px;border:1px solid var(--rule);border-radius:var(--radius);
-  background:var(--paper);margin-bottom:14px
+  display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;
+  padding:12px 16px;border:1px solid var(--rule);border-radius:var(--radius);
+  background:var(--paper);margin-bottom:14px;min-width:0
 }
-.att-selected h3{font-size:16px}
+.att-selected-person{display:flex;align-items:center;gap:12px;min-width:0;flex:1 1 auto}
+.att-selected-avatar{width:40px;height:40px;flex:0 0 40px}
+.att-selected-person h3{font-size:16px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.att-selected-change{flex:0 0 auto;white-space:nowrap}
 .att-selected p{display:none}
 
 .att-filters{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px}
@@ -856,7 +859,9 @@ body.modal-open{overflow:hidden}
   .att-filters .field{flex:1 1 100%}
   .att-filters .btn{width:100%}
   .att-toolbar .btn{width:100%}
-  .att-selected{align-items:flex-start;flex-direction:column}
+  .att-selected{align-items:center;flex-direction:row}
+  .att-selected-person{width:100%;flex:1 1 100%}
+  .att-selected-change{align-self:stretch;text-align:left;padding:4px 0}
   .att-line{flex-wrap:wrap;gap:6px}
   .att-line-label{flex:1 1 100%}
   .att-line-value{white-space:normal}

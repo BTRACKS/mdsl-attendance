@@ -742,8 +742,11 @@
     $("attStaffResults").hidden = true;
     $("attStaffResults").innerHTML = "";
     $("attSelected").hidden = false;
+    var selectedAvatar = $("attSelectedAvatar");
+    if (selectedAvatar) {
+      selectedAvatar.outerHTML = avatarHtml(row, false).replace('class="avatar"', 'class="avatar att-selected-avatar" id="attSelectedAvatar" aria-hidden="true"');
+    }
     $("attSelectedName").textContent = displayName(row);
-    $("attSelectedMeta").textContent = "";
     loadAttendance();
   }
 
