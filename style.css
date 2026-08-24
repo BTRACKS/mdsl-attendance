@@ -765,7 +765,7 @@ body.maintenance-page{background:var(--gradient-hero);min-height:100vh}
 }
 
 /* ---------- HSE Attendance module ---------- */
-.hse-card{border-left:4px solid var(--amber)}
+.hse-card{border-left:1px solid var(--rule)}
 .hse-topic{
   display:flex;align-items:center;gap:10px;margin:0 0 16px;
   background:var(--warn-soft);border:1px solid var(--amber-soft);color:var(--warn);
