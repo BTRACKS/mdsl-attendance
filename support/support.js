@@ -1038,7 +1038,12 @@
       m.indexOf("does not exist") !== -1;
   }
 
-  /* ---------- account access ---------- */
+  /* ---------- Phase 7: account & password support ----------
+     Lets an authorised administrator help staff with sign-in problems without
+     ever seeing, storing or choosing a password. Passwords are handled only by
+     Supabase Authentication; the portal simply asks Auth to email a recovery
+     link. Account status is a profile-record flag (never a user deletion), and
+     every write is re-checked in Postgres by a security-definer function. */
   function isActiveRow(row) {
     var col = colOf(row, STATUS_KEYS);
     if (!col) return true;
@@ -1048,29 +1053,46 @@
     return ["active", "enabled", "true", "yes", "1"].indexOf(String(v).toLowerCase()) !== -1;
   }
 
+  function isSelf(row) { return !!(ME.user && rowId(row) === ME.user.id); }
+
   function renderAccountPanel(row) {
     var col = colOf(row, STATUS_KEYS);
     var active = isActiveRow(row);
     var email = pick(row, EMAIL_KEYS);
+    var name = displayName(row);
+    var admin = isAdmin();
+
+    /* identity summary */
+    var av = $("acctAvatar");
+    if (av) av.outerHTML = avatarHtml(row, true).replace('class="avatar avatar-lg"', 'class="avatar avatar-lg" id="acctAvatar"');
+    $("acctName").textContent = name;
+    $("acctEmail").textContent = email ? String(email) : "No email on record";
+    $("acctSub").textContent = [roleLabel(roleOf(row)), active ? "Account active" : "Account deactivated",
+      pick(row, DEPT_KEYS), pick(row, STAFF_KEYS) ? "Staff ID " + pick(row, STAFF_KEYS) : null]
+      .filter(Boolean).join(" · ");
 
     kv("kvAccountState", [
       ["Access", pill(active ? "Active" : "Deactivated", active ? "ok" : "bad"), true],
-      ["Stored in", col ? labelize(col) : "Not tracked on this record"],
       ["Sign-in email", txt(email)],
-      ["Current role", roleLabel(roleOf(row))]
+      ["Current role", roleLabel(roleOf(row))],
+      ["Status stored in", col ? labelize(col) : "Not tracked on this record"],
+      ["Password", "Held only by Supabase Authentication"],
+      ["User ID", txt(rowId(row))],
+      ["Last updated", fmtValue(row.updated_at)]
     ]);
 
-    var canEdit = isAdmin() && !!col;
-    $("accountActions").hidden = !isAdmin();
-    $("acctToggle").hidden = !canEdit;
+    $("accountActions").hidden = !admin;
+    $("acctToggle").hidden = !(admin && col);
     $("acctToggle").textContent = active ? "Deactivate account" : "Activate account";
-    $("acctReset").hidden = !isAdmin() || !email;
+    $("acctReset").hidden = !(admin && email);
+    $("acctRecheck").hidden = !admin;
+    $("acctEmailBtn").hidden = !(admin && isSelf(row));
 
-    $("accountNote").textContent = !isAdmin()
-      ? "Your account can review account details. Only an administrator can activate, deactivate or edit an account."
+    $("accountNote").textContent = !admin
+      ? "Your account can review account details. Only an administrator may send a password reset or change account status."
       : (col
-        ? "Deactivating removes the account's access to the platform. Passwords and sign-in details are handled by Supabase Authentication and are never edited here."
-        : "This installation does not store an account status field, so access cannot be toggled from the portal.");
+        ? "Sending a reset emails " + name + " a Supabase Authentication recovery link — you never see or set the password. Deactivating removes platform access without deleting the account."
+        : "This installation does not store an account status field, so access cannot be activated or deactivated from the portal. Password resets are still available.");
   }
 
   function accountStatusValue(row, active) {
@@ -1091,15 +1113,103 @@
     return res;
   }
 
+  /* ---------- confirmation screen for sensitive account actions ---------- */
+  var ACCT = null;
+
+  function closeAcct() {
+    ACCT = null;
+    $("acctBackdrop").hidden = true;
+    document.body.classList.remove("modal-open");
+  }
+
+  /* opts: { title, body, rows, okLabel, needEmail, onConfirm(value), done } */
+  function openAcct(opts) {
+    ACCT = opts;
+    $("acctConfirmTitle").textContent = opts.title;
+    $("acctConfirmBody").textContent = opts.body || "";
+    $("acctConfirmKv").innerHTML = (opts.rows || []).map(function (r) {
+      return "<div><dt>" + esc(r[0]) + "</dt><dd>" + esc(txt(r[1])) + "</dd></div>";
+    }).join("");
+    $("acctConfirmInputField").hidden = !opts.needEmail;
+    $("acctConfirmInput").value = "";
+    $("acctConfirmOk").textContent = opts.okLabel || "Confirm";
+    $("acctConfirmError").hidden = true;
+    $("acctBackdrop").hidden = false;
+    document.body.classList.add("modal-open");
+    $("acctConfirmOk").focus();
+  }
+
+  async function runAcct() {
+    if (!ACCT) return;
+    var job = ACCT;
+    var value = $("acctConfirmInput").value.trim();
+    var err = $("acctConfirmError");
+    if (job.needEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value)) {
+      err.hidden = false;
+      err.textContent = "Enter a valid email address.";
+      return;
+    }
+    var btn = $("acctConfirmOk");
+    busy(btn, true);
+    loader(true);
+    var res;
+    try { res = await job.onConfirm(value); }
+    catch (ex) { res = { error: { message: ex && ex.message ? ex.message : String(ex) } }; }
+    busy(btn, false);
+    loader(false);
+    if (res && res.error) {
+      err.hidden = false;
+      err.textContent = res.error.message || "The request was refused.";
+      return;
+    }
+    var done = job.done;
+    closeAcct();
+    if (done) done();
+  }
+
+  /* ---------- password reset (Supabase Auth recovery only) ---------- */
+  function askReset() {
+    var row = USERS.current;
+    if (!row || !isAdmin()) return;
+    var email = pick(row, EMAIL_KEYS);
+    if (!email) { toast("This record has no email address, so a reset cannot be sent.", "bad"); return; }
+    var name = displayName(row);
+    openAcct({
+      title: "Reset password for " + name + "?",
+      body: "Supabase Authentication will email " + name + " a secure recovery link. No password is shown to you, chosen by you, or stored in the application database.",
+      rows: [
+        ["Staff member", name],
+        ["Recovery email", String(email)],
+        ["Action", "Send Supabase Authentication reset link"],
+        ["Requested by", (ME.user && ME.user.email) || "—"]
+      ],
+      okLabel: "Yes, send reset email",
+      onConfirm: function () {
+        return sb.auth.resetPasswordForEmail(String(email), { redirectTo: location.origin + "/index.html" });
+      },
+      done: function () { toast("Password reset link sent to " + email + ".", "good"); }
+    });
+  }
+
+  /* ---------- account status ---------- */
   function askAccountToggle() {
     var row = USERS.current;
     if (!row || !isAdmin()) return;
     var active = isActiveRow(row);
-    openChange({
-      title: active ? "Deactivate account" : "Activate account",
-      lede: "This updates the staff record the main website reads. Sign-in credentials are not changed.",
-      rows: [["Account access", active ? "Active" : "Deactivated", active ? "Deactivated" : "Active"]],
-      needReason: true,
+    var name = displayName(row);
+    if (isSelf(row) && active) { toast("You cannot deactivate your own account.", "bad"); return; }
+    openAcct({
+      title: (active ? "Deactivate account for " : "Activate account for ") + name + "?",
+      body: active
+        ? "This removes platform access for " + name + ". The account is not deleted and no sign-in credentials are changed."
+        : "This restores platform access for " + name + ". Sign-in credentials are unchanged.",
+      rows: [
+        ["Staff member", name],
+        ["Current status", active ? "Active" : "Deactivated"],
+        ["New status", active ? "Deactivated" : "Active"],
+        ["Account record", "Kept — never deleted"]
+      ],
+      okLabel: active ? "Yes, deactivate" : "Yes, activate",
       onConfirm: function () { return writeAccountStatus(row, !active); },
       done: function () {
         toast(active ? "Account deactivated." : "Account activated.", "good");
@@ -1108,15 +1218,44 @@
     });
   }
 
-  async function sendReset() {
+  /* Re-reads the record so the administrator can confirm the live status. */
+  async function recheckAccount() {
     var row = USERS.current;
-    var email = row && pick(row, EMAIL_KEYS);
-    if (!email) return;
+    if (!row) return;
     loader(true);
-    var res = await sb.auth.resetPasswordForEmail(String(email), { redirectTo: location.origin + "/index.html" });
+    var res = await sb.from("profiles").select("*").eq("id", rowId(row)).maybeSingle();
     loader(false);
-    if (res.error) toast(res.error.message, "bad");
-    else toast("Password reset email sent through Supabase Authentication.", "good");
+    if (res.error || !res.data) { toast("The account status could not be re-checked.", "bad"); return; }
+    for (var i = 0; i < USERS.rows.length; i++) {
+      if (rowId(USERS.rows[i]) === rowId(row)) { USERS.rows[i] = res.data; break; }
+    }
+    USERS.current = res.data;
+    renderAccountPanel(res.data);
+    toast(isActiveRow(res.data) ? "Account is currently active." : "Account is currently deactivated.", isActiveRow(res.data) ? "good" : "bad");
+  }
+
+  /* ---------- sign-in email change ----------
+     Authentication emails are never overwritten from the profile editor. The
+     change is requested through Supabase Authentication, which emails the
+     verification links; the profile email is only refreshed once Auth confirms. */
+  function askEmailChange() {
+    var row = USERS.current;
+    if (!row || !isAdmin() || !isSelf(row)) return;
+    openAcct({
+      title: "Change your sign-in email?",
+      body: "Supabase Authentication will email verification links to both addresses. The change only takes effect after you confirm, which keeps the profile email and the authentication email consistent.",
+      rows: [
+        ["Account", displayName(row)],
+        ["Current sign-in email", (ME.user && ME.user.email) || txt(pick(row, EMAIL_KEYS))],
+        ["Process", "Supabase Authentication verification"]
+      ],
+      okLabel: "Send verification",
+      needEmail: true,
+      onConfirm: function (value) {
+        return sb.auth.updateUser({ email: value });
+      },
+      done: function () { toast("Verification sent. The email changes only after both addresses are confirmed.", "good"); }
+    });
   }
 
   /* ---------- profile management ---------- */
@@ -1151,7 +1290,7 @@
     $("avatarFile").value = "";
     $("profileEditActions").hidden = !(EDIT.cols.length || avatarCol);
     $("profileEditNote").textContent =
-      "These are the only profile fields the portal may change. Saving updates the existing staff record — no duplicate profile is created — and the main website shows the new details immediately.";
+      "These are the only profile fields the portal may change. The sign-in (authentication) email is deliberately not editable here — use Account & password support. Saving updates the existing staff record — no duplicate profile is created — and the main website shows the new details immediately.";
   }
 
   async function uploadAvatar(row, file) {
@@ -1245,7 +1384,18 @@
       EDIT.avatarFile = f;
     });
     $("acctToggle").addEventListener("click", askAccountToggle);
-    $("acctReset").addEventListener("click", sendReset);
+    $("acctReset").addEventListener("click", askReset);
+    $("acctRecheck").addEventListener("click", recheckAccount);
+    $("acctEmailBtn").addEventListener("click", askEmailChange);
+
+    $("acctConfirmCancel").addEventListener("click", closeAcct);
+    $("acctConfirmOk").addEventListener("click", runAcct);
+    $("acctBackdrop").addEventListener("click", function (e) {
+      if (e.target === $("acctBackdrop")) closeAcct();
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && !$("acctBackdrop").hidden) closeAcct();
+    });
 
     $("changeCancel").addEventListener("click", closeChange);
     $("changeOk").addEventListener("click", runChange);

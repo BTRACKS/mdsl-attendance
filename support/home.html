@@ -215,15 +215,27 @@
                 <p class="role-note" id="roleNote"></p>
               </div>
             </div>
-            <div class="panel" id="accountPanel">
-              <div class="panel-head">Account access</div>
+            <!-- Account & password support (Phase 7) -->
+            <div class="panel panel-span" id="accountPanel">
+              <div class="panel-head">Account &amp; password support</div>
               <div class="panel-body">
+                <div class="acct-summary">
+                  <div class="avatar avatar-lg" id="acctAvatar"></div>
+                  <div class="acct-ident">
+                    <h3 id="acctName">&mdash;</h3>
+                    <p id="acctEmail">&mdash;</p>
+                    <p id="acctSub">&mdash;</p>
+                  </div>
+                </div>
                 <dl class="kv" id="kvAccountState"></dl>
                 <div class="account-actions" id="accountActions" hidden>
+                  <button class="btn btn-primary btn-sm" id="acctReset" type="button">Send password reset email</button>
                   <button class="btn btn-ghost btn-sm" id="acctToggle" type="button">Deactivate account</button>
-                  <button class="btn btn-ghost btn-sm" id="acctReset" type="button">Send password reset</button>
+                  <button class="btn btn-ghost btn-sm" id="acctRecheck" type="button">Re-check account status</button>
+                  <button class="btn btn-ghost btn-sm" id="acctEmailBtn" type="button">Start sign-in email change</button>
                 </div>
                 <p class="role-note" id="accountNote"></p>
+                <p class="edit-hint" id="acctSecurityNote">Passwords are never shown, stored or chosen here. Supabase Authentication sends the recovery link and handles email verification.</p>
               </div>
             </div>
 
@@ -517,6 +529,24 @@
       <div class="modal-actions">
         <button class="btn btn-ghost btn-sm" id="changeCancel" type="button">Cancel</button>
         <button class="btn btn-primary btn-sm" id="changeOk" type="button">Confirm and save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== ACCOUNT ACTION CONFIRMATION (Phase 7) ===================== -->
+  <div class="modal-backdrop" id="acctBackdrop" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="acctConfirmTitle">
+      <h2 id="acctConfirmTitle">Confirm account action</h2>
+      <p class="att-confirm-lede" id="acctConfirmBody">&mdash;</p>
+      <dl class="kv att-kv" id="acctConfirmKv"></dl>
+      <div class="field" id="acctConfirmInputField" hidden>
+        <label for="acctConfirmInput">New sign-in email</label>
+        <input id="acctConfirmInput" type="email" autocomplete="off" placeholder="name@multidigitalng.com" />
+      </div>
+      <div class="alert alert-error" id="acctConfirmError" hidden></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost btn-sm" id="acctConfirmCancel" type="button">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="acctConfirmOk" type="button">Confirm</button>
       </div>
     </div>
   </div>

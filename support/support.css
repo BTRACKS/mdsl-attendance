@@ -543,3 +543,15 @@ body.modal-open{overflow:hidden}
   .diff-old::before{content:"Existing: ";font-weight:600;color:var(--ink-4);text-decoration:none}
   .diff-new::before{content:"New: ";font-weight:600;color:var(--ink-4)}
 }
+
+/* ---------- Account & password support (Phase 7) ---------- */
+.acct-summary{display:flex;align-items:center;gap:16px;padding-bottom:16px;margin-bottom:4px;border-bottom:1px solid var(--rule)}
+.acct-ident{min-width:0}
+.acct-ident h3{font-size:18px;letter-spacing:-.02em}
+.acct-ident p{margin:3px 0 0;font-size:13.5px;color:var(--ink-3);word-break:break-word}
+.acct-ident p:last-child{color:var(--ink-4);font-size:12.5px}
+#acctConfirmKv{margin-top:14px}
+@media (max-width:640px){
+  .acct-summary{flex-direction:column;align-items:flex-start;gap:12px}
+  .account-actions .btn{width:100%;justify-content:center}
+}
