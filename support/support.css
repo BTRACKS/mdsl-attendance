@@ -1010,3 +1010,11 @@ body.modal-open{overflow:hidden}
 #tab-overview [class*="quick-actions"] .btn {
   margin:0;
 }
+
+/* Complete Leave page layout */
+#tab-leave { width:100%; }
+#tab-leave .page-head { margin-bottom:18px; }
+#tab-leave .section { margin-bottom:18px; }
+#tab-leave .leave-support-toolbar { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; }
+#tab-leave .leave-support-toolbar .search-field { flex:1 1 320px; }
+#tab-leave .leave-support-toolbar .btn { margin:0; }

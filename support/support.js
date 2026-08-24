@@ -2159,6 +2159,20 @@ return "Completed";
 ensureLeavePortalTab();
 var root = $("tab-leave");
 if (!root) return;
+
+if (!LEAVES.loaded) {
+  root.innerHTML =
+    '<div class="page-head"><p class="eyebrow">Time Away</p><h1>Leave</h1>' +
+    '<p class="dateline">Loading staff leave records…</p></div>';
+  loadLeaves().then(function(){ renderSupportLeave(); }).catch(function(e){
+    root.innerHTML =
+      '<div class="page-head"><p class="eyebrow">Time Away</p><h1>Leave</h1>' +
+      '<p class="dateline">Leave records could not be loaded.</p>' +
+      '<p class="empty">' + esc(e && e.message ? e.message : "Unable to load leave records.") + '</p></div>';
+  });
+  return;
+}
+
 var today = localDateIso();
 var leaves = (LEAVES.rows || []).slice().sort(function(a,b){
   return String(b.start_date || "").localeCompare(String(a.start_date || ""));
@@ -2368,6 +2382,9 @@ if(refresh) refresh.addEventListener("click",async function(){ await loadUsers(t
         if (panel) panel.hidden = b !== btn;
       });
       if (!options.skipPersist) setPortalSection(name, !!options.replace);
+      if (name === "leave") {
+        renderSupportLeave();
+      }
       if (options.closeNav && typeof closeNav === "function") closeNav();
     }
 
