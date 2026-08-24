@@ -207,6 +207,53 @@
     return '<div class="' + cls + '">' + esc(initials(name)) + "</div>";
   }
 
+  var LEAVE_TYPES = ["Annual Leave", "Sick Leave", "Casual Leave", "Maternity Leave", "Paternity Leave", "Study Leave", "Compassionate Leave", "Other"];
+  var LEAVES = { rows: [], loaded: false };
+
+  function leaveForDate(userId, key) {
+    return (LEAVES.rows || []).find(function(l) {
+      return String(l.staff_id || l.user_id) === String(userId) &&
+        l.status !== "cancelled" && l.start_date <= key && key <= l.end_date;
+    }) || null;
+  }
+  function leaveRowsFor(userId) {
+    return (LEAVES.rows || []).filter(function(l){ return String(l.staff_id || l.user_id) === String(userId); })
+      .sort(function(a,b){ return String(b.start_date).localeCompare(String(a.start_date)); });
+  }
+  function leaveTypeLabel(v) { return String(v || "").replace(/_/g," ").replace(/\b\w/g,function(c){return c.toUpperCase();}); }
+  function leaveStateText(userId, key) {
+    var l=leaveForDate(userId,key);
+    return l ? "Leave" : null;
+  }
+  async function loadLeaves() {
+    var res = await sb.from("staff_leave").select("*").order("start_date",{ascending:false});
+    LEAVES.rows = res.error ? [] : (res.data || []);
+    LEAVES.loaded = true;
+    return res;
+  }
+  function ensureUserLeavePanel() {
+    var root=$("userProfileView");
+    if(!root) return null;
+    var box=$("userLeaveInfo");
+    if(!box){
+      box=document.createElement("section");
+      box.id="userLeaveInfo";
+      box.className="section leave-support-panel";
+      root.appendChild(box);
+    }
+    return box;
+  }
+  function renderUserLeave(row) {
+    var box=ensureUserLeavePanel(); if(!box) return;
+    var rows=leaveRowsFor(rowId(row)), today=localDateIso();
+    var active=rows.find(function(l){return l.status!=="cancelled"&&l.start_date<=today&&today<=l.end_date;});
+    box.innerHTML='<div class="section-head"><h2>Leave Information</h2><span>View only</span></div>' +
+      (active ? '<div class="leave-active-banner"><strong>Leave</strong><span>'+esc(leaveTypeLabel(active.leave_type))+' · '+esc(dashboardDateOnly(active.start_date))+' – '+esc(dashboardDateOnly(active.end_date))+'</span></div>' : '<p class="dateline">No active leave for this staff member today.</p>') +
+      (rows.length ? '<div class="table-wrap"><table><thead><tr><th>Type</th><th>Start</th><th>End</th><th>Reason</th><th>Status</th></tr></thead><tbody>'+
+        rows.map(function(l){var activeNow=l.status!=="cancelled"&&l.start_date<=today&&today<=l.end_date;var future=l.status!=="cancelled"&&l.start_date>today;var st=l.status==="cancelled"?"Cancelled":activeNow?"Active":future?"Scheduled":"Completed";return '<tr><td>'+esc(leaveTypeLabel(l.leave_type))+'</td><td>'+esc(dashboardDateOnly(l.start_date))+'</td><td>'+esc(dashboardDateOnly(l.end_date))+'</td><td>'+esc(l.reason||"—")+'</td><td>'+esc(st)+'</td></tr>';}).join("")+
+        '</tbody></table></div>' : '<p class="empty">No leave history recorded.</p>');
+  }
+
   function matchesQuery(row, q) {
     if (!q) return true;
     var hay = [displayName(row), pick(row, EMAIL_KEYS), pick(row, STAFF_KEYS)]
@@ -248,8 +295,7 @@
     var name = displayName(row);
     $("profileAvatar").outerHTML = avatarHtml(row, true).replace('class="avatar avatar-lg"', 'class="avatar avatar-lg" id="profileAvatar"');
     $("profileName").textContent = name;
-    $("profileMeta").textContent = [pick(row, TITLE_KEYS), pick(row, DEPT_KEYS), pick(row, EMAIL_KEYS)]
-      .filter(Boolean).join(" · ") || "No additional details recorded";
+    $("profileMeta").textContent = "";
 
     kv("kvUserContact", [
       ["Email", fmtValue(pick(row, EMAIL_KEYS))],
@@ -282,6 +328,7 @@
     renderRolePanel(row);
     renderAccountPanel(row);
     renderProfileEditor(row);
+    renderUserLeave(row);
 
     $("usersListView").hidden = true;
     $("userProfileView").hidden = false;
@@ -300,6 +347,7 @@
     loader(true);
     var res = await sb.from("profiles").select("*").limit(1000);
     await loadRoles();
+    await loadLeaves();
     loader(false);
     USERS.loading = false;
 
@@ -745,7 +793,16 @@
       selectedAvatar.outerHTML = avatarHtml(row).replace('class="avatar"', 'class="avatar avatar-sm" id="attSelectedAvatar"');
     }
     $("attSelectedName").textContent = displayName(row);
+    renderSelectedStaffLeave(row);
     loadAttendance();
+  }
+
+  function renderSelectedStaffLeave(row) {
+    var selected=$("attSelected"); if(!selected) return;
+    var box=$("attSelectedLeave");
+    if(!box){ box=document.createElement("div"); box.id="attSelectedLeave"; box.className="att-selected-leave"; var anchor=$("attSelectedName"); if(anchor&&anchor.parentNode) anchor.parentNode.appendChild(box); }
+    var today=localDateIso(), active=leaveForDate(rowId(row),today);
+    box.innerHTML=active ? '<span class="tag tag-leave">Leave</span><span>'+esc(leaveTypeLabel(active.leave_type))+' · '+esc(dashboardDateOnly(active.start_date))+' – '+esc(dashboardDateOnly(active.end_date))+'</span>' : '<span class="tag tag-miss">Not on leave</span>';
   }
 
   function clearAttStaff() {
@@ -829,9 +886,11 @@
 
     if (!rows.length) {
       box.innerHTML = "";
-      $("attState").textContent = ATT.rows.length
-        ? "No attendance record matches the current filters."
-        : "No attendance records found for " + displayName(ATT.staff) + ".";
+      var selectedId=ATT.staff && rowId(ATT.staff), today=localDateIso();
+      var leave=selectedId ? leaveForDate(selectedId, $("attDate").value || today) : null;
+      $("attState").textContent = leave
+        ? "Leave — " + leaveTypeLabel(leave.leave_type) + " (" + dashboardDateOnly(leave.start_date) + " – " + dashboardDateOnly(leave.end_date) + ")."
+        : (ATT.rows.length ? "No attendance record matches the current filters." : "No attendance records found for " + displayName(ATT.staff) + ".");
       return;
     }
     $("attState").textContent = "Showing " + rows.length + " of " + ATT.rows.length + " record" + (ATT.rows.length === 1 ? "" : "s") + ".";
@@ -859,9 +918,10 @@
       var dateBtn = canEdit && ATT.dateKey
         ? '<button type="button" class="btn btn-ghost btn-sm" data-editdate="' + idx + '">Correct date</button>'
         : "";
+      var leave=ATT.staff ? leaveForDate(rowId(ATT.staff), d) : null;
       return '<article class="att-record"><header class="att-record-head">' +
         "<h4>" + esc(ukDate(d)) + "</h4>" +
-        "<span>" + esc(status || "Attendance record") + "</span>" + dateBtn +
+        "<span>" + esc(leave ? "Leave" : (status || "Attendance record")) + "</span>" + dateBtn +
         "</header><div class=\"att-record-body\">" + lines + jsonLines + "</div></article>";
     }).join("");
 

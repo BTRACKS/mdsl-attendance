@@ -75,7 +75,7 @@
      Views read synchronously from this cache; actions that change data
      (sign up, sign in, submit attendance) await refreshData() before
      re-rendering, so the UI code below stays largely unchanged. */
-  var db = { users: [], attendance: [], staffCount: null, hse: [], hseSettings: null };
+  var db = { users: [], attendance: [], leaves: [], staffCount: null, hse: [], hseSettings: null };
   var authUser = null;     // the raw Supabase auth user (has .id, .email)
   var currentUser = null;  // the matching row from db.users (profile + role)
   var dataError = null;
@@ -91,6 +91,25 @@
   function mapAttendance(a) {
     return { userId: a.user_id, date: a.date, morning: a.morning || null, evening: a.evening || null };
   }
+  function mapLeave(r) {
+    return {
+      id: r.id, userId: r.staff_id || r.user_id, leaveType: r.leave_type || "",
+      startDate: r.start_date, endDate: r.end_date, reason: r.reason || "",
+      status: r.status || "active", createdAt: r.created_at, updatedAt: r.updated_at
+    };
+  }
+  function leaveForDate(userId, key) {
+    return (db.leaves || []).find(function (l) {
+      return String(l.userId) === String(userId) &&
+        l.status !== "cancelled" &&
+        l.startDate <= key && key <= l.endDate;
+    }) || null;
+  }
+  function leaveStatusText(userId, key) {
+    var l = leaveForDate(userId, key);
+    return l ? "Leave" : null;
+  }
+  function leaveTypeLabel(v) { return String(v || "").replace(/_/g, " ").replace(/\b\w/g, function(c){return c.toUpperCase();}); }
 
   async function refreshData() {
     pageLoader.show();
@@ -102,6 +121,8 @@
       if (attendanceRes.error) dataError = attendanceRes.error.message;
       db.users = (profilesRes.data || []).map(mapProfile);
       db.attendance = (attendanceRes.data || []).map(mapAttendance);
+      var leaveRes = await supabaseClient.from("staff_leave").select("*").order("start_date", { ascending: false });
+      db.leaves = leaveRes.error ? [] : (leaveRes.data || []).map(mapLeave);
 
       // HSE module data. Errors here are non-fatal so the core attendance
       // system keeps working even before the HSE tables are created.
@@ -269,7 +290,7 @@
     } else {
       links = u.role === "admin"
         ? [["#/admin", "Overview"], ["#/admin/attendance", "Attendance Management"], ["#/admin/hse", "HSE Attendance"], ["#/dashboard", "My Dashboard"], ["#/settings", "Settings"]]
-        : [["#/dashboard", "Dashboard"], ["#/history", "Attendance History"], ["#/settings", "Settings"]];
+        : [["#/dashboard", "Dashboard"], ["#/history", "Attendance History"], ["#/leave", "Leave"], ["#/settings", "Settings"]];
 
     }
     var hash = PAGE === "about" ? "" : (location.hash || (u ? "#/dashboard" : "#/login"));
@@ -443,6 +464,7 @@
   function dashboardView(u) {
     var now = new Date(), key = dateKey(now);
     var rec = record(u.id, key);
+    var leave = leaveForDate(u.id, key);
     var m = rec && rec.morning, e = rec && rec.evening;
 
     var greeting = greetingInfo(now);
@@ -455,11 +477,13 @@
       '<div class="layout"><div>' +
 
       '<section class="section"><div class="section-head"><h2>Today\'s Attendance</h2><span>' + longDate(now) + "</span></div>" +
-      '<div class="att-grid">' +
-      attBlock("Morning", "Resumption", m, "morning", !!m) +
-      attBlock("Evening", "Closing", e, "evening", !!e || !m) +
-      "</div>" +
-      (!m ? '<p class="dateline" style="margin-top:12px">Closing time unlocks once your morning resumption has been submitted.</p>' : "") +
+      (leave
+        ? '<div class="leave-active-banner"><strong>Leave</strong><span>' + esc(leaveTypeLabel(leave.leaveType)) + ' · ' + esc(prettyDate(leave.startDate)) + ' – ' + esc(prettyDate(leave.endDate)) + '</span></div>'
+        : '<div class="att-grid">' +
+          attBlock("Morning", "Resumption", m, "morning", !!m) +
+          attBlock("Evening", "Closing", e, "evening", !!e || !m) +
+          "</div>" +
+          (!m ? '<p class="dateline" style="margin-top:12px">Closing time unlocks once your morning resumption has been submitted.</p>' : "")) +
       "</section>" +
 
       hseStaffCard(u) +
@@ -507,9 +531,11 @@
       row("Awaiting closing", recs.filter(function (a) { return a.morning && !a.evening; }).length) + "</dl>";
   }
 
-  function statusOf(a) {
-    if (a.morning && a.evening) return '<span class="tag tag-ok">Complete</span>';
-    if (a.morning) return '<span class="tag tag-pending">Awaiting closing</span>';
+  function statusOf(a, userId, key) {
+    var leave = userId && key ? leaveForDate(userId, key) : null;
+    if (leave) return '<span class="tag tag-leave">Leave</span>';
+    if (a && a.morning && a.evening) return '<span class="tag tag-ok">Complete</span>';
+    if (a && a.morning) return '<span class="tag tag-pending">Awaiting closing</span>';
     return '<span class="tag tag-miss">Incomplete</span>';
   }
 
@@ -523,6 +549,56 @@
         return "<tr><td>" + esc(prettyDate(a.date)) + '</td><td class="num">' + (a.morning ? esc(a.morning.time) : "—") +
           '</td><td class="num">' + (a.evening ? esc(a.evening.time) : "—") + "</td><td>" + statusOf(a) + "</td></tr>";
       }).join("") + "</tbody></table></div>";
+  }
+
+  var LEAVE_TYPES = ["Annual Leave", "Sick Leave", "Casual Leave", "Maternity Leave", "Paternity Leave", "Study Leave", "Compassionate Leave", "Other"];
+
+  function leaveHistoryFor(userId) {
+    return (db.leaves || []).filter(function(l){ return String(l.userId) === String(userId); })
+      .sort(function(a,b){ return String(b.startDate).localeCompare(String(a.startDate)); });
+  }
+
+  function leaveView(u) {
+    var rows = leaveHistoryFor(u.id);
+    var today = dateKey(new Date());
+    var active = rows.find(function(l){ return l.status !== "cancelled" && l.startDate <= today && today <= l.endDate; });
+    return '<div class="page"><div class="page-head"><p class="eyebrow">Time Away</p><h1>Leave Management</h1>' +
+      '<p class="dateline">Activate your own leave period. Future leave will not affect attendance until its start date.</p></div>' +
+      (active ? '<section class="section leave-active-card"><div class="section-head"><h2>You are currently on leave</h2><span>Leave</span></div>' +
+        '<div class="leave-detail-grid"><div><span>Type</span><strong>' + esc(leaveTypeLabel(active.leaveType)) + '</strong></div><div><span>Start</span><strong>' + esc(prettyDate(active.startDate)) + '</strong></div><div><span>End</span><strong>' + esc(prettyDate(active.endDate)) + '</strong></div></div>' +
+        (active.reason ? '<p class="dateline leave-reason">Reason: ' + esc(active.reason) + '</p>' : '') + '</section>' : '') +
+      '<section class="section"><div class="section-head"><h2>Activate Leave</h2><span>Staff controlled</span></div>' +
+      '<form id="leaveForm" novalidate><div class="form-grid">' +
+      '<div class="field"><label for="leaveType">Leave type</label><select id="leaveType" name="leaveType"><option value="">Select leave type</option>' +
+      LEAVE_TYPES.map(function(t){return '<option value="'+esc(t)+'">'+esc(t)+'</option>';}).join("") +
+      '</select><span class="error"></span></div>' +
+      '<div class="field"><label for="leaveStart">Start date</label><input id="leaveStart" name="startDate" type="date" min="'+esc(today)+'" /><span class="error"></span></div>' +
+      '<div class="field"><label for="leaveEnd">End date</label><input id="leaveEnd" name="endDate" type="date" /><span class="error"></span></div>' +
+      '<div class="field full"><label for="leaveReason">Reason (optional)</label><textarea id="leaveReason" name="reason" rows="4" maxlength="1000" placeholder="Optional reason"></textarea><span class="error"></span></div>' +
+      '</div><div class="form-foot"><button class="btn btn-primary" type="submit">Activate leave</button></div></form></section>' +
+      '<section class="section"><div class="section-head"><h2>Leave History</h2><span>'+rows.length+' record'+(rows.length===1?'':'s')+'</span></div>' +
+      (rows.length ? '<div class="table-wrap"><table><thead><tr><th>Type</th><th>Start</th><th>End</th><th>Reason</th><th>Status</th></tr></thead><tbody>' +
+        rows.map(function(l){ var activeNow=l.status!=="cancelled"&&l.startDate<=today&&today<=l.endDate; var future=l.status!=="cancelled"&&l.startDate>today; var st=l.status==="cancelled"?"Cancelled":activeNow?"Active":future?"Scheduled":"Completed"; return '<tr><td>'+esc(leaveTypeLabel(l.leaveType))+'</td><td>'+esc(prettyDate(l.startDate))+'</td><td>'+esc(prettyDate(l.endDate))+'</td><td>'+esc(l.reason||"—")+'</td><td>'+esc(st)+'</td></tr>'; }).join("") +
+        '</tbody></table></div>' : '<p class="empty">No leave records yet.</p>') +
+      '</section></div>';
+  }
+
+  async function submitLeave() {
+    var u=session(); if(!u) return;
+    var form=el("leaveForm"); if(!form) return;
+    var v=readForm(form,{leaveType:req("Leave type"),startDate:req("Start date"),endDate:req("End date"),reason:function(){return "";}});
+    if(!v) return;
+    var today=dateKey(new Date());
+    if(v.startDate < today){toast("Leave cannot start in the past.","error");return;}
+    if(v.endDate < v.startDate){toast("End date must be on or after the start date.","error");return;}
+    var overlap=(db.leaves||[]).some(function(l){return String(l.userId)===String(u.id)&&l.status!=="cancelled"&&v.startDate<=l.endDate&&v.endDate>=l.startDate;});
+    if(overlap){toast("These dates overlap an existing leave record.","error");return;}
+    var btn=form.querySelector('button[type="submit"]'); setBtnLoading(btn,true); loader(true);
+    try{
+      var res=await supabaseClient.from("staff_leave").insert({staff_id:u.id,leave_type:v.leaveType,start_date:v.startDate,end_date:v.endDate,reason:v.reason||null,status:"active"});
+      if(res.error){toast(res.error.message,"error");return;}
+      await refreshData(); toast("Leave activated successfully."); render();
+    }finally{setBtnLoading(btn,false);loader(false);}
   }
 
   function historyView(u) {
@@ -775,7 +851,7 @@
           "<td>" + esc(u.department) + "</td><td>" + esc(u.employmentType) + "</td>" +
           '<td class="num">' + (a && a.morning ? esc(a.morning.time) : "—") + "</td>" +
           '<td class="num">' + (a && a.evening ? esc(a.evening.time) : "—") + "</td>" +
-          "<td>" + (a ? statusOf(a) : '<span class="tag tag-miss">Not submitted</span>') + "</td></tr>";
+          "<td>" + (leaveForDate(u.id, key) ? '<span class="tag tag-leave">Leave</span>' : (a ? statusOf(a, u.id, key) : '<span class="tag tag-miss">Not submitted</span>')) + "</td></tr>";
       }).join("") + "</tbody></table></div>";
   }
 
@@ -844,6 +920,7 @@
         return '<div class="panel" style="margin-bottom:18px"><div class="panel-head panel-head-staff">' + avatarHtml(u, "avatar-sm") +
           "<span>" + esc(u.fullName) + "</span></div>" +
           '<div class="panel-body panel-body-history">' +
+          (leaveHistoryFor(u.id).length ? '<div class="leave-history-mini">' + leaveHistoryFor(u.id).slice(0,5).map(function(l){var today=dateKey(new Date());var st=l.status==="cancelled"?"Cancelled":(l.startDate<=today&&today<=l.endDate?"Active":(l.startDate>today?"Scheduled":"Completed"));return '<div><strong>'+esc(leaveTypeLabel(l.leaveType))+'</strong><span>'+esc(prettyDate(l.startDate))+' – '+esc(prettyDate(l.endDate))+' · '+esc(st)+(l.reason?' · '+esc(l.reason):'')+'</span></div>';}).join("") + '</div>' : '') +
           (recs.length ? '<div class="history-list">' +
             recs.map(function (a) {
               return '<div class="history-row">' +
@@ -1534,6 +1611,9 @@
         : adminManagement();
     } else if (hash === "#/history") {
       view.innerHTML = historyView(u);
+    } else if (hash === "#/leave") {
+      view.innerHTML = leaveView(u);
+      renderChrome(); bindAuth(); bindLeave(); __restoreScroll(); return;
     } else if (hash === "#/settings") {
       view.innerHTML = settingsView(u);
       renderChrome(); bindAuth(); bindSettings(); __restoreScroll(); return;
@@ -1569,6 +1649,11 @@
     if (historyToggle) historyToggle.addEventListener("click", toggleHistoryContent);
     bindExport();
     bindHse();
+  }
+
+  function bindLeave() {
+    var form=el("leaveForm");
+    if(form) form.addEventListener("submit",function(e){e.preventDefault();submitLeave();});
   }
 
   function bindAuth() {

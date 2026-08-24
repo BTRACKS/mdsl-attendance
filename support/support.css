@@ -961,3 +961,31 @@ body.modal-open{overflow:hidden}
   .setting-row{grid-template-columns:1fr;align-items:stretch}
   .setting-row .setting-reset{justify-self:start}
 }
+
+
+/* ---------- Leave Management ---------- */
+.tag-leave{background:#efe9ff;color:#5b3ea6;border:1px solid #d8cdfa}
+.leave-active-banner{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:16px 18px;border:1px solid #d8cdfa;background:#f7f3ff;border-radius:14px;
+  margin-bottom:16px;
+}
+.leave-active-banner strong{font-size:15px;color:#5b3ea6}
+.leave-active-banner span{font-size:13px;color:var(--ink-2);text-align:right}
+.leave-active-card{border-left:4px solid #8b6ed8}
+.leave-detail-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.leave-detail-grid>div{padding:14px;border:1px solid var(--rule);border-radius:12px;background:var(--paper-2)}
+.leave-detail-grid span{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-4);margin-bottom:4px}
+.leave-detail-grid strong{font-size:14px;color:var(--ink)}
+.leave-reason{margin-top:14px}
+.leave-history-mini{display:grid;gap:8px;margin-bottom:14px}
+.leave-history-mini>div{display:flex;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid var(--rule);border-radius:10px;background:var(--paper-2)}
+.leave-history-mini span{color:var(--ink-3);font-size:13px}
+.leave-support-panel{margin-top:20px}
+.att-selected-leave{display:flex;align-items:center;gap:8px;margin-top:3px;font-size:12px;color:var(--ink-3)}
+@media (max-width:760px){
+  .leave-active-banner{align-items:flex-start;flex-direction:column}
+  .leave-active-banner span{text-align:left}
+  .leave-detail-grid{grid-template-columns:1fr}
+  .leave-history-mini>div{flex-direction:column;gap:2px}
+}
