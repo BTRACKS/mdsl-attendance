@@ -1965,7 +1965,7 @@
       if(section) section.remove(); else el.remove();
     });
   }
-  function initDashboard(){var root=$("tab-overview");if(!root||root.getAttribute('data-ready')==='1')return;root.setAttribute('data-ready','1');removeDashboardQuickActions();$("dashboardRefresh").addEventListener('click',function(){loadDashboard(true);});$("dashboardRetry").addEventListener('click',function(){runDashboardChecks();});root.addEventListener('click',function(e){var b=e.target.closest('[data-goto]');if(!b)return;var t=document.querySelector('.nav button[data-tab="'+b.getAttribute('data-goto')+'"]');if(t)t.click();});}
+  function initDashboard(){var root=$("tab-overview");if(!root||root.getAttribute('data-ready')==='1')return;root.setAttribute('data-ready','1');removeDashboardQuickActions();var refresh=$("dashboardRefresh");if(refresh)refresh.addEventListener('click',function(){loadDashboard(true);});var retry=$("dashboardRetry");if(retry)retry.addEventListener('click',function(){runDashboardChecks();});root.addEventListener('click',function(e){var b=e.target.closest('[data-goto]');if(!b)return;var t=document.querySelector('.nav button[data-tab="'+b.getAttribute('data-goto')+'"]');if(t)t.click();});}
 
   /* ------------------------- portal render ------------------------- */
   async function renderPortal(user, access) {
