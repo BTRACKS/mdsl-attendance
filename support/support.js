@@ -291,6 +291,8 @@
     kv("kvUserOther", extras.length ? extras : [["Additional fields", "Nothing further stored for this user."]]);
 
     renderRolePanel(row);
+    renderAccountPanel(row);
+    renderProfileEditor(row);
 
     $("usersListView").hidden = true;
     $("userProfileView").hidden = false;
@@ -731,9 +733,12 @@
         return '<div class="att-line"><span class="att-line-label">' + esc(f[1]) + "</span>" +
           '<span class="att-line-value">' + esc(stampText(val, d)) + "</span>" + btn + "</div>";
       }).join("");
+      var dateBtn = canEdit && ATT.dateKey
+        ? '<button type="button" class="btn btn-ghost btn-sm" data-editdate="' + idx + '">Correct date</button>'
+        : "";
       return '<article class="att-record"><header class="att-record-head">' +
         "<h4>" + esc(ukDate(d)) + "</h4>" +
-        "<span>" + esc(status || "Attendance record") + "</span>" +
+        "<span>" + esc(status || "Attendance record") + "</span>" + dateBtn +
         "</header><div class=\"att-record-body\">" + lines + "</div></article>";
     }).join("");
 
@@ -750,7 +755,8 @@
     document.body.classList.remove("modal-open");
   }
 
-  function openCorrection(row, field) {
+  function openCorrection(row, field, opts) {
+    opts = opts || {};
     if (!isAdmin()) { toast("Only an administrator can correct attendance timestamps.", "bad"); return; }
     var label = (ATT.fields.filter(function (f) { return f[0] === field; })[0] || [field, labelize(field)])[1];
     var d = rowDate(row);
@@ -761,12 +767,15 @@
       original: row[field] === null || row[field] === undefined || String(row[field]) === "" ? null : String(row[field]),
       originalText: stampText(row[field], d),
       timeOnly: isTimeOnly(row[field]),
+      dateOnly: !!opts.dateOnly,
       recordDate: d
     };
     ATT.step = 1;
 
     $("attCorrStaff").textContent = displayName(ATT.staff);
     $("attCorrField").textContent = label;
+    $("attCorrTitle").textContent = opts.dateOnly ? "Correct attendance date" : "Correct attendance timestamp";
+    var tf = $("attNewTimeField"); if (tf) tf.hidden = !!opts.dateOnly;
     $("attCorrOriginal").textContent = ATT.pending.originalText;
     $("attNewDate").value = cur.date;
     $("attNewTime").value = cur.time;
@@ -801,7 +810,7 @@
     var reason = correctionReason();
     var err = $("attCorrError");
 
-    if (!date || !time) { err.hidden = false; err.textContent = "Enter both the correct date and the correct time."; return; }
+    if (!date || (!time && !p.dateOnly)) { err.hidden = false; err.textContent = p.dateOnly ? "Enter the correct date." : "Enter both the correct date and the correct time."; return; }
     if (!reason) { err.hidden = false; err.textContent = "Select a reason for this correction. If you choose Other, describe it briefly."; return; }
     if (reason.length > 300) { err.hidden = false; err.textContent = "Keep the reason under 300 characters."; return; }
     err.hidden = true;
@@ -809,8 +818,8 @@
     p.newDate = date;
     p.newTime = time;
     p.reason = reason;
-    p.newValue = p.timeOnly ? time + ":00" : date + "T" + time + ":00";
-    p.newText = ukDate(date) + " — " + time;
+    p.newValue = p.dateOnly ? date : (p.timeOnly ? time + ":00" : date + "T" + time + ":00");
+    p.newText = p.dateOnly ? ukDate(date) : ukDate(date) + " — " + time;
 
     $("sumStaff").textContent = displayName(ATT.staff);
     $("sumField").textContent = p.label;
@@ -892,6 +901,12 @@
     });
 
     $("attRecords").addEventListener("click", function (e) {
+      var dd = e.target.closest("[data-editdate]");
+      if (dd) {
+        var drow = ATT.rows[Number(dd.getAttribute("data-editdate"))];
+        if (drow && ATT.dateKey) openCorrection(drow, ATT.dateKey, { dateOnly: true });
+        return;
+      }
       var b = e.target.closest("[data-edit]");
       if (!b) return;
       var row = ATT.rows[Number(b.getAttribute("data-edit"))];
@@ -925,6 +940,468 @@
     $("attNote").textContent = isAdmin()
       ? "Corrections are executed by the database, which records the original value, the new value, your account and your reason."
       : "Your account can review attendance records. Only an administrator can correct a timestamp.";
+  }
+
+
+  /* ------------------------- Phase 6: IT / system management -------------------------
+     A controlled administration surface over the data the main website already
+     owns. Nothing here is a generic database editor: only the fields listed in
+     EDIT_FIELDS, the account status column, the attendance timestamps handled in
+     Phase 4 and the key/value application settings table can be written, and
+     every write goes through a security-definer function that re-checks the
+     caller is an administrator (with a direct, RLS-protected update as fallback).
+     Authentication data (passwords, emails, sessions) is never touched in the
+     database — password resets go through Supabase Auth. */
+
+  var EDIT_FIELDS = [
+    { keys: NAME_KEYS, label: "Full name", max: 120 },
+    { keys: PHONE_KEYS, label: "Phone number", max: 32 },
+    { keys: TITLE_KEYS, label: "Position / job title", max: 80 },
+    { keys: DEPT_KEYS, label: "Department", max: 80 },
+    { keys: STAFF_KEYS, label: "Staff ID", max: 40 },
+    { keys: TYPE_KEYS, label: "Employment type", max: 40 },
+    { keys: ["address"], label: "Address", max: 200 }
+  ];
+
+  var EDIT = { avatarFile: null, cols: [] };
+
+  /* First column of a group that actually exists on the record. */
+  function colOf(row, keys) {
+    for (var i = 0; i < keys.length; i++) {
+      if (Object.prototype.hasOwnProperty.call(row, keys[i])) return keys[i];
+    }
+    return null;
+  }
+  function rowId(row) { return row.id || row.user_id; }
+  function txt(v) { return (v === null || v === undefined || String(v).trim() === "") ? "—" : String(v); }
+
+  /* ---------- generic “existing value → new value” confirmation ---------- */
+  var CHANGE = null;
+
+  function closeChange() {
+    CHANGE = null;
+    $("changeBackdrop").hidden = true;
+    document.body.classList.remove("modal-open");
+  }
+
+  /* opts: { title, lede, rows:[[label, oldText, newText]], needReason, onConfirm(reason) } */
+  function openChange(opts) {
+    CHANGE = opts;
+    $("changeTitle").textContent = opts.title || "Confirm changes";
+    $("changeLede").textContent = opts.lede || "Review the existing value against the new value before saving.";
+    $("changeDiff").innerHTML =
+      '<div class="diff-row diff-head"><span>Field</span><span>Existing value</span><span>New value</span></div>' +
+      opts.rows.map(function (r) {
+        return '<div class="diff-row"><span class="diff-label">' + esc(r[0]) + "</span>" +
+          '<span class="diff-old">' + esc(txt(r[1])) + "</span>" +
+          '<span class="diff-new">' + esc(txt(r[2])) + "</span></div>";
+      }).join("");
+    $("changeReasonField").hidden = !opts.needReason;
+    $("changeReason").value = "";
+    $("changeError").hidden = true;
+    $("changeBackdrop").hidden = false;
+    document.body.classList.add("modal-open");
+  }
+
+  async function runChange() {
+    if (!CHANGE) return;
+    var reason = $("changeReason").value.trim();
+    if (CHANGE.needReason && !reason) {
+      var e0 = $("changeError"); e0.hidden = false; e0.textContent = "Enter a reason for this change.";
+      return;
+    }
+    var btn = $("changeOk");
+    busy(btn, true);
+    loader(true);
+    var res;
+    try { res = await CHANGE.onConfirm(reason); }
+    catch (ex) { res = { error: { message: ex && ex.message ? ex.message : String(ex) } }; }
+    busy(btn, false);
+    loader(false);
+    if (res && res.error) {
+      var el = $("changeError");
+      el.hidden = false;
+      el.textContent = res.error.message || "The change was refused by the database.";
+      return;
+    }
+    var done = CHANGE.done;
+    closeChange();
+    if (done) done();
+  }
+
+  /* Calls an admin security-definer function; falls back to a direct,
+     RLS-protected write when the function is not installed yet. */
+  function missingFunction(err) {
+    var m = ((err && err.message) || "").toLowerCase();
+    return (err && (err.code === "42883" || err.code === "PGRST202")) ||
+      m.indexOf("could not find the function") !== -1 ||
+      m.indexOf("does not exist") !== -1;
+  }
+
+  /* ---------- account access ---------- */
+  function isActiveRow(row) {
+    var col = colOf(row, STATUS_KEYS);
+    if (!col) return true;
+    var v = row[col];
+    if (v === null || v === undefined || String(v).trim() === "") return true;
+    if (typeof v === "boolean") return v;
+    return ["active", "enabled", "true", "yes", "1"].indexOf(String(v).toLowerCase()) !== -1;
+  }
+
+  function renderAccountPanel(row) {
+    var col = colOf(row, STATUS_KEYS);
+    var active = isActiveRow(row);
+    var email = pick(row, EMAIL_KEYS);
+
+    kv("kvAccountState", [
+      ["Access", pill(active ? "Active" : "Deactivated", active ? "ok" : "bad"), true],
+      ["Stored in", col ? labelize(col) : "Not tracked on this record"],
+      ["Sign-in email", txt(email)],
+      ["Current role", roleLabel(roleOf(row))]
+    ]);
+
+    var canEdit = isAdmin() && !!col;
+    $("accountActions").hidden = !isAdmin();
+    $("acctToggle").hidden = !canEdit;
+    $("acctToggle").textContent = active ? "Deactivate account" : "Activate account";
+    $("acctReset").hidden = !isAdmin() || !email;
+
+    $("accountNote").textContent = !isAdmin()
+      ? "Your account can review account details. Only an administrator can activate, deactivate or edit an account."
+      : (col
+        ? "Deactivating removes the account's access to the platform. Passwords and sign-in details are handled by Supabase Authentication and are never edited here."
+        : "This installation does not store an account status field, so access cannot be toggled from the portal.");
+  }
+
+  function accountStatusValue(row, active) {
+    var col = colOf(row, STATUS_KEYS);
+    var cur = row[col];
+    if (typeof cur === "boolean" || col === "is_active" || col === "active") return active;
+    return active ? "active" : "inactive";
+  }
+
+  async function writeAccountStatus(row, active) {
+    var id = rowId(row);
+    var res = await sb.rpc("admin_set_account_status", { p_user_id: id, p_active: active });
+    if (res.error && missingFunction(res.error)) {
+      var patch = {};
+      patch[colOf(row, STATUS_KEYS)] = accountStatusValue(row, active);
+      res = await sb.from("profiles").update(patch).eq("id", id);
+    }
+    return res;
+  }
+
+  function askAccountToggle() {
+    var row = USERS.current;
+    if (!row || !isAdmin()) return;
+    var active = isActiveRow(row);
+    openChange({
+      title: active ? "Deactivate account" : "Activate account",
+      lede: "This updates the staff record the main website reads. Sign-in credentials are not changed.",
+      rows: [["Account access", active ? "Active" : "Deactivated", active ? "Deactivated" : "Active"]],
+      needReason: true,
+      onConfirm: function () { return writeAccountStatus(row, !active); },
+      done: function () {
+        toast(active ? "Account deactivated." : "Account activated.", "good");
+        refreshUser(rowId(row));
+      }
+    });
+  }
+
+  async function sendReset() {
+    var row = USERS.current;
+    var email = row && pick(row, EMAIL_KEYS);
+    if (!email) return;
+    loader(true);
+    var res = await sb.auth.resetPasswordForEmail(String(email), { redirectTo: location.origin + "/index.html" });
+    loader(false);
+    if (res.error) toast(res.error.message, "bad");
+    else toast("Password reset email sent through Supabase Authentication.", "good");
+  }
+
+  /* ---------- profile management ---------- */
+  function renderProfileEditor(row) {
+    var box = $("profileEditFields");
+    EDIT.avatarFile = null;
+    EDIT.cols = [];
+
+    if (!isAdmin()) {
+      box.innerHTML = "";
+      $("profileAvatarRow").hidden = true;
+      $("profileEditActions").hidden = true;
+      $("profileEditNote").textContent =
+        "Your account can review profile details. Only an administrator can edit them, and the database enforces that rule.";
+      return;
+    }
+
+    EDIT_FIELDS.forEach(function (f) {
+      var col = colOf(row, f.keys);
+      if (col) EDIT.cols.push({ col: col, label: f.label, max: f.max });
+    });
+
+    box.innerHTML = EDIT.cols.map(function (f) {
+      var v = row[f.col];
+      return '<div class="field"><label for="pf_' + esc(f.col) + '">' + esc(f.label) + "</label>" +
+        '<input id="pf_' + esc(f.col) + '" data-col="' + esc(f.col) + '" type="text" maxlength="' + f.max +
+        '" value="' + esc(v === null || v === undefined ? "" : String(v)) + '" /></div>';
+    }).join("") || '<p class="edit-hint">No editable profile fields are stored on this record.</p>';
+
+    var avatarCol = colOf(row, AVATAR_KEYS);
+    $("profileAvatarRow").hidden = !avatarCol;
+    $("avatarFile").value = "";
+    $("profileEditActions").hidden = !(EDIT.cols.length || avatarCol);
+    $("profileEditNote").textContent =
+      "These are the only profile fields the portal may change. Saving updates the existing staff record — no duplicate profile is created — and the main website shows the new details immediately.";
+  }
+
+  async function uploadAvatar(row, file) {
+    var id = rowId(row);
+    var ext = (file.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "");
+    var path = id + "/" + Date.now() + "." + (ext || "png");
+    var up = await sb.storage.from("avatars").upload(path, file, { upsert: true, contentType: file.type });
+    if (up.error) return { error: up.error };
+    var pub = sb.storage.from("avatars").getPublicUrl(path);
+    return { url: (pub && pub.data && pub.data.publicUrl) || path };
+  }
+
+  async function writeProfile(id, patch) {
+    var res = await sb.rpc("admin_update_profile", { p_user_id: id, p_changes: patch });
+    if (res.error && missingFunction(res.error)) {
+      res = await sb.from("profiles").update(patch).eq("id", id);
+    }
+    return res;
+  }
+
+  function askProfileSave() {
+    var row = USERS.current;
+    if (!row || !isAdmin()) return;
+
+    var diffs = [];
+    var patch = {};
+    EDIT.cols.forEach(function (f) {
+      var input = document.getElementById("pf_" + f.col);
+      if (!input) return;
+      var next = input.value.trim();
+      var cur = row[f.col] === null || row[f.col] === undefined ? "" : String(row[f.col]);
+      if (next === cur.trim()) return;
+      if (next.length > f.max) return;
+      patch[f.col] = next === "" ? null : next;
+      diffs.push([f.label, cur, next]);
+    });
+
+    var file = EDIT.avatarFile;
+    var avatarCol = colOf(row, AVATAR_KEYS);
+    if (file && avatarCol) diffs.push(["Profile picture", "Current picture", file.name]);
+
+    if (!diffs.length) { toast("Nothing has been changed yet.", "bad"); return; }
+
+    openChange({
+      title: "Confirm profile changes",
+      lede: "These values will replace the current profile details on the staff record.",
+      rows: diffs,
+      needReason: false,
+      onConfirm: async function () {
+        if (file && avatarCol) {
+          var up = await uploadAvatar(row, file);
+          if (up.error) return { error: up.error };
+          patch[avatarCol] = up.url;
+        }
+        return writeProfile(rowId(row), patch);
+      },
+      done: function () {
+        toast("Profile updated. The main website now shows the new details.", "good");
+        refreshUser(rowId(row));
+      }
+    });
+  }
+
+  /* Re-reads one record so the portal never shows a stale value. */
+  async function refreshUser(id) {
+    var res = await sb.from("profiles").select("*").eq("id", id).maybeSingle();
+    if (res.error || !res.data) { loadUsers(true); return; }
+    for (var i = 0; i < USERS.rows.length; i++) {
+      if (rowId(USERS.rows[i]) === id) { USERS.rows[i] = res.data; break; }
+    }
+    renderUsers();
+    openUserProfile(res.data);
+  }
+
+  function initProfileTools() {
+    var panel = $("profileEditPanel");
+    if (!panel || panel.getAttribute("data-ready") === "1") return;
+    panel.setAttribute("data-ready", "1");
+
+    $("profileSave").addEventListener("click", askProfileSave);
+    $("profileReset").addEventListener("click", function () {
+      if (USERS.current) renderProfileEditor(USERS.current);
+    });
+    $("avatarFile").addEventListener("change", function (e) {
+      var f = e.target.files && e.target.files[0];
+      if (!f) { EDIT.avatarFile = null; return; }
+      if (f.size > 2 * 1024 * 1024) { toast("Choose an image under 2 MB.", "bad"); e.target.value = ""; return; }
+      if (["image/png", "image/jpeg", "image/webp"].indexOf(f.type) === -1) {
+        toast("Only PNG, JPG or WebP images are accepted.", "bad"); e.target.value = ""; return;
+      }
+      EDIT.avatarFile = f;
+    });
+    $("acctToggle").addEventListener("click", askAccountToggle);
+    $("acctReset").addEventListener("click", sendReset);
+
+    $("changeCancel").addEventListener("click", closeChange);
+    $("changeOk").addEventListener("click", runChange);
+    $("changeBackdrop").addEventListener("click", function (e) {
+      if (e.target === $("changeBackdrop")) closeChange();
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && !$("changeBackdrop").hidden) closeChange();
+    });
+  }
+
+  /* ---------- application settings ---------- */
+  var SETTING_TABLES = ["app_settings", "system_settings", "settings", "site_settings", "configuration"];
+  var SETTING_KEY_COLS = ["key", "setting_key", "name", "code", "slug"];
+  var SETTING_VALUE_COLS = ["value", "setting_value", "val", "content", "data"];
+  var SETTING_DESC_COLS = ["description", "label", "note", "help"];
+
+  var SETTINGS = { table: null, keyCol: null, valueCol: null, descCol: null, rows: [], loaded: false };
+
+  async function detectSettings() {
+    if (SETTINGS.table) return true;
+    for (var i = 0; i < SETTING_TABLES.length; i++) {
+      var res = await sb.from(SETTING_TABLES[i]).select("*").limit(200);
+      if (res.error) continue;
+      var sample = (res.data && res.data[0]) || null;
+      if (!sample) continue;
+      var cols = Object.keys(sample);
+      var k = SETTING_KEY_COLS.filter(function (c) { return cols.indexOf(c) !== -1; })[0];
+      var v = SETTING_VALUE_COLS.filter(function (c) { return cols.indexOf(c) !== -1; })[0];
+      if (!k || !v) continue;
+      SETTINGS.table = SETTING_TABLES[i];
+      SETTINGS.keyCol = k;
+      SETTINGS.valueCol = v;
+      SETTINGS.descCol = SETTING_DESC_COLS.filter(function (c) { return cols.indexOf(c) !== -1; })[0] || null;
+      SETTINGS.rows = res.data;
+      return true;
+    }
+    return false;
+  }
+
+  function renderSettings() {
+    var list = $("settingsList");
+    var rows = SETTINGS.rows || [];
+    if (!rows.length) {
+      list.innerHTML = "";
+      $("settingsActions").hidden = true;
+      return;
+    }
+    $("settingsState").textContent = rows.length + " setting" + (rows.length === 1 ? "" : "s") +
+      " from " + SETTINGS.table + ".";
+    list.innerHTML = rows.map(function (r, i) {
+      var val = r[SETTINGS.valueCol];
+      var desc = SETTINGS.descCol ? r[SETTINGS.descCol] : null;
+      return '<div class="setting-row"><div class="setting-meta"><h4>' +
+        esc(labelize(String(r[SETTINGS.keyCol]))) + "</h4>" +
+        (desc ? "<p>" + esc(String(desc)) + "</p>" : "") + "</div>" +
+        '<div class="field"><label for="st_' + i + '" class="sr-label">Value</label>' +
+        '<input id="st_' + i + '" data-setting="' + i + '" type="text" maxlength="240"' +
+        (isAdmin() ? "" : " disabled") +
+        ' value="' + esc(val === null || val === undefined ? "" : (typeof val === "object" ? JSON.stringify(val) : String(val))) +
+        '" /></div></div>';
+    }).join("");
+    $("settingsActions").hidden = !isAdmin();
+  }
+
+  async function loadSettings() {
+    $("settingsState").textContent = "Loading application settings…";
+    var ok = await detectSettings();
+    if (!ok) {
+      SETTINGS.rows = [];
+      $("settingsList").innerHTML = "";
+      $("settingsActions").hidden = true;
+      $("settingsState").textContent =
+        "No application settings table is readable by your account, so there is nothing to manage here yet.";
+      return;
+    }
+    var res = await sb.from(SETTINGS.table).select("*").limit(200);
+    if (res.error) {
+      $("settingsState").textContent = "Settings could not be loaded: " + res.error.message;
+      return;
+    }
+    SETTINGS.rows = (res.data || []).sort(function (a, b) {
+      return String(a[SETTINGS.keyCol]).localeCompare(String(b[SETTINGS.keyCol]));
+    });
+    SETTINGS.loaded = true;
+    renderSettings();
+  }
+
+  async function writeSetting(key, value) {
+    var res = await sb.rpc("admin_update_setting", { p_key: key, p_value: value });
+    if (res.error && missingFunction(res.error)) {
+      var patch = {};
+      patch[SETTINGS.valueCol] = value;
+      res = await sb.from(SETTINGS.table).update(patch).eq(SETTINGS.keyCol, key);
+    }
+    return res;
+  }
+
+  function askSettingsSave() {
+    if (!isAdmin()) return;
+    var diffs = [], jobs = [];
+    SETTINGS.rows.forEach(function (r, i) {
+      var input = document.getElementById("st_" + i);
+      if (!input) return;
+      var cur = r[SETTINGS.valueCol];
+      var curText = cur === null || cur === undefined ? "" : (typeof cur === "object" ? JSON.stringify(cur) : String(cur));
+      var next = input.value.trim();
+      if (next === curText.trim()) return;
+      diffs.push([labelize(String(r[SETTINGS.keyCol])), curText, next]);
+      jobs.push({ key: String(r[SETTINGS.keyCol]), value: next });
+    });
+    if (!diffs.length) { toast("No setting has been changed.", "bad"); return; }
+
+    openChange({
+      title: "Confirm setting changes",
+      lede: "These application settings will be updated for everyone using the platform.",
+      rows: diffs,
+      needReason: false,
+      onConfirm: async function () {
+        for (var i = 0; i < jobs.length; i++) {
+          var r = await writeSetting(jobs[i].key, jobs[i].value);
+          if (r.error) return { error: r.error };
+        }
+        return {};
+      },
+      done: function () { toast("Settings saved.", "good"); loadSettings(); }
+    });
+  }
+
+  /* ---------- system management tab ---------- */
+  function initSystem() {
+    initProfileTools();
+
+    var root = $("tab-system");
+    if (!root || root.getAttribute("data-ready") === "1") return;
+    root.setAttribute("data-ready", "1");
+
+    $("sysScope").textContent = isAdmin() ? "Administrator tools" : "IT Support view";
+    $("sysNote").textContent = isAdmin()
+      ? "Everything below writes to the data the main website already uses. Only the fields shown here can be changed — there is no raw table access, no SQL and no service key in the browser, and the database re-checks your role on every write."
+      : "IT Support accounts can review staff records, roles and attendance. Account, profile, correction and settings changes are reserved for administrators and are refused by the database for other roles.";
+
+    root.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-goto]");
+      if (!b) return;
+      var target = document.querySelector('.nav button[data-tab="' + b.getAttribute("data-goto") + '"]');
+      if (target) target.click();
+    });
+
+    $("settingsSave").addEventListener("click", askSettingsSave);
+    $("settingsReload").addEventListener("click", function () { loadSettings(); });
+    $("settingsNote").textContent = isAdmin()
+      ? "Only settings the application already defines are listed. Adding or deleting settings, or editing other tables, is deliberately not possible from this portal."
+      : "Settings are read-only for IT Support accounts.";
+
+    loadSettings();
   }
 
   /* ------------------------- portal render ------------------------- */
@@ -971,6 +1448,7 @@
     initUsers();
     initRoleUi();
     initAttendance();
+    initSystem();
     loadUsers();
 
     only("portalView");

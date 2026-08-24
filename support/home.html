@@ -111,6 +111,7 @@
           <button type="button" class="active" data-tab="overview">Overview</button>
           <button type="button" data-tab="users">Users</button>
           <button type="button" data-tab="attendance">Attendance</button>
+          <button type="button" data-tab="system" id="navSystemBtn">System management</button>
           <button type="button" data-tab="checks">System checks</button>
           <button type="button" data-tab="modules">Support modules</button>
           <button type="button" class="nav-signout" id="navSignout">
@@ -133,7 +134,7 @@
     <main class="page">
       <div class="page-head">
         <h1>Welcome, <span id="heroName">colleague</span></h1>
-        <p class="dateline">Signed in as <span id="roleBadge">—</span> · Phase 4 adds attendance and timestamp correction, enforced in the database.</p>
+        <p class="dateline">Signed in as <span id="roleBadge">—</span> · System management, profile and attendance corrections are enforced in the database.</p>
       </div>
 
       <!-- Overview -->
@@ -214,6 +215,37 @@
                 <p class="role-note" id="roleNote"></p>
               </div>
             </div>
+            <div class="panel" id="accountPanel">
+              <div class="panel-head">Account access</div>
+              <div class="panel-body">
+                <dl class="kv" id="kvAccountState"></dl>
+                <div class="account-actions" id="accountActions" hidden>
+                  <button class="btn btn-ghost btn-sm" id="acctToggle" type="button">Deactivate account</button>
+                  <button class="btn btn-ghost btn-sm" id="acctReset" type="button">Send password reset</button>
+                </div>
+                <p class="role-note" id="accountNote"></p>
+              </div>
+            </div>
+
+            <div class="panel panel-span" id="profileEditPanel">
+              <div class="panel-head">Profile management</div>
+              <div class="panel-body">
+                <p class="role-note" id="profileEditNote"></p>
+                <div class="edit-grid" id="profileEditFields"></div>
+                <div class="edit-avatar" id="profileAvatarRow" hidden>
+                  <div class="field">
+                    <label for="avatarFile">Replace profile picture</label>
+                    <input id="avatarFile" type="file" accept="image/png,image/jpeg,image/webp" />
+                  </div>
+                  <p class="edit-hint">PNG, JPG or WebP up to 2&nbsp;MB. Stored in the same bucket the main website reads.</p>
+                </div>
+                <div class="edit-actions" id="profileEditActions" hidden>
+                  <button class="btn btn-primary btn-sm" id="profileSave" type="button">Review changes</button>
+                  <button class="btn btn-ghost btn-sm" id="profileReset" type="button">Discard</button>
+                </div>
+              </div>
+            </div>
+
             <div class="panel">
               <div class="panel-head">Other stored information</div>
               <div class="panel-body"><dl class="kv" id="kvUserOther"></dl></div>
@@ -260,6 +292,66 @@
         <p class="users-state" id="attState">Search for a staff member to view their attendance records.</p>
         <div class="att-records" id="attRecords"></div>
         <p class="role-note" id="attNote"></p>
+      </section>
+
+      <!-- System management (Phase 6) -->
+      <section class="section" id="tab-system" hidden>
+        <div class="section-head">
+          <h2>System management</h2>
+          <span id="sysScope">&nbsp;</span>
+        </div>
+
+        <p class="role-note" id="sysNote"></p>
+
+        <div class="sys-groups">
+          <div class="panel">
+            <div class="panel-head">Accounts &amp; access</div>
+            <div class="panel-body">
+              <ul class="sys-list">
+                <li>
+                  <h3>Staff accounts</h3>
+                  <p>Open a staff record to view the account, activate or deactivate access, and change the portal role.</p>
+                  <button class="btn btn-ghost btn-sm" data-goto="users" type="button">Open staff accounts</button>
+                </li>
+                <li>
+                  <h3>Profile details</h3>
+                  <p>Correct a name, phone number, position, department or profile picture. Changes write to the same profile record the website reads.</p>
+                  <button class="btn btn-ghost btn-sm" data-goto="users" type="button">Edit a profile</button>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head">Records &amp; corrections</div>
+            <div class="panel-body">
+              <ul class="sys-list">
+                <li>
+                  <h3>Attendance corrections</h3>
+                  <p>Search staff, filter by date or date range, correct a clock-in, clock-out or record date, and enter a missing timestamp. A reason is always required.</p>
+                  <button class="btn btn-ghost btn-sm" data-goto="attendance" type="button">Open attendance tools</button>
+                </li>
+                <li>
+                  <h3>Supported records only</h3>
+                  <p>Only the fields listed in this portal can be changed. There is no free-form database or SQL access from here.</p>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="panel panel-span" id="settingsPanel">
+            <div class="panel-head">Application settings</div>
+            <div class="panel-body">
+              <p class="users-state" id="settingsState">Loading application settings…</p>
+              <div class="settings-list" id="settingsList"></div>
+              <div class="edit-actions" id="settingsActions" hidden>
+                <button class="btn btn-primary btn-sm" id="settingsSave" type="button">Review changes</button>
+                <button class="btn btn-ghost btn-sm" id="settingsReload" type="button">Reload</button>
+              </div>
+              <p class="role-note" id="settingsNote"></p>
+            </div>
+          </div>
+        </div>
       </section>
 
       <!-- System checks -->
@@ -377,7 +469,7 @@
         </dl>
         <div class="att-form-grid">
           <div class="field"><label for="attNewDate">Correct date</label><input id="attNewDate" type="date" /></div>
-          <div class="field"><label for="attNewTime">Correct time</label><input id="attNewTime" type="time" /></div>
+          <div class="field" id="attNewTimeField"><label for="attNewTime">Correct time</label><input id="attNewTime" type="time" /></div>
         </div>
         <div class="field">
           <label for="attReason">Reason for correction</label>
@@ -407,6 +499,24 @@
         <button class="btn btn-ghost btn-sm" id="attBack" type="button" hidden>Back</button>
         <button class="btn btn-primary btn-sm" id="attContinue" type="button">Review change</button>
         <button class="btn btn-primary btn-sm" id="attConfirm" type="button" hidden>Confirm correction</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== CHANGE CONFIRMATION (Phase 6) ===================== -->
+  <div class="modal-backdrop" id="changeBackdrop" hidden>
+    <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="changeTitle">
+      <h2 id="changeTitle">Confirm changes</h2>
+      <p class="att-confirm-lede" id="changeLede">Review the existing value against the new value before saving.</p>
+      <div class="diff-table" id="changeDiff"></div>
+      <div class="field" id="changeReasonField" hidden>
+        <label for="changeReason">Reason</label>
+        <input id="changeReason" type="text" maxlength="240" placeholder="Why is this change needed?" />
+      </div>
+      <div class="alert alert-error" id="changeError" hidden></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost btn-sm" id="changeCancel" type="button">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="changeOk" type="button">Confirm and save</button>
       </div>
     </div>
   </div>

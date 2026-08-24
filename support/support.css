@@ -496,3 +496,50 @@ body.modal-open{overflow:hidden}
   .modal-wide{max-width:100%}
   .att-form-grid .field{flex:1 1 100%}
 }
+
+/* ---------- Phase 6: IT / system management ---------- */
+.panel-span{grid-column:1 / -1}
+.account-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
+.edit-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px 18px;margin-top:6px}
+.edit-grid .field{margin-top:0;min-width:0}
+.edit-avatar{margin-top:16px;padding-top:16px;border-top:1px solid var(--rule)}
+.edit-avatar input[type=file]{font-size:13.5px}
+.edit-hint{margin-top:8px;font-size:12.5px;color:var(--ink-4)}
+.edit-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+
+.sys-groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
+.sys-list{list-style:none;margin:0;padding:0;display:grid;gap:16px}
+.sys-list li{padding-bottom:16px;border-bottom:1px solid var(--rule)}
+.sys-list li:last-child{padding-bottom:0;border-bottom:0}
+.sys-list h3{font-size:15px;letter-spacing:-.02em;color:var(--ink)}
+.sys-list p{margin:6px 0 10px;font-size:14px;color:var(--ink-3);max-width:60ch}
+
+.settings-list{display:grid;gap:14px;margin-top:6px}
+.setting-row{
+  display:grid;grid-template-columns:minmax(0,1fr) minmax(0,320px);gap:16px;align-items:center;
+  padding:14px 16px;border:1px solid var(--rule);border-radius:var(--radius);background:var(--paper-2)
+}
+.setting-meta h4{font-size:14.5px;letter-spacing:-.01em;color:var(--ink)}
+.setting-meta p{margin-top:4px;font-size:13px;color:var(--ink-3)}
+.setting-row .field{margin-top:0;min-width:0}
+.sr-label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+.diff-table{display:grid;gap:8px;margin:16px 0}
+.diff-row{
+  display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) minmax(0,1.2fr);gap:14px;
+  padding:12px 14px;border:1px solid var(--rule);border-radius:12px;background:var(--paper-2);
+  font-size:14px;word-break:break-word
+}
+.diff-row.diff-head{background:none;border:0;padding:0 14px;font-size:11px;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--ink-4)}
+.diff-label{font-weight:700;color:var(--ink)}
+.diff-old{color:var(--ink-3);text-decoration:line-through;text-decoration-color:var(--rule-strong)}
+.diff-new{font-weight:700;color:var(--ok)}
+
+@media (max-width:760px){
+  .setting-row{grid-template-columns:1fr;align-items:stretch}
+  .diff-row{grid-template-columns:1fr;gap:4px}
+  .diff-row.diff-head{display:none}
+  .diff-old::before{content:"Existing: ";font-weight:600;color:var(--ink-4);text-decoration:none}
+  .diff-new::before{content:"New: ";font-weight:600;color:var(--ink-4)}
+}
