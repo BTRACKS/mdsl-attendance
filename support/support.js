@@ -324,6 +324,12 @@
     });
     USERS.loaded = true;
     renderUsers();
+    var restoredStaffId = null;
+    try { restoredStaffId = sessionStorage.getItem("tech_support_attendance_staff_id"); } catch (e) {}
+    if (!ATT.staff && restoredStaffId) {
+      var restoredStaff = USERS.rows.find(function (r) { return String(r.id || r.user_id || "") === String(restoredStaffId); });
+      if (restoredStaff) selectAttStaff(restoredStaff);
+    }
     renderAttStaffResults();
   }
 
@@ -740,6 +746,7 @@
 
   function selectAttStaff(row) {
     ATT.staff = row;
+    try { sessionStorage.setItem("tech_support_attendance_staff_id", String(row.id || row.user_id || "")); } catch (e) {}
     $("attSearch").value = "";
     $("attStaffResults").hidden = true;
     $("attStaffResults").innerHTML = "";
@@ -754,6 +761,7 @@
 
   function clearAttStaff() {
     ATT.staff = null;
+    try { sessionStorage.removeItem("tech_support_attendance_staff_id"); } catch (e) {}
     ATT.rows = [];
     $("attSelected").hidden = true;
     $("attRecords").innerHTML = "";
@@ -2159,6 +2167,41 @@
       });
     }
 
+    /* ------------------------- persistent portal section ------------------------- */
+    var PORTAL_SECTION_KEY = "tech_support_active_section";
+    function validPortalSection(name) {
+      return ["overview", "users", "attendance", "system", "settings", "checks"].indexOf(name) !== -1;
+    }
+    function getPortalSection() {
+      var hash = String(location.hash || "").replace(/^#\/?/, "").toLowerCase();
+      if (validPortalSection(hash)) return hash;
+      try {
+        var stored = sessionStorage.getItem(PORTAL_SECTION_KEY);
+        if (validPortalSection(stored)) return stored;
+      } catch (e) {}
+      return "overview";
+    }
+    function setPortalSection(name, replace) {
+      if (!validPortalSection(name)) name = "overview";
+      try { sessionStorage.setItem(PORTAL_SECTION_KEY, name); } catch (e) {}
+      var targetHash = "#" + name;
+      if (replace) history.replaceState(null, "", targetHash);
+      else history.pushState(null, "", targetHash);
+    }
+    function activatePortalSection(name, options) {
+      options = options || {};
+      if (!validPortalSection(name)) name = "overview";
+      var btn = document.querySelector('.nav button[data-tab="' + name + '"]');
+      if (!btn) return;
+      Array.prototype.forEach.call(document.querySelectorAll('.nav button[data-tab]'), function (b) {
+        b.classList.toggle("active", b === btn);
+        var panel = $("tab-" + b.getAttribute("data-tab"));
+        if (panel) panel.hidden = b !== btn;
+      });
+      if (!options.skipPersist) setPortalSection(name, !!options.replace);
+      if (options.closeNav && typeof closeNav === "function") closeNav();
+    }
+
     /* ------------------------- mobile nav (hamburger) -------------------------
        Mirrors the E-Attendance Platform's masthead: on mobile the tab nav
        becomes a fixed dropdown, the header sign-out button hides, and a
@@ -2196,12 +2239,7 @@
         }
         var btn = e.target.closest("button[data-tab]");
         if (!btn) return;
-        Array.prototype.forEach.call(navEl.querySelectorAll("button[data-tab]"), function (b) {
-          b.classList.toggle("active", b === btn);
-          var panel = $("tab-" + b.getAttribute("data-tab"));
-          if (panel) panel.hidden = b !== btn;
-        });
-        closeNav();
+        activatePortalSection(btn.getAttribute("data-tab"), { closeNav: true });
           });
     }
     if (toggle) {
@@ -2211,6 +2249,13 @@
       });
     }
     if (backdrop) backdrop.addEventListener("click", closeNav);
+    activatePortalSection(getPortalSection(), { skipPersist: true });
+    window.addEventListener("popstate", function () {
+      activatePortalSection(getPortalSection(), { skipPersist: true, closeNav: true });
+    });
+    window.addEventListener("hashchange", function () {
+      activatePortalSection(getPortalSection(), { skipPersist: true, closeNav: true });
+    });
     document.addEventListener("click", function (e) {
       if (!navEl || !navEl.classList.contains("open")) return;
       if (navEl.contains(e.target) || (toggle && toggle.contains(e.target))) return;
