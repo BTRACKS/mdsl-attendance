@@ -809,7 +809,6 @@
     });
 
     return '<div class="page"><div class="page-head"><p class="eyebrow">Administration</p><h1>Attendance Management</h1>' +
-      '<p class="dateline">Search staff, filter by department, employment type or date, and review individual records.</p></div>' +
       '<form class="filters" id="filterForm">' +
       '<div class="field"><label>Search name, staff ID or email</label><input name="q" value="' + esc(filters.q) + '" placeholder="e.g. MD-0102" /></div>' +
       '<div class="field"><label>Department</label><select name="dept"><option value="">All departments</option>' +
@@ -1004,7 +1003,6 @@
   function settingsView(u) {
     var joined = u.createdAt ? prettyDate(String(u.createdAt).slice(0, 10)) : "—";
     return '<div class="page"><div class="page-head"><p class="eyebrow">Account</p><h1>Profile &amp; Settings</h1>' +
-      '<p class="dateline">Update your details, profile picture and password. Attendance records are not affected.</p></div>' +
 
       '<div class="layout"><div>' +
 
