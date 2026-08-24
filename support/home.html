@@ -110,6 +110,7 @@
         <nav class="nav" id="nav" aria-label="Support navigation">
           <button type="button" class="active" data-tab="overview">Overview</button>
           <button type="button" data-tab="users">Users</button>
+          <button type="button" data-tab="attendance">Attendance</button>
           <button type="button" data-tab="checks">System checks</button>
           <button type="button" data-tab="modules">Support modules</button>
           <button type="button" class="nav-signout" id="navSignout">
@@ -132,7 +133,7 @@
     <main class="page">
       <div class="page-head">
         <h1>Welcome, <span id="heroName">colleague</span></h1>
-        <p class="dateline">Signed in as <span id="roleBadge">—</span> · Phase 3 adds role management for administrators, enforced in the database.</p>
+        <p class="dateline">Signed in as <span id="roleBadge">—</span> · Phase 4 adds attendance and timestamp correction, enforced in the database.</p>
       </div>
 
       <!-- Overview -->
@@ -221,6 +222,46 @@
         </div>
       </section>
 
+      <!-- Attendance & timestamp correction -->
+      <section class="section" id="tab-attendance" hidden>
+        <div class="section-head">
+          <h2>Attendance &amp; timestamps</h2>
+          <span id="attCount">&nbsp;</span>
+        </div>
+
+        <div class="att-toolbar">
+          <div class="field search-field att-search">
+            <label for="attSearch">Search staff</label>
+            <input id="attSearch" type="search" placeholder="Search by name, email or staff ID" autocomplete="off" />
+            <div class="att-staff-results" id="attStaffResults" hidden></div>
+          </div>
+          <button class="btn btn-ghost btn-sm" id="attRefresh" type="button">Refresh</button>
+        </div>
+
+        <div class="att-selected" id="attSelected" hidden>
+          <div>
+            <h3 id="attSelectedName">—</h3>
+            <p id="attSelectedMeta">—</p>
+          </div>
+          <button class="link-muted" id="attClear" type="button">Change staff member</button>
+        </div>
+
+        <div class="att-filters">
+          <div class="field"><label for="attDate">Exact date</label><input id="attDate" type="date" /></div>
+          <div class="field"><label for="attFrom">From</label><input id="attFrom" type="date" /></div>
+          <div class="field"><label for="attTo">To</label><input id="attTo" type="date" /></div>
+          <div class="field" id="attStatusField" hidden>
+            <label for="attStatus">Type</label>
+            <select id="attStatus"><option value="">All types</option></select>
+          </div>
+          <button class="btn btn-ghost btn-sm" id="attFilterReset" type="button">Clear filters</button>
+        </div>
+
+        <p class="users-state" id="attState">Search for a staff member to view their attendance records.</p>
+        <div class="att-records" id="attRecords"></div>
+        <p class="role-note" id="attNote"></p>
+      </section>
+
       <!-- System checks -->
       <section class="section" id="tab-checks" hidden>
         <div class="section-head">
@@ -282,15 +323,15 @@
         <nav class="footer-nav" aria-label="Footer">
           <div>
             <h3>Platform</h3>
-            <a href="#/dashboard">Dashboard</a>
-            <a href="#/history">Attendance History</a>
+            <a href="index.html#/dashboard">Dashboard</a>
+            <a href="index.html#/history">Attendance History</a>
             <a href="about.html">About Us</a>
           </div>
           <div>
             <h3>Support</h3>
             <button type="button" class="footer-link" data-scroll="faqSection">FAQ</button>
-            <a href="#/forgot">Reset password</a>
-            <a href="#/signup">Register</a>
+            <a href="index.html#/forgot">Reset password</a>
+            <a href="index.html#/signup">Register</a>
           </div>
         </nav>
         <div class="footer-offices">
@@ -319,6 +360,53 @@
       <div class="modal-actions">
         <button class="btn btn-ghost btn-sm" id="confirmCancel" type="button">Cancel</button>
         <button class="btn btn-primary btn-sm" id="confirmOk" type="button">Yes, change role</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== TIMESTAMP CORRECTION ===================== -->
+  <div class="modal-backdrop" id="attBackdrop" hidden>
+    <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="attCorrTitle">
+      <h2 id="attCorrTitle">Correct attendance timestamp</h2>
+
+      <div id="attStep1">
+        <dl class="kv att-kv">
+          <div><dt>Staff</dt><dd id="attCorrStaff">—</dd></div>
+          <div><dt>Field</dt><dd id="attCorrField">—</dd></div>
+          <div><dt>Original</dt><dd id="attCorrOriginal">—</dd></div>
+        </dl>
+        <div class="att-form-grid">
+          <div class="field"><label for="attNewDate">Correct date</label><input id="attNewDate" type="date" /></div>
+          <div class="field"><label for="attNewTime">Correct time</label><input id="attNewTime" type="time" /></div>
+        </div>
+        <div class="field">
+          <label for="attReason">Reason for correction</label>
+          <select id="attReason"></select>
+        </div>
+        <div class="field" id="attReasonOtherField" hidden>
+          <label for="attReasonOther">Explain</label>
+          <textarea id="attReasonOther" rows="2" maxlength="240" placeholder="Briefly describe why this record is being corrected"></textarea>
+        </div>
+      </div>
+
+      <div id="attStep2" hidden>
+        <p class="att-confirm-lede">Confirm this correction. The original value is kept for the audit record.</p>
+        <dl class="kv att-kv">
+          <div><dt>Staff</dt><dd id="sumStaff">—</dd></div>
+          <div><dt>Field</dt><dd id="sumField">—</dd></div>
+          <div><dt>Original</dt><dd id="sumOriginal">—</dd></div>
+          <div><dt>New</dt><dd id="sumNew">—</dd></div>
+          <div><dt>Reason</dt><dd id="sumReason">—</dd></div>
+        </dl>
+      </div>
+
+      <div class="alert alert-error" id="attCorrError" hidden></div>
+
+      <div class="modal-actions">
+        <button class="btn btn-ghost btn-sm" id="attCancel" type="button">Cancel</button>
+        <button class="btn btn-ghost btn-sm" id="attBack" type="button" hidden>Back</button>
+        <button class="btn btn-primary btn-sm" id="attContinue" type="button">Review change</button>
+        <button class="btn btn-primary btn-sm" id="attConfirm" type="button" hidden>Confirm correction</button>
       </div>
     </div>
   </div>

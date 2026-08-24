@@ -509,6 +509,424 @@
     });
   }
 
+  /* ------------------------- Phase 4: attendance & timestamp correction -------------------------
+     Reads the company's existing attendance table (no second database) and
+     performs every correction through public.correct_attendance_timestamp(),
+     a security-definer function that re-checks the caller is an administrator,
+     records the original value, the new value, the reason and who made the
+     change. Hiding the button here protects nothing on its own. */
+  var ATT_TABLES = ["attendance", "attendance_records", "attendances", "attendance_logs"];
+  var ATT_USER_KEYS = ["user_id", "profile_id", "staff_uuid", "employee_id", "staff_id"];
+  var ATT_DATE_KEYS = ["date", "attendance_date", "work_date", "record_date", "day"];
+  var ATT_STATUS_KEYS = ["status", "attendance_status", "attendance_type", "entry_type", "type"];
+  var ATT_TS_FIELDS = [
+    ["check_in", "Resumption (clock-in)"], ["clock_in", "Resumption (clock-in)"],
+    ["time_in", "Resumption (clock-in)"], ["resumption_time", "Resumption (clock-in)"],
+    ["resumption", "Resumption (clock-in)"], ["sign_in_time", "Resumption (clock-in)"],
+    ["morning_time", "Resumption (clock-in)"], ["check_in_time", "Resumption (clock-in)"],
+    ["check_out", "Closing (clock-out)"], ["clock_out", "Closing (clock-out)"],
+    ["time_out", "Closing (clock-out)"], ["closing_time", "Closing (clock-out)"],
+    ["closing", "Closing (clock-out)"], ["sign_out_time", "Closing (clock-out)"],
+    ["evening_time", "Closing (clock-out)"], ["check_out_time", "Closing (clock-out)"],
+    ["timestamp", "Recorded timestamp"], ["recorded_at", "Recorded timestamp"],
+    ["logged_at", "Recorded timestamp"]
+  ];
+  var REASONS = ["System error", "Incorrect device time", "Network issue", "Missed clock-in", "Missed clock-out", "Other"];
+
+  var ATT = {
+    table: null, ready: false, error: null,
+    userKey: null, dateKey: null, statusKey: null, fields: [],
+    staff: null, rows: [], loading: false, statuses: [],
+    pending: null, step: 1
+  };
+
+  function isTimeOnly(v) { return typeof v === "string" && /^\d{1,2}:\d{2}(:\d{2})?$/.test(v.trim()); }
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
+
+  /* Splits any stored value into { date: 'YYYY-MM-DD', time: 'HH:MM' }. */
+  function splitStamp(value, fallbackDate) {
+    if (value === null || value === undefined || String(value).trim() === "") return null;
+    var s = String(value).trim();
+    if (isTimeOnly(s)) {
+      var p = s.split(":");
+      return { date: fallbackDate || "", time: pad(Number(p[0])) + ":" + pad(Number(p[1])) };
+    }
+    var d = new Date(s.indexOf("T") === -1 && s.indexOf(" ") !== -1 ? s.replace(" ", "T") : s);
+    if (isNaN(d.getTime())) return null;
+    return {
+      date: d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()),
+      time: pad(d.getHours()) + ":" + pad(d.getMinutes())
+    };
+  }
+  function ukDate(iso) {
+    if (!iso) return "—";
+    var p = String(iso).split("-");
+    return p.length === 3 ? p[2] + "/" + p[1] + "/" + p[0] : String(iso);
+  }
+  function stampText(value, fallbackDate) {
+    var s = splitStamp(value, fallbackDate);
+    return s ? ukDate(s.date) + " — " + s.time : "Not recorded";
+  }
+  function rowDate(row) {
+    if (ATT.dateKey && row[ATT.dateKey]) {
+      var s = splitStamp(row[ATT.dateKey], null);
+      return s ? s.date : String(row[ATT.dateKey]).slice(0, 10);
+    }
+    for (var i = 0; i < ATT.fields.length; i++) {
+      var s2 = splitStamp(row[ATT.fields[i][0]], null);
+      if (s2 && s2.date) return s2.date;
+    }
+    return "";
+  }
+  function attStaffId(row) {
+    for (var i = 0; i < ATT_USER_KEYS.length; i++) {
+      if (row[ATT_USER_KEYS[i]]) return String(row[ATT_USER_KEYS[i]]);
+    }
+    return null;
+  }
+
+  async function detectAttendance() {
+    if (ATT.ready || ATT.error) return;
+    for (var i = 0; i < ATT_TABLES.length; i++) {
+      var res = await sb.from(ATT_TABLES[i]).select("*").limit(1);
+      if (res.error) continue;
+      ATT.table = ATT_TABLES[i];
+      var sample = (res.data && res.data[0]) || null;
+      var cols = sample ? Object.keys(sample) : [];
+      ATT.userKey = ATT_USER_KEYS.filter(function (k) { return cols.indexOf(k) !== -1; })[0] || "user_id";
+      ATT.dateKey = ATT_DATE_KEYS.filter(function (k) { return cols.indexOf(k) !== -1; })[0] || null;
+      ATT.statusKey = ATT_STATUS_KEYS.filter(function (k) { return cols.indexOf(k) !== -1; })[0] || null;
+      ATT.fields = ATT_TS_FIELDS.filter(function (f) { return cols.indexOf(f[0]) !== -1; });
+      if (!ATT.fields.length && cols.indexOf("created_at") !== -1) ATT.fields = [["created_at", "Recorded timestamp"]];
+      ATT.ready = true;
+      return;
+    }
+    ATT.error = "No attendance table is readable by your account. Expected one of: " + ATT_TABLES.join(", ") + ".";
+  }
+
+  function renderAttStaffResults() {
+    var q = ($("attSearch").value || "").trim().toLowerCase();
+    var box = $("attStaffResults");
+    if (!q) { box.innerHTML = ""; box.hidden = true; return; }
+    var rows = USERS.rows.filter(function (r) { return matchesQuery(r, q); }).slice(0, 12);
+    box.hidden = false;
+    box.innerHTML = rows.length
+      ? rows.map(function (r) {
+          var idx = USERS.rows.indexOf(r);
+          return '<button type="button" class="att-staff-item" data-staff="' + idx + '">' +
+            "<span>" + esc(displayName(r)) + "</span><small>" +
+            esc([pick(r, EMAIL_KEYS), pick(r, STAFF_KEYS)].filter(Boolean).join(" · ") || "No email on record") +
+            "</small></button>";
+        }).join("")
+      : '<p class="att-empty">No staff member matches “' + esc(q) + '”.</p>';
+  }
+
+  function selectAttStaff(row) {
+    ATT.staff = row;
+    $("attSearch").value = "";
+    $("attStaffResults").hidden = true;
+    $("attStaffResults").innerHTML = "";
+    $("attSelected").hidden = false;
+    $("attSelectedName").textContent = displayName(row);
+    $("attSelectedMeta").textContent =
+      [pick(row, STAFF_KEYS) ? "Staff ID " + pick(row, STAFF_KEYS) : null, pick(row, DEPT_KEYS), pick(row, EMAIL_KEYS)]
+        .filter(Boolean).join(" · ") || "No further details recorded";
+    loadAttendance();
+  }
+
+  function clearAttStaff() {
+    ATT.staff = null;
+    ATT.rows = [];
+    $("attSelected").hidden = true;
+    $("attRecords").innerHTML = "";
+    $("attState").textContent = "Search for a staff member to view their attendance records.";
+    $("attCount").textContent = "";
+  }
+
+  async function loadAttendance() {
+    if (!ATT.staff || ATT.loading) return;
+    await detectAttendance();
+    if (ATT.error) { $("attState").textContent = ATT.error; return; }
+
+    ATT.loading = true;
+    $("attState").textContent = "Loading attendance records…";
+    $("attRecords").innerHTML = "";
+    loader(true);
+
+    var staffId = ATT.staff.id || ATT.staff.user_id;
+    var q = sb.from(ATT.table).select("*").eq(ATT.userKey, staffId).limit(500);
+    if (ATT.dateKey) {
+      var from = $("attFrom").value, to = $("attTo").value, one = $("attDate").value;
+      if (one) q = q.eq(ATT.dateKey, one);
+      else {
+        if (from) q = q.gte(ATT.dateKey, from);
+        if (to) q = q.lte(ATT.dateKey, to);
+      }
+      q = q.order(ATT.dateKey, { ascending: false });
+    }
+    var res = await q;
+
+    loader(false);
+    ATT.loading = false;
+
+    if (res.error) {
+      ATT.rows = [];
+      $("attState").textContent = "Attendance records could not be loaded: " + res.error.message;
+      return;
+    }
+    ATT.rows = res.data || [];
+    if (ATT.statusKey) {
+      var seen = {};
+      ATT.rows.forEach(function (r) { if (r[ATT.statusKey]) seen[String(r[ATT.statusKey])] = 1; });
+      var opts = Object.keys(seen).sort();
+      var sel = $("attStatus");
+      var keep = sel.value;
+      sel.innerHTML = '<option value="">All types</option>' +
+        opts.map(function (o) { return '<option value="' + esc(o) + '">' + esc(String(o).replace(/_/g, " ")) + "</option>"; }).join("");
+      sel.value = opts.indexOf(keep) !== -1 ? keep : "";
+      $("attStatusField").hidden = false;
+    } else {
+      $("attStatusField").hidden = true;
+    }
+    renderAttendance();
+  }
+
+  function filteredAttRows() {
+    var one = $("attDate").value, from = $("attFrom").value, to = $("attTo").value;
+    var status = ATT.statusKey ? $("attStatus").value : "";
+    return ATT.rows.filter(function (r) {
+      var d = rowDate(r);
+      if (one && d !== one) return false;
+      if (!one && from && d && d < from) return false;
+      if (!one && to && d && d > to) return false;
+      if (status && String(r[ATT.statusKey]) !== status) return false;
+      return true;
+    });
+  }
+
+  function renderAttendance() {
+    var rows = filteredAttRows();
+    var box = $("attRecords");
+    $("attCount").textContent = ATT.rows.length ? ATT.rows.length + " loaded" : "";
+
+    if (!rows.length) {
+      box.innerHTML = "";
+      $("attState").textContent = ATT.rows.length
+        ? "No attendance record matches the current filters."
+        : "No attendance records found for " + displayName(ATT.staff) + ".";
+      return;
+    }
+    $("attState").textContent = "Showing " + rows.length + " of " + ATT.rows.length + " record" + (ATT.rows.length === 1 ? "" : "s") + ".";
+
+    var canEdit = isAdmin();
+    box.innerHTML = rows.map(function (r) {
+      var idx = ATT.rows.indexOf(r);
+      var d = rowDate(r);
+      var status = ATT.statusKey && r[ATT.statusKey] ? String(r[ATT.statusKey]).replace(/_/g, " ") : null;
+      var lines = ATT.fields.map(function (f) {
+        var val = r[f[0]];
+        var btn = canEdit
+          ? '<button type="button" class="btn btn-ghost btn-sm" data-edit="' + idx + '" data-field="' + esc(f[0]) + '">Correct</button>'
+          : "";
+        return '<div class="att-line"><span class="att-line-label">' + esc(f[1]) + "</span>" +
+          '<span class="att-line-value">' + esc(stampText(val, d)) + "</span>" + btn + "</div>";
+      }).join("");
+      return '<article class="att-record"><header class="att-record-head">' +
+        "<h4>" + esc(ukDate(d)) + "</h4>" +
+        "<span>" + esc(status || "Attendance record") + "</span>" +
+        "</header><div class=\"att-record-body\">" + lines + "</div></article>";
+    }).join("");
+
+    if (!canEdit) {
+      $("attState").textContent += " Corrections require an administrator account.";
+    }
+  }
+
+  /* ---------- correction modal ---------- */
+  function closeAtt() {
+    ATT.pending = null;
+    ATT.step = 1;
+    $("attBackdrop").hidden = true;
+    document.body.classList.remove("modal-open");
+  }
+
+  function openCorrection(row, field) {
+    if (!isAdmin()) { toast("Only an administrator can correct attendance timestamps.", "bad"); return; }
+    var label = (ATT.fields.filter(function (f) { return f[0] === field; })[0] || [field, labelize(field)])[1];
+    var d = rowDate(row);
+    var cur = splitStamp(row[field], d) || { date: d || "", time: "" };
+
+    ATT.pending = {
+      row: row, field: field, label: label,
+      original: row[field] === null || row[field] === undefined || String(row[field]) === "" ? null : String(row[field]),
+      originalText: stampText(row[field], d),
+      timeOnly: isTimeOnly(row[field]),
+      recordDate: d
+    };
+    ATT.step = 1;
+
+    $("attCorrStaff").textContent = displayName(ATT.staff);
+    $("attCorrField").textContent = label;
+    $("attCorrOriginal").textContent = ATT.pending.originalText;
+    $("attNewDate").value = cur.date;
+    $("attNewTime").value = cur.time;
+    $("attReason").value = "";
+    $("attReasonOther").value = "";
+    $("attReasonOtherField").hidden = true;
+    $("attCorrError").hidden = true;
+    $("attStep1").hidden = false;
+    $("attStep2").hidden = true;
+    $("attContinue").hidden = false;
+    $("attConfirm").hidden = true;
+    $("attBack").hidden = true;
+    $("attBackdrop").hidden = false;
+    document.body.classList.add("modal-open");
+  }
+
+  function correctionReason() {
+    var r = $("attReason").value;
+    if (!r) return null;
+    if (r === "Other") {
+      var t = $("attReasonOther").value.trim();
+      return t ? "Other — " + t : null;
+    }
+    return r;
+  }
+
+  function toStep2() {
+    var p = ATT.pending;
+    if (!p) return;
+    var date = $("attNewDate").value;
+    var time = $("attNewTime").value;
+    var reason = correctionReason();
+    var err = $("attCorrError");
+
+    if (!date || !time) { err.hidden = false; err.textContent = "Enter both the correct date and the correct time."; return; }
+    if (!reason) { err.hidden = false; err.textContent = "Select a reason for this correction. If you choose Other, describe it briefly."; return; }
+    if (reason.length > 300) { err.hidden = false; err.textContent = "Keep the reason under 300 characters."; return; }
+    err.hidden = true;
+
+    p.newDate = date;
+    p.newTime = time;
+    p.reason = reason;
+    p.newValue = p.timeOnly ? time + ":00" : date + "T" + time + ":00";
+    p.newText = ukDate(date) + " — " + time;
+
+    $("sumStaff").textContent = displayName(ATT.staff);
+    $("sumField").textContent = p.label;
+    $("sumOriginal").textContent = p.originalText;
+    $("sumNew").textContent = p.newText;
+    $("sumReason").textContent = p.reason;
+
+    ATT.step = 2;
+    $("attStep1").hidden = true;
+    $("attStep2").hidden = false;
+    $("attContinue").hidden = true;
+    $("attConfirm").hidden = false;
+    $("attBack").hidden = false;
+    $("attConfirm").focus();
+  }
+
+  async function submitCorrection() {
+    var p = ATT.pending;
+    if (!p) return;
+    var btn = $("attConfirm");
+    busy(btn, true);
+    loader(true);
+
+    var res = await sb.rpc("correct_attendance_timestamp", {
+      p_table: ATT.table,
+      p_record_id: p.row.id,
+      p_field: p.field,
+      p_new_value: p.newValue,
+      p_new_date: ATT.dateKey && !p.timeOnly ? p.newDate : (ATT.dateKey ? p.newDate : null),
+      p_reason: p.reason
+    });
+
+    busy(btn, false);
+    loader(false);
+
+    if (res.error) {
+      var err = $("attCorrError");
+      err.hidden = false;
+      err.textContent = res.error.message || "The correction was refused by the database.";
+      $("attStep1").hidden = false;
+      $("attStep2").hidden = true;
+      $("attContinue").hidden = false;
+      $("attConfirm").hidden = true;
+      $("attBack").hidden = true;
+      return;
+    }
+
+    closeAtt();
+    toast("Timestamp corrected and recorded for audit.", "good");
+    loadAttendance();
+  }
+
+  function initAttendance() {
+    var root = $("tab-attendance");
+    if (!root || root.getAttribute("data-ready") === "1") return;
+    root.setAttribute("data-ready", "1");
+
+    var t;
+    $("attSearch").addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(renderAttStaffResults, 140);
+    });
+    $("attStaffResults").addEventListener("click", function (e) {
+      var b = e.target.closest("[data-staff]");
+      if (!b) return;
+      var row = USERS.rows[Number(b.getAttribute("data-staff"))];
+      if (row) selectAttStaff(row);
+    });
+    $("attClear").addEventListener("click", clearAttStaff);
+    $("attRefresh").addEventListener("click", function () { loadAttendance(); });
+    ["attDate", "attFrom", "attTo"].forEach(function (id) {
+      $(id).addEventListener("change", function () { loadAttendance(); });
+    });
+    $("attStatus").addEventListener("change", renderAttendance);
+    $("attFilterReset").addEventListener("click", function () {
+      $("attDate").value = ""; $("attFrom").value = ""; $("attTo").value = "";
+      if (ATT.statusKey) $("attStatus").value = "";
+      loadAttendance();
+    });
+
+    $("attRecords").addEventListener("click", function (e) {
+      var b = e.target.closest("[data-edit]");
+      if (!b) return;
+      var row = ATT.rows[Number(b.getAttribute("data-edit"))];
+      if (row) openCorrection(row, b.getAttribute("data-field"));
+    });
+
+    $("attReason").addEventListener("change", function () {
+      $("attReasonOtherField").hidden = $("attReason").value !== "Other";
+    });
+    $("attContinue").addEventListener("click", toStep2);
+    $("attConfirm").addEventListener("click", submitCorrection);
+    $("attBack").addEventListener("click", function () {
+      ATT.step = 1;
+      $("attStep1").hidden = false;
+      $("attStep2").hidden = true;
+      $("attContinue").hidden = false;
+      $("attConfirm").hidden = true;
+      $("attBack").hidden = true;
+    });
+    $("attCancel").addEventListener("click", closeAtt);
+    $("attBackdrop").addEventListener("click", function (e) {
+      if (e.target === $("attBackdrop")) closeAtt();
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && !$("attBackdrop").hidden) closeAtt();
+    });
+
+    $("attReason").innerHTML = '<option value="">Select a reason…</option>' +
+      REASONS.map(function (r) { return '<option value="' + r + '">' + r + "</option>"; }).join("");
+
+    $("attNote").textContent = isAdmin()
+      ? "Corrections are executed by the database, which records the original value, the new value, your account and your reason."
+      : "Your account can review attendance records. Only an administrator can correct a timestamp.";
+  }
+
   /* ------------------------- portal render ------------------------- */
   async function renderPortal(user, access) {
     ME.user = user;
@@ -552,6 +970,7 @@
 
     initUsers();
     initRoleUi();
+    initAttendance();
     loadUsers();
 
     only("portalView");
