@@ -808,7 +808,7 @@
       return match && (!filters.dept || u.department === filters.dept) && (!filters.type || u.employmentType === filters.type);
     });
 
-    return '<div class="page"><div class="page-head"><p class="eyebrow">Administration</p><h1>Attendance Management</h1>' +
+    return '<div class="page"><div class="page-head"><p class="eyebrow">Administration</p><h1>Attendance Management</h1></div>' +
       '<form class="filters" id="filterForm">' +
       '<div class="field"><label>Search name, staff ID or email</label><input name="q" value="' + esc(filters.q) + '" placeholder="e.g. MD-0102" /></div>' +
       '<div class="field"><label>Department</label><select name="dept"><option value="">All departments</option>' +
@@ -1002,7 +1002,7 @@
 
   function settingsView(u) {
     var joined = u.createdAt ? prettyDate(String(u.createdAt).slice(0, 10)) : "—";
-    return '<div class="page"><div class="page-head"><p class="eyebrow">Account</p><h1>Profile &amp; Settings</h1>' +
+    return '<div class="page"><div class="page-head"><p class="eyebrow">Account</p><h1>Profile &amp; Settings</h1></div>' +
 
       '<div class="layout"><div>' +
 
