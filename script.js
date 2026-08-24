@@ -727,8 +727,7 @@
              (Math.max((a.evening && a.evening.at) || 0, (a.morning && a.morning.at) || 0));
     }).slice(0, 8);
 
-    return '<div class="page"><div class="page-head"><p class="eyebrow">Administration</p><h1>Attendance Overview</h1>' +
-      '<p class="dateline">' + longDate(now) + " · organisation-wide monitoring</p></div>" +
+    return '<div class="page"><div class="page-head"><p class="eyebrow">Administration</p><h1>Attendance Overview</h1></div>' +
       '<div class="stats">' +
       stat("Total Staff", staff.length, "", ICON.users) + stat("Staff Present", morning.length, "ok", ICON.check) +
       stat("Morning Submitted", morning.length, "ok", ICON.sunrise) + stat("Evening Submitted", evening.length, "accent", ICON.sunset) +
