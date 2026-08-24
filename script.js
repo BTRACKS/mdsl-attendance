@@ -995,7 +995,7 @@
         '<p class="hse-done-sub">Checked in at ' + esc(rec.time) + "</p></div></div>" +
         '<div class="locked-note"><span class="lock-icon"></span> Locked — one check-in per HSE session</div>';
     } else if (st.phase === "not-monday") {
-      body = '<p class="hse-note">HSE holds every Monday. The next session is ' +
+      body = '<p class="hse-note">The next HSE session is ' +
         esc(prettyDate(st.next)) + ', ' + esc(prettyClock(s.open_time)) + " – " + esc(prettyClock(s.close_time)) + ".</p>";
     } else if (st.phase === "before") {
       body = '<p class="hse-note warn">HSE attendance has not opened yet.</p>' +
@@ -1065,9 +1065,7 @@
     var missing = staff.filter(function (u) { return !presentIds[u.id]; });
     var pct = staff.length ? Math.round((recs.length / staff.length) * 100) : 0;
 
-    return '<div class="page"><div class="page-head"><p class="eyebrow">Administration</p><h1>HSE Attendance</h1>' +
-      '<p class="dateline">HSE holds every Monday. Session: ' + esc(prettyDate(key)) +
-      (isMondayKey(key) ? "" : " (non-Monday session)") + "</p></div>" +
+    return '<div class="page"><div class="page-head"><p class="eyebrow">Administration</p><h1>HSE Attendance</h1></div>' +
 
       '<div class="stats">' +
       stat("Total Staff", staff.length, "", ICON.users) +
