@@ -63,8 +63,8 @@
      sunrise for morning, sun for afternoon, moon for evening. */
   function greetingInfo(now) {
     var h = now.getHours();
-    if (h < 12) return { text: "Good morning", icon: ICON.sunriseTabler };
-    if (h < 18) return { text: "Good afternoon", icon: ICON.sun };
+    if (h >= 5 && h < 12) return { text: "Good morning", icon: ICON.sunriseTabler };
+    if (h >= 12 && h < 17) return { text: "Good afternoon", icon: ICON.sun };
     return { text: "Good evening", icon: ICON.moon };
   }
 

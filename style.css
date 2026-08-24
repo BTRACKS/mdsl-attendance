@@ -289,8 +289,13 @@ img{max-width:100%;display:block}
 .greeting-line{display:flex;align-items:center;gap:0 10px;flex-wrap:wrap;max-width:100%}
 .greeting-salutation{white-space:nowrap}
 .greeting-name{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;max-width:100%}
-.greeting-icon{display:inline-flex;flex:0 0 auto}
-.greeting-icon svg{width:1em;height:1em}
+.greeting-icon{display:inline-flex;align-items:center;flex:0 0 auto;color:var(--navy);opacity:.85;line-height:0;transform:translateY(-.02em)}
+.greeting-icon svg{width:.82em;height:.82em;stroke-width:2}
+@media (max-width:560px){
+  .greeting-line{gap:0 8px}
+  .greeting-name{gap:6px}
+  .greeting-icon svg{width:.78em;height:.78em}
+}
 .layout{display:grid;grid-template-columns:minmax(0,1fr) 348px;gap:28px;align-items:start}
 .layout>*{min-width:0}
 .section{
