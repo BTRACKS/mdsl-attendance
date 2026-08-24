@@ -974,7 +974,7 @@
   /* ------------------------- profile picture helpers ------------------------- */
   var AVATAR_BUCKET = "avatars";
   var AVATAR_TYPES = ["image/jpeg", "image/png", "image/webp"];
-  var AVATAR_MAX_BYTES = 2 * 1024 * 1024;
+  var AVATAR_MAX_BYTES = 20 * 1024 * 1024;
 
   /* Renders the staff avatar: the uploaded picture when present, initials
      otherwise. Used everywhere an avatar appears so a new upload shows up
@@ -991,7 +991,7 @@
   function validateAvatar(file) {
     if (!file) return "Choose an image to upload.";
     if (AVATAR_TYPES.indexOf(file.type) === -1) return "Use a JPG, PNG or WebP image.";
-    if (file.size > AVATAR_MAX_BYTES) return "Image must be 2MB or smaller.";
+    if (file.size > AVATAR_MAX_BYTES) return "Image must be 20MB or smaller.";
     return "";
   }
 
