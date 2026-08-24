@@ -139,22 +139,22 @@
         
       </div>
 
-      <!-- Overview -->
+      <!-- Phase 9 — IT Administration Overview -->
       <section class="section" id="tab-overview">
-        <div class="section-head">
-          <h2>Overview</h2>
-          <span>Portal status</span>
+        <div class="section-head"><div><h2>IT Administration Overview</h2><p class="overview-lede">Users, attendance, recent changes and portal service status.</p></div><button class="btn btn-ghost btn-sm" id="dashboardRefresh" type="button">Refresh overview</button></div>
+        <div class="dashboard-stats" id="dashboardStats" aria-live="polite">
+          <div class="stat-panel"><span>Total Users</span><strong id="statUsers">—</strong></div><div class="stat-panel"><span>Admins</span><strong id="statAdmins">—</strong></div><div class="stat-panel"><span>IT Support</span><strong id="statSupport">—</strong></div><div class="stat-panel"><span>Staff</span><strong id="statStaff">—</strong></div><div class="stat-panel"><span>Active Accounts</span><strong id="statActive">—</strong></div><div class="stat-panel"><span>Inactive Accounts</span><strong id="statInactive">—</strong></div>
         </div>
-        <div class="grid-2">
-          <div class="panel">
-            <div class="panel-head">Authentication</div>
-            <div class="panel-body"><dl class="kv" id="kvAuth"></dl></div>
-          </div>
-          <div class="panel">
-            <div class="panel-head">Your profile record</div>
-            <div class="panel-body"><dl class="kv" id="kvProfile"></dl></div>
-          </div>
+        <div class="dashboard-grid">
+          <div class="panel"><div class="panel-head">Today's attendance</div><div class="panel-body"><div class="mini-stats" id="attendanceSummary"><div><span>Clock-ins</span><strong>—</strong></div><div><span>Clock-outs</span><strong>—</strong></div><div><span>Missing clock-outs</span><strong>—</strong></div></div><p class="dashboard-state" id="dashboardAttendanceState">Loading today's attendance…</p></div></div>
+          <div class="panel"><div class="panel-head">System status</div><div class="panel-body"><div class="service-list" id="systemStatusList"><div class="service-row"><span>Authentication</span><strong>Checking…</strong></div><div class="service-row"><span>Supabase</span><strong>Checking…</strong></div><div class="service-row"><span>Database queries</span><strong>Checking…</strong></div></div><button class="btn btn-ghost btn-sm dashboard-retry" id="dashboardRetry" type="button">Retry checks</button></div></div>
         </div>
+        <div class="dashboard-grid">
+          <div class="panel"><div class="panel-head">Recent attendance activity</div><div class="panel-body"><div class="activity-list" id="recentAttendance"></div><p class="dashboard-state" id="recentAttendanceState">Loading…</p></div></div>
+          <div class="panel"><div class="panel-head">Recent profile &amp; account updates</div><div class="panel-body"><div class="activity-list" id="recentProfiles"></div><p class="dashboard-state" id="recentProfilesState">Loading…</p></div></div>
+        </div>
+        <div class="panel dashboard-panel"><div class="panel-head">Quick actions</div><div class="panel-body quick-actions"><button class="btn btn-ghost btn-sm" data-goto="users" type="button">View Users</button><button class="btn btn-ghost btn-sm" data-goto="users" type="button">Search Staff</button><button class="btn btn-ghost btn-sm" data-goto="attendance" type="button">Attendance Management</button><button class="btn btn-ghost btn-sm" data-goto="users" type="button">Account Support</button><button class="btn btn-ghost btn-sm" data-goto="settings" type="button">System Settings</button></div></div>
+        <div class="grid-2 dashboard-account-panels"><div class="panel"><div class="panel-head">Authentication</div><div class="panel-body"><dl class="kv" id="kvAuth"></dl></div></div><div class="panel"><div class="panel-head">Your profile record</div><div class="panel-body"><dl class="kv" id="kvProfile"></dl></div></div></div>
       </section>
 
 
