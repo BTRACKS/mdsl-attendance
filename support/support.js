@@ -234,22 +234,19 @@
       : "Showing " + rows.length + " staff record" + (rows.length === 1 ? "" : "s") + " from the database.";
     $("usersCount").textContent = USERS.rows.length + " total";
 
-    grid.innerHTML = rows.map(function (r, i) {
+    /*
+     * Staff cards intentionally expose only the profile picture and full name.
+     * The complete existing database record remains available through
+     * openUserProfile(row), which is triggered by clicking the entire card.
+     */
+    grid.innerHTML = rows.map(function (r) {
       var idx = USERS.rows.indexOf(r);
-      var email = pick(r, EMAIL_KEYS);
-      var title = pick(r, TITLE_KEYS);
-      var dept = pick(r, DEPT_KEYS);
-      var staff = pick(r, STAFF_KEYS);
-      var second = [title, dept].filter(Boolean).join(" · ") || "Position not recorded";
-      var third = [staff ? "Staff ID " + staff : null, statusText(r), roleLabel(roleOf(r))]
-        .filter(Boolean).join(" · ");
-      return '<button type="button" class="user-card" data-user="' + idx + '">' +
+      var name = displayName(r);
+      return '<button type="button" class="user-card" data-user="' + idx +
+        '" aria-label="View details for ' + esc(name) + '">' +
         avatarHtml(r) +
         '<span class="u-body">' +
-          '<span class="u-name">' + esc(displayName(r)) + "</span>" +
-          '<span class="u-line">' + esc(email || "No email on record") + "</span>" +
-          '<span class="u-line">' + esc(second) + "</span>" +
-          '<span class="u-line-2">' + esc(third) + "</span>" +
+          '<span class="u-name">' + esc(name) + "</span>" +
         "</span></button>";
     }).join("");
   }
