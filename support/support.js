@@ -615,6 +615,37 @@
     var p = String(iso).split("-");
     return p.length === 3 ? p[2] + "/" + p[1] + "/" + p[0] : String(iso);
   }
+
+  /* Dashboard-only display formatter: 24 Aug 2026, 12:26 PM.
+     Seconds are intentionally omitted so both activity cards use one format. */
+  function dashboardDateTime(value, dateOnlyFallback) {
+    if (!value) return dateOnlyFallback ? dashboardDateOnly(dateOnlyFallback) : "—";
+    var d = value instanceof Date ? value : new Date(value);
+    if (isNaN(d.getTime())) {
+      return dateOnlyFallback ? dashboardDateOnly(dateOnlyFallback) : String(value);
+    }
+    var months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    return d.getDate() + " " + months[d.getMonth()] + " " + d.getFullYear() + ", " + to12Hour(d);
+  }
+
+  function dashboardDateOnly(iso) {
+    if (!iso) return "—";
+    var d = new Date(String(iso) + "T00:00:00");
+    if (isNaN(d.getTime())) return String(iso);
+    var months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    return d.getDate() + " " + months[d.getMonth()] + " " + d.getFullYear();
+  }
+
+  function dashboardAttendanceTime(row) {
+    var keys = ["updated_at","recorded_at","logged_at","timestamp","check_in","clock_in","time_in","resumption_time","resumption","sign_in_time","check_out","clock_out","time_out","closing_time","closing","sign_out_time"];
+    for (var i = 0; i < keys.length; i++) {
+      if (row[keys[i]] != null && String(row[keys[i]]).trim() !== "") {
+        var d = new Date(row[keys[i]]);
+        if (!isNaN(d.getTime()) && String(row[keys[i]]).indexOf(":") !== -1) return d;
+      }
+    }
+    return null;
+  }
   function stampText(value, fallbackDate) {
     var s = splitStamp(value, fallbackDate);
     return s ? ukDate(s.date) + " — " + s.time : "Not recorded";
@@ -1923,12 +1954,18 @@
   function dashStatus(t,k){return '<strong class="'+(k==='ok'?'service-ok':k==='bad'?'service-bad':'service-warn')+'">'+esc(t)+'</strong>';}
   function renderDashboardStats(){var r=USERS.rows||[],c={admin:0,it_support:0,staff:0,active:0,inactive:0};r.forEach(function(x){var role=roleOf(x);if(role==='admin')c.admin++;else if(role==='it_support')c.it_support++;else c.staff++;var s=statusText(x).toLowerCase().replace(/[\s-]+/g,'_');if(s==='inactive'||s==='disabled'||s==='deactivated'||s==='false')c.inactive++;else c.active++;});$("statUsers").textContent=r.length;$("statAdmins").textContent=c.admin;$("statSupport").textContent=c.it_support;$("statStaff").textContent=c.staff;$("statActive").textContent=c.active;$("statInactive").textContent=c.inactive;}
   function attFlags(r){var i=false,o=false;ATT.fields.forEach(function(f){var v=r[f[0]];if(v==null||String(v).trim()==='')return;var l=f[1].toLowerCase();if(l.indexOf('clock-in')!==-1)i=true;if(l.indexOf('clock-out')!==-1)o=true;});['check_in','clock_in','time_in','resumption_time','resumption','sign_in_time'].forEach(function(k){if(r[k]!=null&&String(r[k]).trim()!=='')i=true;});['check_out','clock_out','time_out','closing_time','closing','sign_out_time'].forEach(function(k){if(r[k]!=null&&String(r[k]).trim()!=='')o=true;});if(r.morning!=null&&r.morning!=='')i=true;if(r.evening!=null&&r.evening!=='')o=true;return{in:i,out:o};}
-  function renderRecentAttendance(rows){var b=$("recentAttendance"),s=$("recentAttendanceState");if(!rows.length){b.innerHTML='';s.textContent='No attendance activity was found for today.';return;}s.textContent='';b.innerHTML=rows.slice(0,6).map(function(r){var id=attStaffId(r),u=(USERS.rows||[]).find(function(x){return String(x.id||x.user_id)===String(id);}),f=attFlags(r),l=f.in&&f.out?'Clock-in and clock-out recorded':f.in?'Clock-in recorded':f.out?'Clock-out recorded':'Attendance record';return '<div class="activity-item"><div class="activity-main"><strong>'+esc(u?displayName(u):'Staff member')+'</strong><span>'+esc(l)+'</span></div><span class="activity-time">'+esc(rowDate(r)?ukDate(rowDate(r)):'Today')+'</span></div>';}).join('');}
-  function renderRecentProfiles(){var b=$("recentProfiles"),s=$("recentProfilesState"),r=(USERS.rows||[]).slice().sort(function(a,b){return new Date(b.updated_at||b.created_at||0)-new Date(a.updated_at||a.created_at||0);}).slice(0,6);if(!r.length){b.innerHTML='';s.textContent='No profile or account updates are visible.';return;}s.textContent='';b.innerHTML=r.map(function(x){var w=x.updated_at||x.created_at,l=x.updated_at?'Profile updated':'Account created';return '<div class="activity-item"><div class="activity-main"><strong>'+esc(displayName(x))+'</strong><span>'+esc(l)+' · '+esc(roleLabel(roleOf(x)))+'</span></div><span class="activity-time">'+esc(fmtValue(w))+'</span></div>';}).join('');}
+  function renderRecentAttendance(rows){var b=$("recentAttendance"),s=$("recentAttendanceState");if(!rows.length){b.innerHTML='';s.textContent='No attendance activity was found for today.';return;}s.textContent='';b.innerHTML=rows.slice(0,6).map(function(r){var id=attStaffId(r),u=(USERS.rows||[]).find(function(x){return String(x.id||x.user_id)===String(id);}),f=attFlags(r),l=f.in&&f.out?'Clock-in and clock-out recorded':f.in?'Clock-in recorded':f.out?'Clock-out recorded':'Attendance record';var d=dashboardAttendanceTime(r);var date=rowDate(r);var stamp=d?dashboardDateTime(d):dashboardDateOnly(date||localDateIso());return '<div class="activity-item"><div class="activity-main"><div class="activity-title"><strong>'+esc(u?displayName(u):'Staff member')+'</strong><span class="activity-separator">—</span><span class="activity-action">'+esc(l)+'</span></div></div><time class="activity-time" datetime="'+esc(d?d.toISOString():(date||localDateIso()))+'">'+esc(stamp)+'</time></div>';}).join('');}
+  function renderRecentProfiles(){var b=$("recentProfiles"),s=$("recentProfilesState"),r=(USERS.rows||[]).slice().sort(function(a,b){return new Date(b.updated_at||b.created_at||0)-new Date(a.updated_at||a.created_at||0);}).slice(0,6);if(!r.length){b.innerHTML='';s.textContent='No profile or account updates are visible.';return;}s.textContent='';b.innerHTML=r.map(function(x){var w=x.updated_at||x.created_at,l=x.updated_at?'Profile updated':'Account created';var d=new Date(w);var stamp=!isNaN(d.getTime())?dashboardDateTime(d):String(w);return '<div class="activity-item"><div class="activity-main"><div class="activity-title"><strong>'+esc(displayName(x))+'</strong><span class="activity-separator">—</span><span class="activity-action">'+esc(l)+' · '+esc(roleLabel(roleOf(x)))+'</span></div></div><time class="activity-time" datetime="'+esc(!isNaN(d.getTime())?d.toISOString():"")+'">'+esc(stamp)+'</time></div>';}).join('');}
   async function loadDashboardAttendance(){await detectAttendance();if(ATT.error){$("dashboardAttendanceState").textContent='Attendance service is not available to this account.';return{ok:false};}var q=sb.from(ATT.table).select('*').limit(1000);if(ATT.dateKey)q=q.eq(ATT.dateKey,localDateIso()).order(ATT.dateKey,{ascending:false});var r=await q;if(r.error){$("dashboardAttendanceState").textContent="Today's attendance could not be loaded.";return{ok:false};}DASH.attendanceRows=r.data||[];var i=0,o=0,m=0;DASH.attendanceRows.forEach(function(x){var f=attFlags(x);if(f.in)i++;if(f.out)o++;if(f.in&&!f.out)m++;});$("attendanceSummary").innerHTML='<div><span>Clock-ins</span><strong>'+i+'</strong></div><div><span>Clock-outs</span><strong>'+o+'</strong></div><div><span>Missing clock-outs</span><strong>'+m+'</strong></div>';$("dashboardAttendanceState").textContent=DASH.attendanceRows.length?DASH.attendanceRows.length+' attendance record'+(DASH.attendanceRows.length===1?'':'s')+' found today.':'No attendance records found for today.';renderRecentAttendance(DASH.attendanceRows);return{ok:true};}
   async function runDashboardChecks(){$("systemStatusList").innerHTML='<div class="service-row"><span>Authentication</span>'+dashStatus('Checking…','warn')+'</div><div class="service-row"><span>Supabase</span>'+dashStatus('Checking…','warn')+'</div><div class="service-row"><span>Database queries</span>'+dashStatus('Checking…','warn')+'</div>';var aok=!!(ME.user&&ME.allowed),sok=false,dok=false;try{var p=await sb.from('profiles').select('id').eq('id',ME.user.id).maybeSingle();sok=!p.error;dok=sok;}catch(e){}var a=await loadDashboardAttendance();dok=dok&&a.ok;$("systemStatusList").innerHTML='<div class="service-row"><span>Authentication</span>'+dashStatus(aok?'Connected':'Unavailable',aok?'ok':'bad')+'</div><div class="service-row"><span>Supabase</span>'+dashStatus(sok?'Connected':'Unavailable',sok?'ok':'bad')+'</div><div class="service-row"><span>Database queries</span>'+dashStatus(dok?'Available':'Partial / unavailable',dok?'ok':'warn')+'</div>';}
   async function loadDashboard(force){if(DASH.loading)return;DASH.loading=true;loader(true);try{if(force)await loadUsers(true);else if(!USERS.loaded)await loadUsers(false);renderDashboardStats();renderRecentProfiles();await runDashboardChecks();}catch(e){$("dashboardAttendanceState").textContent='Some dashboard information could not be loaded. Please retry.';}finally{DASH.loading=false;loader(false);}}
-  function initDashboard(){var root=$("tab-overview");if(!root||root.getAttribute('data-ready')==='1')return;root.setAttribute('data-ready','1');$("dashboardRefresh").addEventListener('click',function(){loadDashboard(true);});$("dashboardRetry").addEventListener('click',function(){runDashboardChecks();});root.addEventListener('click',function(e){var b=e.target.closest('[data-goto]');if(!b)return;var t=document.querySelector('.nav button[data-tab="'+b.getAttribute('data-goto')+'"]');if(t)t.click();});}
+  function removeDashboardQuickActions(){
+    document.querySelectorAll("#tab-overview .quick-actions").forEach(function(el){
+      var section=el.closest(".section");
+      if(section) section.remove(); else el.remove();
+    });
+  }
+  function initDashboard(){var root=$("tab-overview");if(!root||root.getAttribute('data-ready')==='1')return;root.setAttribute('data-ready','1');removeDashboardQuickActions();$("dashboardRefresh").addEventListener('click',function(){loadDashboard(true);});$("dashboardRetry").addEventListener('click',function(){runDashboardChecks();});root.addEventListener('click',function(e){var b=e.target.closest('[data-goto]');if(!b)return;var t=document.querySelector('.nav button[data-tab="'+b.getAttribute('data-goto')+'"]');if(t)t.click();});}
 
   /* ------------------------- portal render ------------------------- */
   async function renderPortal(user, access) {
