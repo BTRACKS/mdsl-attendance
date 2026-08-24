@@ -803,6 +803,16 @@ body.maintenance-page{background:var(--gradient-hero);min-height:100vh}
 #hseSettingsForm{display:flex;flex-direction:column;gap:14px}
 
 
+/* ---------- Dashboard Leave card ---------- */
+.dashboard-leave-card{border-left:4px solid #8b6ed8}
+.dashboard-leave-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:14px}
+.dashboard-leave-summary>div{padding:13px 14px;border:1px solid var(--rule);border-radius:12px;background:var(--paper-2)}
+.dashboard-leave-summary span{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-4);font-weight:700;margin-bottom:3px}
+.dashboard-leave-summary strong{display:block;font-size:14px;color:var(--ink)}
+.dashboard-leave-empty{margin-bottom:14px}
+.dashboard-leave-actions{display:flex;justify-content:flex-end}
+@media (max-width:760px){.dashboard-leave-summary{grid-template-columns:1fr}.dashboard-leave-actions{justify-content:stretch}.dashboard-leave-actions .btn{width:100%}}
+
 /* ---------- Leave Management ---------- */
 .tag-leave{background:#efe9ff;color:#5b3ea6;border:1px solid #d8cdfa}
 .leave-active-banner{

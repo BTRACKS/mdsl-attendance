@@ -963,6 +963,17 @@ body.modal-open{overflow:hidden}
 }
 
 
+/* ---------- Support Leave tab ---------- */
+.leave-support-toolbar{align-items:flex-end}
+.leave-support-toolbar .search-field{margin-top:0;flex:1 1 320px}
+.leave-support-table{overflow-x:auto}
+.leave-staff-cell{display:flex;align-items:center;gap:10px;min-width:190px}
+.leave-staff-cell .avatar{width:36px;height:36px;font-size:12px}
+.leave-staff-cell strong{display:block;font-size:13px}
+.leave-staff-cell span{display:block;font-size:11px;color:var(--ink-4);margin-top:1px}
+.support-leave-page .page-head{max-width:var(--maxw);margin:0 auto}
+@media (max-width:760px){.leave-support-toolbar{align-items:stretch}.leave-support-toolbar .btn{width:100%}}
+
 /* ---------- Leave Management ---------- */
 .tag-leave{background:#efe9ff;color:#5b3ea6;border:1px solid #d8cdfa}
 .leave-active-banner{
