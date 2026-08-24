@@ -579,6 +579,18 @@
     }
     try { return JSON.stringify(obj); } catch (e) { return "Recorded"; }
   }
+  /* Mirrors the "7:23 AM" style already used in the stored morning/evening
+     objects, so a correction doesn't change the record's display format. */
+  function to12Hour(dt) {
+    var h = dt.getHours(), m = dt.getMinutes();
+    var ampm = h >= 12 ? "PM" : "AM";
+    var h12 = h % 12; if (h12 === 0) h12 = 12;
+    return h12 + ":" + pad(m) + " " + ampm;
+  }
+  function buildLocalEpoch(dateStr, timeStr) {
+    var dt = new Date(dateStr + "T" + timeStr + ":00");
+    return isNaN(dt.getTime()) ? null : dt.getTime();
+  }
 
   function isTimeOnly(v) { return typeof v === "string" && /^\d{1,2}:\d{2}(:\d{2})?$/.test(v.trim()); }
   function pad(n) { return (n < 10 ? "0" : "") + n; }
@@ -812,8 +824,11 @@
           '<span class="att-line-value">' + esc(stampText(val, d)) + "</span>" + btn + "</div>";
       }).join("");
       var jsonLines = (ATT.jsonFields || []).map(function (f) {
+        var jbtn = canEdit
+          ? '<button type="button" class="btn btn-ghost btn-sm" data-editjson="' + idx + '" data-jsonfield="' + esc(f[0]) + '">Correct attendance</button>'
+          : "";
         return '<div class="att-line"><span class="att-line-label">' + esc(f[1]) + "</span>" +
-          '<span class="att-line-value">' + esc(jsonTimeText(r[f[0]], d)) + "</span></div>";
+          '<span class="att-line-value">' + esc(jsonTimeText(r[f[0]], d)) + "</span>" + jbtn + "</div>";
       }).join("");
       var dateBtn = canEdit && ATT.dateKey
         ? '<button type="button" class="btn btn-ghost btn-sm" data-editdate="' + idx + '">Correct date</button>'
@@ -845,7 +860,7 @@
     var cur = splitStamp(row[field], d) || { date: d || "", time: "" };
 
     ATT.pending = {
-      row: row, field: field, label: label,
+      row: row, field: field, label: label, jsonField: false,
       original: row[field] === null || row[field] === undefined || String(row[field]) === "" ? null : String(row[field]),
       originalText: stampText(row[field], d),
       timeOnly: isTimeOnly(row[field]),
@@ -855,9 +870,61 @@
     ATT.step = 1;
 
     $("attCorrStaff").textContent = displayName(ATT.staff);
+    $("attCorrFieldLabel").textContent = "Field";
     $("attCorrField").textContent = label;
     $("attCorrTitle").textContent = opts.dateOnly ? "Correct attendance date" : "Correct attendance timestamp";
     var tf = $("attNewTimeField"); if (tf) tf.hidden = !!opts.dateOnly;
+    $("attCorrOriginal").textContent = ATT.pending.originalText;
+    $("attNewDate").value = cur.date;
+    $("attNewTime").value = cur.time;
+    $("attReason").value = "";
+    $("attReasonOther").value = "";
+    $("attReasonOtherField").hidden = true;
+    $("attCorrError").hidden = true;
+    $("attStep1").hidden = false;
+    $("attStep2").hidden = true;
+    $("attContinue").hidden = false;
+    $("attConfirm").hidden = true;
+    $("attBack").hidden = true;
+    $("attBackdrop").hidden = false;
+    document.body.classList.add("modal-open");
+  }
+
+  /* Correction entry point for the morning/evening JSONB fields — same modal,
+     but the "field" being corrected is a JSON object rather than a flat
+     column, and the period name (Morning/Evening) is shown instead of a
+     generic column label. */
+  function openJsonCorrection(row, jsonKey) {
+    if (!isAdmin()) { toast("Only an administrator can correct attendance timestamps.", "bad"); return; }
+    var pair = ATT.jsonFields.filter(function (f) { return f[0] === jsonKey; })[0] || [jsonKey, labelize(jsonKey)];
+    var periodLabel = jsonKey.charAt(0).toUpperCase() + jsonKey.slice(1);
+    var d = rowDate(row);
+    var obj = row[jsonKey] && typeof row[jsonKey] === "object" ? row[jsonKey] : null;
+    var cur = { date: d || "", time: "" };
+    if (obj && obj.at !== undefined && obj.at !== null) {
+      var epoch = Number(obj.at);
+      if (!isNaN(epoch)) {
+        var dt = new Date(epoch);
+        if (!isNaN(dt.getTime())) {
+          cur.date = dt.getFullYear() + "-" + pad(dt.getMonth() + 1) + "-" + pad(dt.getDate());
+          cur.time = pad(dt.getHours()) + ":" + pad(dt.getMinutes());
+        }
+      }
+    }
+
+    ATT.pending = {
+      row: row, field: jsonKey, label: periodLabel, jsonField: true, jsonOriginal: obj,
+      original: obj ? JSON.stringify(obj) : null,
+      originalText: jsonTimeText(row[jsonKey], d),
+      timeOnly: false, dateOnly: false, recordDate: d
+    };
+    ATT.step = 1;
+
+    $("attCorrStaff").textContent = displayName(ATT.staff);
+    $("attCorrFieldLabel").textContent = "Attendance period";
+    $("attCorrField").textContent = periodLabel;
+    $("attCorrTitle").textContent = "Correct attendance timestamp";
+    var tf = $("attNewTimeField"); if (tf) tf.hidden = false;
     $("attCorrOriginal").textContent = ATT.pending.originalText;
     $("attNewDate").value = cur.date;
     $("attNewTime").value = cur.time;
@@ -900,10 +967,25 @@
     p.newDate = date;
     p.newTime = time;
     p.reason = reason;
-    p.newValue = p.dateOnly ? date : (p.timeOnly ? time + ":00" : date + "T" + time + ":00");
-    p.newText = p.dateOnly ? ukDate(date) : ukDate(date) + " — " + time;
+
+    if (p.jsonField) {
+      var epochMs = buildLocalEpoch(date, time);
+      if (epochMs === null) { err.hidden = false; err.textContent = "That date and time couldn't be understood."; return; }
+      var merged = {};
+      if (p.jsonOriginal) {
+        for (var k in p.jsonOriginal) { if (Object.prototype.hasOwnProperty.call(p.jsonOriginal, k)) merged[k] = p.jsonOriginal[k]; }
+      }
+      merged.at = epochMs;
+      merged.time = to12Hour(new Date(epochMs));
+      p.newValue = merged;
+      p.newText = ukDate(date) + " — " + merged.time;
+    } else {
+      p.newValue = p.dateOnly ? date : (p.timeOnly ? time + ":00" : date + "T" + time + ":00");
+      p.newText = p.dateOnly ? ukDate(date) : ukDate(date) + " — " + time;
+    }
 
     $("sumStaff").textContent = displayName(ATT.staff);
+    $("sumFieldLabel").textContent = p.jsonField ? "Attendance period" : "Field";
     $("sumField").textContent = p.label;
     $("sumOriginal").textContent = p.originalText;
     $("sumNew").textContent = p.newText;
@@ -925,14 +1007,27 @@
     busy(btn, true);
     loader(true);
 
-    var res = await sb.rpc("correct_attendance_timestamp", {
-      p_table: ATT.table,
-      p_record_id: p.row.id,
-      p_field: p.field,
-      p_new_value: p.newValue,
-      p_new_date: ATT.dateKey && !p.timeOnly ? p.newDate : (ATT.dateKey ? p.newDate : null),
-      p_reason: p.reason
-    });
+    /* Flat timestamp columns keep using the existing, unmodified RPC. The
+       morning/evening JSONB fields call a dedicated function instead — see
+       SUPABASE-SETUP.sql — since writing into a JSONB column safely (without
+       clobbering the sibling keys) needs different SQL than a plain column
+       update, and correct_attendance_timestamp() was never built for that. */
+    var res = p.jsonField
+      ? await sb.rpc("correct_attendance_period_timestamp", {
+          p_table: ATT.table,
+          p_record_id: p.row.id,
+          p_period: p.field,
+          p_new_value: p.newValue,
+          p_reason: p.reason
+        })
+      : await sb.rpc("correct_attendance_timestamp", {
+          p_table: ATT.table,
+          p_record_id: p.row.id,
+          p_field: p.field,
+          p_new_value: p.newValue,
+          p_new_date: ATT.dateKey && !p.timeOnly ? p.newDate : (ATT.dateKey ? p.newDate : null),
+          p_reason: p.reason
+        });
 
     busy(btn, false);
     loader(false);
@@ -940,7 +1035,9 @@
     if (res.error) {
       var err = $("attCorrError");
       err.hidden = false;
-      err.textContent = res.error.message || "The correction was refused by the database.";
+      err.textContent = (p.jsonField && /function .*correct_attendance_period_timestamp.* does not exist/i.test(res.error.message || ""))
+        ? "This database doesn't have the correct_attendance_period_timestamp function yet — it needs to be added in the Supabase SQL editor before Morning/Evening corrections can be saved."
+        : (res.error.message || "The correction was refused by the database.");
       $("attStep1").hidden = false;
       $("attStep2").hidden = true;
       $("attContinue").hidden = false;
@@ -988,6 +1085,13 @@
       if (dd) {
         var drow = ATT.rows[Number(dd.getAttribute("data-editdate"))];
         if (drow && ATT.dateKey) openCorrection(drow, ATT.dateKey, { dateOnly: true });
+        return;
+      }
+      var jb = e.target.closest("[data-editjson]");
+      if (jb) {
+        var jrow = ATT.rows[Number(jb.getAttribute("data-editjson"))];
+        var jkey = jb.getAttribute("data-jsonfield");
+        if (jrow && jkey) openJsonCorrection(jrow, jkey);
         return;
       }
       var b = e.target.closest("[data-edit]");
