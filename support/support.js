@@ -1596,7 +1596,7 @@
     $("avatarFile").addEventListener("change", function (e) {
       var f = e.target.files && e.target.files[0];
       if (!f) { EDIT.avatarFile = null; return; }
-      if (f.size > 2 * 1024 * 1024) { toast("Choose an image under 2 MB.", "bad"); e.target.value = ""; return; }
+      if (f.size > 20 * 1024 * 1024) { toast("Choose an image under 20 MB.", "bad"); e.target.value = ""; return; }
       if (["image/png", "image/jpeg", "image/webp"].indexOf(f.type) === -1) {
         toast("Only PNG, JPG or WebP images are accepted.", "bad"); e.target.value = ""; return;
       }
