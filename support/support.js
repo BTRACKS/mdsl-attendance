@@ -729,11 +729,9 @@
     box.innerHTML = rows.length
       ? note + rows.map(function (r) {
           var idx = USERS.rows.indexOf(r);
-          return '<button type="button" class="att-staff-item" data-staff="' + idx + '">' +
+          return '<button type="button" class="att-staff-item" data-staff="' + idx + '" aria-label="Select ' + esc(displayName(r)) + '">' +
             avatarHtml(r) +
-            "<span>" + esc(displayName(r)) + "</span><small>" +
-            esc([pick(r, EMAIL_KEYS), pick(r, STAFF_KEYS)].filter(Boolean).join(" · ") || "No email on record") +
-            "</small></button>";
+            "<span>" + esc(displayName(r)) + "</span></button>";
         }).join("")
       : '<p class="att-empty">No staff member matches “' + esc($("attSearch").value.trim()) + '”.</p>';
   }
@@ -745,9 +743,7 @@
     $("attStaffResults").innerHTML = "";
     $("attSelected").hidden = false;
     $("attSelectedName").textContent = displayName(row);
-    $("attSelectedMeta").textContent =
-      [pick(row, STAFF_KEYS) ? "Staff ID " + pick(row, STAFF_KEYS) : null, pick(row, DEPT_KEYS), pick(row, EMAIL_KEYS)]
-        .filter(Boolean).join(" · ") || "No further details recorded";
+    $("attSelectedMeta").textContent = "";
     loadAttendance();
   }
 
