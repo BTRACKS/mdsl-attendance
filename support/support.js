@@ -1017,7 +1017,8 @@
           p_table: ATT.table,
           p_record_id: p.row.id,
           p_period: p.field,
-          p_new_value: p.newValue,
+          p_new_value: JSON.stringify(p.newValue),
+          p_new_date: ATT.dateKey ? p.newDate : null,
           p_reason: p.reason
         })
       : await sb.rpc("correct_attendance_timestamp", {
