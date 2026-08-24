@@ -256,8 +256,7 @@
     var name = displayName(row);
     $("profileAvatar").outerHTML = avatarHtml(row, true).replace('class="avatar avatar-lg"', 'class="avatar avatar-lg" id="profileAvatar"');
     $("profileName").textContent = name;
-    $("profileMeta").textContent = [pick(row, TITLE_KEYS), pick(row, DEPT_KEYS), pick(row, EMAIL_KEYS)]
-      .filter(Boolean).join(" · ") || "No additional details recorded";
+    $("profileMeta").textContent = "";
 
     kv("kvUserContact", [
       ["Email", fmtValue(pick(row, EMAIL_KEYS))],
