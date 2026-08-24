@@ -1,19 +1,108 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Staff Dashboard Greeting</title>
-  <link rel="stylesheet" href="style.css">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>E-Attendance Platform</title>
+<meta name="description" content="E-Attendance Platform for Multidigital Service Limited staff: registration, daily morning and evening attendance, history and administrative monitoring." />
+<link rel="icon" type="image/png" sizes="256x256" href="favicon.png" />
+<link rel="apple-touch-icon" href="favicon.png" />
+<meta name="theme-color" content="#123a6b" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <main class="dashboard-card">
-    <span class="badge">STAFF DASHBOARD</span>
-    <h1 class="greeting" id="greeting">
-      <span class="greeting-text">Good morning, Oladapo</span>
-      <span class="greeting-icon" aria-hidden="true"></span>
-    </h1>
-  </main>
+  <div class="top-loader" id="topLoader" hidden aria-hidden="true"></div>
+
+  <header class="masthead" id="masthead" hidden>
+    <div class="masthead-inner">
+      <nav class="nav" id="nav"></nav>
+      <div class="masthead-right">
+        <button class="btn btn-dark btn-sm" id="logoutBtn" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          <span class="btn-label">Sign out</span>
+        </button>
+        <button class="menu-toggle" id="menuToggle" type="button" aria-label="Menu" aria-expanded="false"><span></span><span></span><span></span></button>
+      </div>
+    </div>
+  </header>
+
+  <div class="nav-backdrop" id="navBackdrop" hidden></div>
+
+  <main id="view"></main>
+
+  <section class="faq" id="faqSection" hidden>
+    <div class="faq-inner">
+      <div class="faq-head">
+        <p class="eyebrow">Frequently Asked Questions</p>
+        <h2>Everything about the E-Attendance Platform</h2>
+        <p class="faq-lede">Short answers to the questions staff and administrators ask most.</p>
+      </div>
+      <div class="faq-list" id="faqList"></div>
+    </div>
+  </section>
+
+  <footer class="footer" id="footer" hidden>
+    <div class="footer-inner">
+      <div class="footer-top">
+        <div class="footer-about">
+          <p class="footer-title">Multidigital Service Limited</p>
+          <p class="footer-copy">The E-Attendance Platform keeps daily resumption and closing times accurate, transparent and easy to review for every department.</p>
+          <p class="footer-legal">&copy; <span id="year"></span> Multidigital Service Limited. All rights reserved.</p>
+        </div>
+        <nav class="footer-nav" aria-label="Footer">
+          <div>
+            <h3>Platform</h3>
+            <a href="#/dashboard">Dashboard</a>
+            <a href="#/history">Attendance History</a>
+            <a href="about.html">About Us</a>
+          </div>
+          <div>
+            <h3>Support</h3>
+            <button type="button" class="footer-link" data-scroll="faqSection">FAQ</button>
+            <a href="#/forgot">Reset password</a>
+            <a href="#/signup">Register</a>
+          </div>
+        </nav>
+        <div class="footer-offices">
+          <div>
+            	<h3>Head Office</h3>
+            <address>Plot 135, GRA Phase 8,<br />G.U. Ake Road,<br />Port Harcourt, Rivers State, Nigeria</address>
+          </div>
+          <div>
+            <h3>Lagos Office</h3>
+            <address>VGB Court, Penthouse 2,<br />86A Oduduwa Crescent,<br />GRA, Ikeja, Lagos State, Nigeria</address>
+
+
+
+          </div>
+          <div>
+            <h3>Email</h3>
+            <a href="mailto:info@multidigitalng.com">info@multidigitalng.com</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <div class="modal-backdrop" id="modal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <p class="eyebrow" id="modalKicker">Confirmation required</p>
+      <h2 id="modalTitle">Confirm Attendance</h2>
+      <p id="modalBody"></p>
+      <p class="modal-question">Are you sure you want to proceed?</p>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="modalCancel" type="button">Cancel</button>
+        <button class="btn btn-primary" id="modalConfirm" type="button">Yes, submit</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toasts" id="toasts"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="script.js"></script>
 </body>
 </html>
