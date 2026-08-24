@@ -577,12 +577,9 @@
           name: u.fullName,
           staffId: u.staffId,
           employmentType: u.employmentType,
-          department: u.department,
-          position: u.position,
           date: a.date,
           signIn: a.morning ? a.morning.time : "",
-          signOut: a.evening ? a.evening.time : "",
-          status: a.morning && a.evening ? "Complete" : (a.morning ? "Awaiting closing" : "Incomplete")
+          signOut: a.evening ? a.evening.time : ""
         };
       })
       .sort(function (x, y) {
@@ -591,13 +588,30 @@
       });
   }
 
-  var EXPORT_HEADERS = ["Staff Name", "Staff ID", "Employment Type", "Department", "Position",
-    "Attendance Date", "Sign-in Time", "Sign-out Time", "Attendance Status"];
+  /* CSV date: DD/MM/YYYY */
+  function csvDate(key) {
+    var p = String(key || "").split("-");
+    if (p.length !== 3) return "";
+    return pad(+p[2]) + "/" + pad(+p[1]) + "/" + p[0];
+  }
+
+  /* CSV time: hh:mm AM/PM (zero padded); blank when not recorded */
+  function csvTime(value) {
+    if (!value) return "";
+    var m = String(value).trim().match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*([AaPp][Mm])?$/);
+    if (!m) return String(value).trim();
+    var h = +m[1], mer = m[3] ? m[3].toUpperCase() : "";
+    if (!mer) { mer = h >= 12 ? "PM" : "AM"; h = h % 12 || 12; }
+    return pad(h) + ":" + m[2] + " " + mer;
+  }
+
+  var EXPORT_HEADERS = ["Name", "Staff ID", "Date",
+    "Attendance Resumption (Morning)", "Closing (Evening)", "Employment"];
 
   function exportMatrix() {
     return exportRows().map(function (r) {
-      return [r.name, r.staffId, r.employmentType, r.department, r.position,
-        prettyDate(r.date), r.signIn || "—", r.signOut || "—", r.status];
+      return [r.name, r.staffId, csvDate(r.date),
+        csvTime(r.signIn), csvTime(r.signOut), r.employmentType || ""];
     });
   }
 
