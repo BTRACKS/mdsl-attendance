@@ -2119,6 +2119,72 @@
     if (head) document.documentElement.style.setProperty("--header-h", head.offsetHeight + "px");
   }
 
+/* ------------------------- Leave portal section ------------------------- */
+  function ensureLeavePortalTab() {
+var nav = $("nav"), portal = $("portalView");
+if (!nav || !portal) return;
+var btn = nav.querySelector('button[data-tab="leave"]');
+if (!btn) {
+  btn = document.createElement("button");
+  btn.type = "button";
+  btn.setAttribute("data-tab", "leave");
+  btn.textContent = "Leave";
+  var settingsBtn = nav.querySelector('button[data-tab="settings"]');
+  if (settingsBtn) nav.insertBefore(btn, settingsBtn); else nav.appendChild(btn);
+}
+var panel = $("tab-leave");
+if (!panel) {
+  panel = document.createElement("section");
+  panel.id = "tab-leave";
+  panel.className = "support-leave-page";
+  panel.hidden = true;
+  portal.appendChild(panel);
+}
+  }
+
+  function leaveRecordStatus(l, today) {
+if (String(l.status || "").toLowerCase() === "cancelled") return "Cancelled";
+if (l.start_date <= today && today <= l.end_date) return "Active";
+if (l.start_date > today) return "Scheduled";
+return "Completed";
+  }
+
+  function renderSupportLeave() {
+ensureLeavePortalTab();
+var root = $("tab-leave");
+if (!root) return;
+var today = localDateIso();
+var leaves = (LEAVES.rows || []).slice().sort(function(a,b){
+  return String(b.start_date || "").localeCompare(String(a.start_date || ""));
+});
+var search = $("supportLeaveSearch");
+var q = search ? String(search.value || "").trim().toLowerCase() : "";
+var rows = leaves.filter(function(l){
+  var staffId = String(l.staff_id || l.user_id || "");
+  var user = (USERS.rows || []).find(function(u){ return String(u.id || u.user_id || "") === staffId; });
+  var hay = [user ? displayName(user) : "Staff member", user ? pick(user, STAFF_KEYS) : "", leaveTypeLabel(l.leave_type), l.reason || "", leaveRecordStatus(l,today)].join(" ").toLowerCase();
+  return !q || hay.indexOf(q) !== -1;
+});
+root.innerHTML =
+  '<div class="page-head"><p class="eyebrow">Time Away</p><h1>Leave</h1>' +
+  '<p class="dateline">View-only leave information for staff. Administrators and IT Support cannot approve, reject, edit or cancel leave from this page.</p></div>' +
+  '<section class="section"><div class="section-head"><h2>Staff Leave Records</h2><span>' + rows.length + ' record' + (rows.length === 1 ? "" : "s") + '</span></div>' +
+  '<div class="users-toolbar leave-support-toolbar"><div class="field search-field"><label for="supportLeaveSearch">Search staff or leave</label><input id="supportLeaveSearch" type="search" placeholder="Name, staff ID, leave type or reason" value="' + esc(q) + '"></div><button type="button" class="btn btn-ghost btn-sm" id="supportLeaveRefresh">Refresh</button></div>' +
+  (rows.length ? '<div class="table-wrap leave-support-table"><table><thead><tr><th>Staff</th><th>Leave Type</th><th>Start</th><th>End</th><th>Reason</th><th>Status</th></tr></thead><tbody>' +
+    rows.map(function(l){
+      var staffId=String(l.staff_id||l.user_id||"");
+      var user=(USERS.rows||[]).find(function(u){return String(u.id||u.user_id||"")===staffId;});
+      var name=user?displayName(user):"Staff member", status=leaveRecordStatus(l,today);
+      return '<tr><td><div class="leave-staff-cell">'+(user?avatarHtml(user):'<div class="avatar">?</div>')+'<div><strong>'+esc(name)+'</strong><span>'+esc(user?(pick(user,STAFF_KEYS)||""):"")+'</span></div></div></td><td>'+esc(leaveTypeLabel(l.leave_type))+'</td><td>'+esc(dashboardDateOnly(l.start_date))+'</td><td>'+esc(dashboardDateOnly(l.end_date))+'</td><td>'+esc(l.reason||"—")+'</td><td><span class="tag '+(status==="Active"?"tag-leave":status==="Cancelled"?"tag-miss":"tag-pending")+'">'+esc(status)+'</span></td></tr>';
+    }).join("") + '</tbody></table></div>' : '<p class="empty">No leave records match the current search.</p>') +
+  '</section>';
+var nextSearch=$("supportLeaveSearch");
+if(nextSearch) nextSearch.addEventListener("input",function(){ renderSupportLeave(); var n=$("supportLeaveSearch"); if(n){n.focus();n.setSelectionRange(n.value.length,n.value.length);} });
+var refresh=$("supportLeaveRefresh");
+if(refresh) refresh.addEventListener("click",async function(){ await loadUsers(true); renderSupportLeave(); });
+  }
+
+
   /* ------------------------- gate ------------------------- */
   async function gate() {
     loader(true);
@@ -2263,71 +2329,6 @@
         only("loginView");
       });
     }
-
-    /* ------------------------- Leave portal section ------------------------- */
-  function ensureLeavePortalTab() {
-    var nav = $("nav"), portal = $("portalView");
-    if (!nav || !portal) return;
-    var btn = nav.querySelector('button[data-tab="leave"]');
-    if (!btn) {
-      btn = document.createElement("button");
-      btn.type = "button";
-      btn.setAttribute("data-tab", "leave");
-      btn.textContent = "Leave";
-      var settingsBtn = nav.querySelector('button[data-tab="settings"]');
-      if (settingsBtn) nav.insertBefore(btn, settingsBtn); else nav.appendChild(btn);
-    }
-    var panel = $("tab-leave");
-    if (!panel) {
-      panel = document.createElement("section");
-      panel.id = "tab-leave";
-      panel.className = "support-leave-page";
-      panel.hidden = true;
-      portal.appendChild(panel);
-    }
-  }
-
-  function leaveRecordStatus(l, today) {
-    if (String(l.status || "").toLowerCase() === "cancelled") return "Cancelled";
-    if (l.start_date <= today && today <= l.end_date) return "Active";
-    if (l.start_date > today) return "Scheduled";
-    return "Completed";
-  }
-
-  function renderSupportLeave() {
-    ensureLeavePortalTab();
-    var root = $("tab-leave");
-    if (!root) return;
-    var today = localDateIso();
-    var leaves = (LEAVES.rows || []).slice().sort(function(a,b){
-      return String(b.start_date || "").localeCompare(String(a.start_date || ""));
-    });
-    var search = $("supportLeaveSearch");
-    var q = search ? String(search.value || "").trim().toLowerCase() : "";
-    var rows = leaves.filter(function(l){
-      var staffId = String(l.staff_id || l.user_id || "");
-      var user = (USERS.rows || []).find(function(u){ return String(u.id || u.user_id || "") === staffId; });
-      var hay = [user ? displayName(user) : "Staff member", user ? pick(user, STAFF_KEYS) : "", leaveTypeLabel(l.leave_type), l.reason || "", leaveRecordStatus(l,today)].join(" ").toLowerCase();
-      return !q || hay.indexOf(q) !== -1;
-    });
-    root.innerHTML =
-      '<div class="page-head"><p class="eyebrow">Time Away</p><h1>Leave</h1>' +
-      '<p class="dateline">View-only leave information for staff. Administrators and IT Support cannot approve, reject, edit or cancel leave from this page.</p></div>' +
-      '<section class="section"><div class="section-head"><h2>Staff Leave Records</h2><span>' + rows.length + ' record' + (rows.length === 1 ? "" : "s") + '</span></div>' +
-      '<div class="users-toolbar leave-support-toolbar"><div class="field search-field"><label for="supportLeaveSearch">Search staff or leave</label><input id="supportLeaveSearch" type="search" placeholder="Name, staff ID, leave type or reason" value="' + esc(q) + '"></div><button type="button" class="btn btn-ghost btn-sm" id="supportLeaveRefresh">Refresh</button></div>' +
-      (rows.length ? '<div class="table-wrap leave-support-table"><table><thead><tr><th>Staff</th><th>Leave Type</th><th>Start</th><th>End</th><th>Reason</th><th>Status</th></tr></thead><tbody>' +
-        rows.map(function(l){
-          var staffId=String(l.staff_id||l.user_id||"");
-          var user=(USERS.rows||[]).find(function(u){return String(u.id||u.user_id||"")===staffId;});
-          var name=user?displayName(user):"Staff member", status=leaveRecordStatus(l,today);
-          return '<tr><td><div class="leave-staff-cell">'+(user?avatarHtml(user):'<div class="avatar">?</div>')+'<div><strong>'+esc(name)+'</strong><span>'+esc(user?(pick(user,STAFF_KEYS)||""):"")+'</span></div></div></td><td>'+esc(leaveTypeLabel(l.leave_type))+'</td><td>'+esc(dashboardDateOnly(l.start_date))+'</td><td>'+esc(dashboardDateOnly(l.end_date))+'</td><td>'+esc(l.reason||"—")+'</td><td><span class="tag '+(status==="Active"?"tag-leave":status==="Cancelled"?"tag-miss":"tag-pending")+'">'+esc(status)+'</span></td></tr>';
-        }).join("") + '</tbody></table></div>' : '<p class="empty">No leave records match the current search.</p>') +
-      '</section>';
-    var nextSearch=$("supportLeaveSearch");
-    if(nextSearch) nextSearch.addEventListener("input",function(){ renderSupportLeave(); var n=$("supportLeaveSearch"); if(n){n.focus();n.setSelectionRange(n.value.length,n.value.length);} });
-    var refresh=$("supportLeaveRefresh");
-    if(refresh) refresh.addEventListener("click",async function(){ await loadUsers(true); renderSupportLeave(); });
-  }
 
   /* ------------------------- persistent portal section ------------------------- */
     var PORTAL_SECTION_KEY = "tech_support_active_section";
