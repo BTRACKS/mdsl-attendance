@@ -1511,6 +1511,8 @@
 
   /* ------------------------- router ------------------------- */
   function render() {
+    var __scrollY = window.scrollY || window.pageYOffset || 0;
+    var __restoreScroll = function () { window.requestAnimationFrame(function () { window.scrollTo(0, __scrollY); }); };
     var u = session();
     var hash = location.hash || (u ? "#/dashboard" : "#/login");
     var view = el("view");
@@ -1522,7 +1524,7 @@
       if (hash === "#/signup") view.innerHTML = signupView();
       else if (hash === "#/forgot") view.innerHTML = forgotView();
       else { if (hash !== "#/login") { location.hash = "#/login"; } view.innerHTML = loginView(); }
-      renderChrome(); bindAuth(); window.scrollTo(0, 0); return;
+      renderChrome(); bindAuth(); __restoreScroll(); return;
     }
 
     if (hash === "#/admin" || hash === "#/admin/attendance" || hash === "#/admin/hse") {
@@ -1534,12 +1536,12 @@
       view.innerHTML = historyView(u);
     } else if (hash === "#/settings") {
       view.innerHTML = settingsView(u);
-      renderChrome(); bindAuth(); bindSettings(); window.scrollTo(0, 0); return;
+      renderChrome(); bindAuth(); bindSettings(); __restoreScroll(); return;
     } else {
       if (hash !== "#/dashboard") { location.hash = "#/dashboard"; return; }
       view.innerHTML = dashboardView(u);
     }
-    renderChrome(); bindApp(); window.scrollTo(0, 0);
+    renderChrome(); bindApp(); __restoreScroll();
   }
 
   function bindApp() {

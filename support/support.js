@@ -234,19 +234,22 @@
       : "Showing " + rows.length + " staff record" + (rows.length === 1 ? "" : "s") + " from the database.";
     $("usersCount").textContent = USERS.rows.length + " total";
 
-    /*
-     * Staff cards intentionally expose only the profile picture and full name.
-     * The complete existing database record remains available through
-     * openUserProfile(row), which is triggered by clicking the entire card.
-     */
-    grid.innerHTML = rows.map(function (r) {
+    grid.innerHTML = rows.map(function (r, i) {
       var idx = USERS.rows.indexOf(r);
-      var name = displayName(r);
-      return '<button type="button" class="user-card" data-user="' + idx +
-        '" aria-label="View details for ' + esc(name) + '">' +
+      var email = pick(r, EMAIL_KEYS);
+      var title = pick(r, TITLE_KEYS);
+      var dept = pick(r, DEPT_KEYS);
+      var staff = pick(r, STAFF_KEYS);
+      var second = [title, dept].filter(Boolean).join(" · ") || "Position not recorded";
+      var third = [staff ? "Staff ID " + staff : null, statusText(r), roleLabel(roleOf(r))]
+        .filter(Boolean).join(" · ");
+      return '<button type="button" class="user-card" data-user="' + idx + '">' +
         avatarHtml(r) +
         '<span class="u-body">' +
-          '<span class="u-name">' + esc(name) + "</span>" +
+          '<span class="u-name">' + esc(displayName(r)) + "</span>" +
+          '<span class="u-line">' + esc(email || "No email on record") + "</span>" +
+          '<span class="u-line">' + esc(second) + "</span>" +
+          '<span class="u-line-2">' + esc(third) + "</span>" +
         "</span></button>";
     }).join("");
   }
@@ -256,7 +259,8 @@
     var name = displayName(row);
     $("profileAvatar").outerHTML = avatarHtml(row, true).replace('class="avatar avatar-lg"', 'class="avatar avatar-lg" id="profileAvatar"');
     $("profileName").textContent = name;
-    $("profileMeta").textContent = "";
+    $("profileMeta").textContent = [pick(row, TITLE_KEYS), pick(row, DEPT_KEYS), pick(row, EMAIL_KEYS)]
+      .filter(Boolean).join(" · ") || "No additional details recorded";
 
     kv("kvUserContact", [
       ["Email", fmtValue(pick(row, EMAIL_KEYS))],
@@ -292,7 +296,6 @@
 
     $("usersListView").hidden = true;
     $("userProfileView").hidden = false;
-    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function closeUserProfile() {
@@ -728,7 +731,7 @@
     box.innerHTML = rows.length
       ? note + rows.map(function (r) {
           var idx = USERS.rows.indexOf(r);
-          return '<button type="button" class="att-staff-item" data-staff="' + idx + '" aria-label="Select ' + esc(displayName(r)) + '">' +
+          return '<button type="button" class="att-staff-item" data-staff="' + idx + '">' +
             avatarHtml(r) +
             "<span>" + esc(displayName(r)) + "</span></button>";
         }).join("")
@@ -743,7 +746,7 @@
     $("attSelected").hidden = false;
     var selectedAvatar = $("attSelectedAvatar");
     if (selectedAvatar) {
-      selectedAvatar.outerHTML = avatarHtml(row, false).replace('class="avatar"', 'class="avatar att-selected-avatar" id="attSelectedAvatar" aria-hidden="true"');
+      selectedAvatar.outerHTML = avatarHtml(row, "avatar-sm").replace('class="avatar avatar-sm"', 'class="avatar avatar-sm" id="attSelectedAvatar"');
     }
     $("attSelectedName").textContent = displayName(row);
     loadAttendance();
@@ -2199,8 +2202,7 @@
           if (panel) panel.hidden = b !== btn;
         });
         closeNav();
-        window.scrollTo({ top: 0, behavior: "smooth" });
-      });
+          });
     }
     if (toggle) {
       toggle.addEventListener("click", function (e) {

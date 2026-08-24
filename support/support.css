@@ -687,24 +687,15 @@ img{max-width:100%;display:block}
 .users-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
 .user-card{
   display:flex;align-items:center;gap:14px;text-align:left;width:100%;
-  min-height:76px;background:var(--paper);border:1px solid var(--rule);
-  border-radius:var(--radius);padding:14px 16px;cursor:pointer;
-  box-shadow:var(--shadow-xs);min-width:0;
-  transition:border-color var(--t),box-shadow var(--t),transform var(--t),background var(--t)
+  background:var(--paper);border:1px solid var(--rule);border-radius:var(--radius);
+  padding:14px 16px;cursor:pointer;box-shadow:var(--shadow-xs);min-width:0;
+  transition:border-color var(--t),box-shadow var(--t),transform var(--t)
 }
-.user-card:hover{
-  border-color:var(--navy);box-shadow:var(--shadow-sm);
-  transform:translateY(-1px);background:var(--paper)
-}
-.user-card:focus-visible{
-  outline:none;border-color:var(--navy);
-  box-shadow:0 0 0 4px rgba(18,58,107,.12),var(--shadow-sm)
-}
+.user-card:hover{border-color:var(--navy);box-shadow:var(--shadow-sm);transform:translateY(-1px)}
 .user-card .u-body{display:block;min-width:0;flex:1 1 auto;overflow:hidden}
-.user-card .u-name{
-  display:block;font-size:14.5px;font-weight:700;color:var(--ink);
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap
-}
+.user-card .u-name{display:block;font-size:14.5px;font-weight:700;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.user-card .u-line{display:block;font-size:13px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
+.user-card .u-line-2{display:block;font-size:12.5px;color:var(--ink-4);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .avatar{
   width:46px;height:46px;flex:0 0 auto;border-radius:50%;overflow:hidden;background:var(--paper-3);
   border:1px solid var(--rule);display:flex;align-items:center;justify-content:center;
@@ -810,22 +801,20 @@ body.modal-open{overflow:hidden}
 }
 .att-staff-item:hover,.att-staff-item:focus-visible{border-color:var(--navy);box-shadow:var(--shadow-sm);transform:translateY(-1px)}
 .att-staff-item span{font-weight:700;font-size:13.5px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
-.att-staff-item small{display:none}
+.att-staff-item small{font-size:12px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .att-empty{grid-column:1/-1;padding:12px 14px;font-size:13.5px;color:var(--ink-3)}
 @media (max-width:980px){ .att-staff-results{grid-template-columns:repeat(3,minmax(0,1fr))} }
 @media (max-width:700px){ .att-staff-results{grid-template-columns:repeat(2,minmax(0,1fr))} }
 @media (max-width:420px){ .att-staff-results{grid-template-columns:1fr} }
 
 .att-selected{
-  display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;
-  padding:12px 16px;border:1px solid var(--rule);border-radius:var(--radius);
-  background:var(--paper);margin-bottom:14px;min-width:0
+  display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;
+  padding:14px 16px;border:1px solid var(--rule);border-radius:var(--radius);
+  background:var(--paper);margin-bottom:14px
 }
-.att-selected-person{display:flex;align-items:center;gap:12px;min-width:0;flex:1 1 auto}
-.att-selected-avatar{width:40px;height:40px;flex:0 0 40px}
-.att-selected-person h3{font-size:16px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.att-selected-change{flex:0 0 auto;white-space:nowrap}
-.att-selected p{display:none}
+.att-selected-person{display:flex;align-items:center;gap:12px;min-width:0}
+.att-selected-person h3{font-size:16px;min-width:0;overflow-wrap:anywhere}
+.att-selected .avatar-sm{width:42px;height:42px;font-size:14px}
 
 .att-filters{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px}
 .att-filters .field{flex:1 1 150px;min-width:140px;margin:0}
@@ -859,9 +848,7 @@ body.modal-open{overflow:hidden}
   .att-filters .field{flex:1 1 100%}
   .att-filters .btn{width:100%}
   .att-toolbar .btn{width:100%}
-  .att-selected{align-items:center;flex-direction:row}
-  .att-selected-person{width:100%;flex:1 1 100%}
-  .att-selected-change{align-self:stretch;text-align:left;padding:4px 0}
+  .att-selected{align-items:flex-start;flex-direction:column}
   .att-line{flex-wrap:wrap;gap:6px}
   .att-line-label{flex:1 1 100%}
   .att-line-value{white-space:normal}
