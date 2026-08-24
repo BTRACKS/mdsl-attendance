@@ -334,7 +334,10 @@ img{max-width:100%;display:block}
   letter-spacing:.1em;text-transform:uppercase;border-bottom:1px solid var(--rule)
 }
 .panel-head svg{width:14px;height:14px;color:var(--navy);opacity:.8;flex:0 0 auto}
+.panel-head-staff{gap:10px}
+.panel-head-staff span{overflow-wrap:break-word;min-width:0}
 .panel-body{padding:20px}
+.panel-body-history{padding:16px}
 .identity{display:flex;gap:14px;align-items:center;padding-bottom:18px;border-bottom:1px solid var(--rule);margin-bottom:16px}
 .identity>div{min-width:0}
 .identity h3,.identity p{overflow-wrap:break-word}
@@ -394,6 +397,30 @@ td.num{font-variant-numeric:tabular-nums;font-weight:600}
 td .who{font-weight:700}
 td .sub{font-size:12.5px;color:var(--ink-4)}
 .empty{padding:44px 20px;text-align:center;color:var(--ink-4);font-size:14px}
+
+/* ---------- Staff cell (avatar + name), used in the register table ---------- */
+.staff-cell{display:flex;align-items:center;gap:10px;min-width:0}
+.staff-cell-info{min-width:0}
+.staff-cell-info .who,.staff-cell-info .sub{overflow-wrap:break-word}
+
+/* ---------- Individual Attendance History (wraps instead of a rigid table) ---------- */
+.history-list{display:flex;flex-direction:column;gap:10px}
+.history-row{
+  display:flex;flex-wrap:wrap;align-items:center;gap:12px 28px;
+  padding:14px 18px;border:1px solid var(--rule);border-radius:var(--radius);
+  background:var(--paper);min-width:0
+}
+.history-item{display:flex;flex-direction:column;gap:3px;min-width:110px;flex:0 1 auto}
+.history-item-date{min-width:150px}
+.history-item-status{min-width:120px;margin-left:auto}
+.history-label{font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-4)}
+.history-value{font-size:14.5px;font-weight:600;color:var(--ink);overflow-wrap:break-word}
+.history-value.num{font-variant-numeric:tabular-nums}
+
+@media (max-width:640px){
+  .history-row{flex-direction:column;align-items:stretch;gap:12px}
+  .history-item,.history-item-date,.history-item-status{width:100%;min-width:0;margin-left:0}
+}
 
 .filters{
   display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:14px;margin-bottom:24px;
@@ -670,6 +697,7 @@ body.maintenance-page{background:var(--gradient-hero);min-height:100vh}
 .avatar-photo{padding:0;overflow:hidden;background:var(--paper-3);box-shadow:var(--shadow-xs)}
 .avatar-photo img{width:100%;height:100%;object-fit:cover;border-radius:inherit}
 .avatar-xl{width:92px;height:92px;font-size:30px}
+.avatar-sm{width:36px;height:36px;font-size:13px;box-shadow:none;flex:0 0 auto}
 .photo-row{
   display:flex;align-items:center;gap:20px;padding-bottom:22px;margin-bottom:22px;
   border-bottom:1px solid var(--rule)

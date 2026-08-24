@@ -567,7 +567,8 @@
     return '<div class="table-wrap"><table><thead><tr><th>Staff</th><th>Department</th><th>Type</th><th>Resumption</th><th>Closing</th><th>Status</th></tr></thead><tbody>' +
       staff.map(function (u) {
         var a = record(u.id, key);
-        return '<tr><td><div class="who">' + esc(u.fullName) + '</div><div class="sub">' + esc(u.staffId) + " · " + esc(u.position) + "</div></td>" +
+        return '<tr><td><div class="staff-cell">' + avatarHtml(u, "avatar-sm") +
+          '<div class="staff-cell-info"><div class="who">' + esc(u.fullName) + '</div><div class="sub">' + esc(u.staffId) + " · " + esc(u.position) + "</div></div></div></td>" +
           "<td>" + esc(u.department) + "</td><td>" + esc(u.employmentType) + "</td>" +
           '<td class="num">' + (a && a.morning ? esc(a.morning.time) : "—") + "</td>" +
           '<td class="num">' + (a && a.evening ? esc(a.evening.time) : "—") + "</td>" +
@@ -599,12 +600,18 @@
       '<section class="section"><div class="section-head"><h2>Individual Attendance History</h2><span>Last 10 records per staff</span></div>' +
       staff.map(function (u) {
         var recs = db.attendance.filter(function (a) { return a.userId === u.id; }).sort(function (a, b) { return a.date < b.date ? 1 : -1; }).slice(0, 10);
-        return '<div class="panel" style="margin-bottom:18px"><div class="panel-head">' + esc(u.fullName) + " — " + esc(u.staffId) + "</div>" +
-          (recs.length ? '<div class="table-wrap" style="border:0"><table><thead><tr><th>Date</th><th>Resumption</th><th>Closing</th><th>Status</th></tr></thead><tbody>' +
+        return '<div class="panel" style="margin-bottom:18px"><div class="panel-head panel-head-staff">' + avatarHtml(u, "avatar-sm") +
+          "<span>" + esc(u.fullName) + " — " + esc(u.staffId) + "</span></div>" +
+          '<div class="panel-body panel-body-history">' +
+          (recs.length ? '<div class="history-list">' +
             recs.map(function (a) {
-              return "<tr><td>" + esc(prettyDate(a.date)) + '</td><td class="num">' + (a.morning ? esc(a.morning.time) : "—") +
-                '</td><td class="num">' + (a.evening ? esc(a.evening.time) : "—") + "</td><td>" + statusOf(a) + "</td></tr>";
-            }).join("") + "</tbody></table></div>" : '<p class="empty">No records.</p>') + "</div>";
+              return '<div class="history-row">' +
+                '<div class="history-item history-item-date"><span class="history-label">Attendance Date</span><span class="history-value">' + esc(prettyDate(a.date)) + "</span></div>" +
+                '<div class="history-item"><span class="history-label">Morning</span><span class="history-value num">' + (a.morning ? esc(a.morning.time) : "—") + "</span></div>" +
+                '<div class="history-item"><span class="history-label">Evening</span><span class="history-value num">' + (a.evening ? esc(a.evening.time) : "—") + "</span></div>" +
+                '<div class="history-item history-item-status"><span class="history-label">Status</span>' + statusOf(a) + "</div>" +
+                "</div>";
+            }).join("") + "</div>" : '<p class="empty">No records.</p>') + "</div></div>";
       }).join("") + "</section></div>";
   }
 
