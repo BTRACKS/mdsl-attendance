@@ -1960,9 +1960,13 @@
   async function runDashboardChecks(){$("systemStatusList").innerHTML='<div class="service-row"><span>Authentication</span>'+dashStatus('Checking…','warn')+'</div><div class="service-row"><span>Supabase</span>'+dashStatus('Checking…','warn')+'</div><div class="service-row"><span>Database queries</span>'+dashStatus('Checking…','warn')+'</div>';var aok=!!(ME.user&&ME.allowed),sok=false,dok=false;try{var p=await sb.from('profiles').select('id').eq('id',ME.user.id).maybeSingle();sok=!p.error;dok=sok;}catch(e){}var a=await loadDashboardAttendance();dok=dok&&a.ok;$("systemStatusList").innerHTML='<div class="service-row"><span>Authentication</span>'+dashStatus(aok?'Connected':'Unavailable',aok?'ok':'bad')+'</div><div class="service-row"><span>Supabase</span>'+dashStatus(sok?'Connected':'Unavailable',sok?'ok':'bad')+'</div><div class="service-row"><span>Database queries</span>'+dashStatus(dok?'Available':'Partial / unavailable',dok?'ok':'warn')+'</div>';}
   async function loadDashboard(force){if(DASH.loading)return;DASH.loading=true;loader(true);try{if(force)await loadUsers(true);else if(!USERS.loaded)await loadUsers(false);renderDashboardStats();renderRecentProfiles();await runDashboardChecks();}catch(e){$("dashboardAttendanceState").textContent='Some dashboard information could not be loaded. Please retry.';}finally{DASH.loading=false;loader(false);}}
   function removeDashboardQuickActions(){
-    /* Remove ONLY Quick Actions. Keep the parent Overview section intact. */
-    document.querySelectorAll("#tab-overview .quick-actions").forEach(function(el){
-      el.remove();
+    /* Remove ONLY the Quick Actions section. Leave all other dashboard markup and functionality unchanged. */
+    var headings = document.querySelectorAll("#tab-overview h2, #tab-overview h3, #tab-overview .section-head");
+    Array.prototype.forEach.call(headings, function(el){
+      if (String(el.textContent || "").trim().toUpperCase() !== "QUICK ACTIONS") return;
+      var section = el.closest(".section");
+      if (section) section.remove();
+      else el.remove();
     });
   }
   function initDashboard(){var root=$("tab-overview");if(!root||root.getAttribute('data-ready')==='1')return;root.setAttribute('data-ready','1');removeDashboardQuickActions();var refresh=$("dashboardRefresh");if(refresh)refresh.addEventListener('click',function(){loadDashboard(true);});var retry=$("dashboardRetry");if(retry)retry.addEventListener('click',function(){runDashboardChecks();});root.addEventListener('click',function(e){var b=e.target.closest('[data-goto]');if(!b)return;var t=document.querySelector('.nav button[data-tab="'+b.getAttribute('data-goto')+'"]');if(t)t.click();});}
