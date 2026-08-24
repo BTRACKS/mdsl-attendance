@@ -2196,7 +2196,11 @@ root.innerHTML =
       var user=(USERS.rows||[]).find(function(u){return String(u.id||u.user_id||"")===staffId;});
       var name=user?displayName(user):"Staff member", status=leaveRecordStatus(l,today);
       return '<tr><td><div class="leave-staff-cell">'+(user?avatarHtml(user):'<div class="avatar">?</div>')+'<div><strong>'+esc(name)+'</strong><span>'+esc(user?(pick(user,STAFF_KEYS)||""):"")+'</span></div></div></td><td>'+esc(leaveTypeLabel(l.leave_type))+'</td><td>'+esc(dashboardDateOnly(l.start_date))+'</td><td>'+esc(dashboardDateOnly(l.end_date))+'</td><td>'+esc(l.reason||"—")+'</td><td><span class="tag '+(status==="Active"?"tag-leave":status==="Cancelled"?"tag-miss":"tag-pending")+'">'+esc(status)+'</span></td></tr>';
-    }).join("") + '</tbody></table></div>' : '<p class="empty">No leave records match the current search.</p>') +
+    }).join("") + '</tbody></table></div>' : (
+        q
+          ? '<div class="leave-empty-state"><strong>No leave records found</strong><p>No staff leave records match your search.</p></div>'
+          : '<div class="leave-empty-state"><strong>No staff are currently on leave</strong><p>There are no active leave records to display at the moment.</p></div>'
+      )) +
   '</section>';
 var nextSearch=$("supportLeaveSearch");
 if(nextSearch) nextSearch.addEventListener("input",function(){ renderSupportLeave(); var n=$("supportLeaveSearch"); if(n){n.focus();n.setSelectionRange(n.value.length,n.value.length);} });

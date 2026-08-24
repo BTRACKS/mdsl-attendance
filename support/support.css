@@ -1018,3 +1018,24 @@ body.modal-open{overflow:hidden}
 #tab-leave .leave-support-toolbar { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; }
 #tab-leave .leave-support-toolbar .search-field { flex:1 1 320px; }
 #tab-leave .leave-support-toolbar .btn { margin:0; }
+
+/* Clear Leave empty state */
+#tab-leave .leave-empty-state{
+  padding:32px 20px;
+  text-align:center;
+  border:1px dashed var(--rule);
+  border-radius:14px;
+  background:var(--paper-2);
+  margin-top:14px;
+}
+#tab-leave .leave-empty-state strong{
+  display:block;
+  font-size:16px;
+  color:var(--ink);
+  margin-bottom:6px;
+}
+#tab-leave .leave-empty-state p{
+  margin:0;
+  color:var(--ink-4);
+  font-size:13px;
+}
