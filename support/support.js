@@ -325,6 +325,7 @@
     });
     USERS.loaded = true;
     renderUsers();
+    renderAttStaffResults();
   }
 
   function initUsers() {
@@ -537,10 +538,29 @@
 
   var ATT = {
     table: null, ready: false, error: null,
-    userKey: null, dateKey: null, statusKey: null, fields: [],
+    userKey: null, dateKey: null, statusKey: null, fields: [], jsonFields: [],
     staff: null, rows: [], loading: false, statuses: [],
     pending: null, step: 1
   };
+
+  /* Some deployments store the morning/evening check as a JSONB object on the
+     row (e.g. {"time":"08:12:00"}) rather than a flat timestamp column. These
+     are detected and DISPLAYED below so both periods are always visible, but
+     are intentionally read-only for now — correcting a value nested inside a
+     JSONB column would need to go through correct_attendance_timestamp() (or
+     a JSONB-aware equivalent) in a way this file can't safely guess at
+     without knowing the exact key your RPC expects. */
+  var ATT_JSON_PAIR_KEYS = [["morning", "Morning attendance"], ["evening", "Evening attendance"]];
+  var JSON_TIME_SUBKEYS = ["time", "clock_in", "clock_out", "timestamp", "recorded_at", "checked_at", "time_in", "time_out", "value"];
+  function jsonTimeText(obj, fallbackDate) {
+    if (obj === null || obj === undefined || obj === "") return "Not recorded";
+    if (typeof obj !== "object") return stampText(obj, fallbackDate);
+    for (var i = 0; i < JSON_TIME_SUBKEYS.length; i++) {
+      var v = obj[JSON_TIME_SUBKEYS[i]];
+      if (v !== undefined && v !== null && String(v).trim() !== "") return stampText(v, fallbackDate);
+    }
+    try { return JSON.stringify(obj); } catch (e) { return "Recorded"; }
+  }
 
   function isTimeOnly(v) { return typeof v === "string" && /^\d{1,2}:\d{2}(:\d{2})?$/.test(v.trim()); }
   function pad(n) { return (n < 10 ? "0" : "") + n; }
@@ -599,28 +619,65 @@
       ATT.dateKey = ATT_DATE_KEYS.filter(function (k) { return cols.indexOf(k) !== -1; })[0] || null;
       ATT.statusKey = ATT_STATUS_KEYS.filter(function (k) { return cols.indexOf(k) !== -1; })[0] || null;
       ATT.fields = ATT_TS_FIELDS.filter(function (f) { return cols.indexOf(f[0]) !== -1; });
-      if (!ATT.fields.length && cols.indexOf("created_at") !== -1) ATT.fields = [["created_at", "Recorded timestamp"]];
+      ATT.jsonFields = ATT_JSON_PAIR_KEYS.filter(function (f) { return cols.indexOf(f[0]) !== -1; });
+      if (!ATT.fields.length && !ATT.jsonFields.length && cols.indexOf("created_at") !== -1) ATT.fields = [["created_at", "Recorded timestamp"]];
       ATT.ready = true;
       return;
     }
     ATT.error = "No attendance table is readable by your account. Expected one of: " + ATT_TABLES.join(", ") + ".";
   }
 
+  var ATT_STAFF_LIMIT = 10;
+
+  /* Ranks staff by closeness to the typed query instead of requiring an exact
+     substring match anywhere: name-starts-with beats name-contains beats an
+     email/staff-ID match, and ties break by where the match falls. Lets a
+     partial first name like "Oladapo" surface the right person immediately. */
+  function attStaffRank(row, q) {
+    var name = displayName(row).toLowerCase();
+    var other = [pick(row, EMAIL_KEYS), pick(row, STAFF_KEYS)]
+      .map(function (v) { return String(v == null ? "" : v).toLowerCase(); }).join(" ");
+    if (name === q) return 0;
+    var ni = name.indexOf(q);
+    if (ni === 0) return 1;
+    if (ni > -1) return 2 + ni / 100;
+    var parts = name.split(/\s+/);
+    for (var i = 0; i < parts.length; i++) { if (parts[i].indexOf(q) === 0) return 1.5; }
+    if (other.indexOf(q) > -1) return 4;
+    return -1;
+  }
+
+  function attFilteredStaff(q) {
+    if (!q) return USERS.rows.slice(0, ATT_STAFF_LIMIT);
+    return USERS.rows
+      .map(function (r) { return { row: r, score: attStaffRank(r, q) }; })
+      .filter(function (m) { return m.score > -1; })
+      .sort(function (a, b) { return a.score - b.score; })
+      .slice(0, ATT_STAFF_LIMIT)
+      .map(function (m) { return m.row; });
+  }
+
   function renderAttStaffResults() {
-    var q = ($("attSearch").value || "").trim().toLowerCase();
+    if (ATT.staff) return; /* a staff member is already selected — nothing to show here */
     var box = $("attStaffResults");
-    if (!q) { box.innerHTML = ""; box.hidden = true; return; }
-    var rows = USERS.rows.filter(function (r) { return matchesQuery(r, q); }).slice(0, 12);
-    box.hidden = false;
+    if (!box) return;
+    if (!USERS.rows.length) { box.innerHTML = ""; return; }
+    var q = ($("attSearch").value || "").trim().toLowerCase();
+    var rows = attFilteredStaff(q);
+    var note = q
+      ? ""
+      : '<p class="att-staff-note">Showing ' + rows.length + " of " + USERS.rows.length + " staff. Search to find someone else.</p>";
+
     box.innerHTML = rows.length
-      ? rows.map(function (r) {
+      ? note + rows.map(function (r) {
           var idx = USERS.rows.indexOf(r);
           return '<button type="button" class="att-staff-item" data-staff="' + idx + '">' +
+            avatarHtml(r) +
             "<span>" + esc(displayName(r)) + "</span><small>" +
             esc([pick(r, EMAIL_KEYS), pick(r, STAFF_KEYS)].filter(Boolean).join(" · ") || "No email on record") +
             "</small></button>";
         }).join("")
-      : '<p class="att-empty">No staff member matches “' + esc(q) + '”.</p>';
+      : '<p class="att-empty">No staff member matches “' + esc($("attSearch").value.trim()) + '”.</p>';
   }
 
   function selectAttStaff(row) {
@@ -643,6 +700,9 @@
     $("attRecords").innerHTML = "";
     $("attState").textContent = "Search for a staff member to view their attendance records.";
     $("attCount").textContent = "";
+    $("attSearch").value = "";
+    $("attStaffResults").hidden = false;
+    renderAttStaffResults();
   }
 
   async function loadAttendance() {
@@ -733,13 +793,17 @@
         return '<div class="att-line"><span class="att-line-label">' + esc(f[1]) + "</span>" +
           '<span class="att-line-value">' + esc(stampText(val, d)) + "</span>" + btn + "</div>";
       }).join("");
+      var jsonLines = (ATT.jsonFields || []).map(function (f) {
+        return '<div class="att-line"><span class="att-line-label">' + esc(f[1]) + "</span>" +
+          '<span class="att-line-value">' + esc(jsonTimeText(r[f[0]], d)) + "</span></div>";
+      }).join("");
       var dateBtn = canEdit && ATT.dateKey
         ? '<button type="button" class="btn btn-ghost btn-sm" data-editdate="' + idx + '">Correct date</button>'
         : "";
       return '<article class="att-record"><header class="att-record-head">' +
         "<h4>" + esc(ukDate(d)) + "</h4>" +
         "<span>" + esc(status || "Attendance record") + "</span>" + dateBtn +
-        "</header><div class=\"att-record-body\">" + lines + "</div></article>";
+        "</header><div class=\"att-record-body\">" + lines + jsonLines + "</div></article>";
     }).join("");
 
     if (!canEdit) {
@@ -877,6 +941,7 @@
     if (!root || root.getAttribute("data-ready") === "1") return;
     root.setAttribute("data-ready", "1");
 
+    $("attStaffResults").hidden = false;
     var t;
     $("attSearch").addEventListener("input", function () {
       clearTimeout(t);
