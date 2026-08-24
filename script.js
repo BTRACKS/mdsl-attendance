@@ -57,9 +57,8 @@
     sunriseTabler: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v3"/><path d="M5.6 7.6 7 9"/><path d="M18.4 7.6 17 9"/><path d="M3 17h3"/><path d="M18 17h3"/><path d="M8 17a4 4 0 0 1 8 0"/><path d="M2 21h20"/></svg>',
     chevronDown: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>'
   };
-  /* Only "Overview" and "Settings" carried nav icons before; those icons
-     are now removed. Other nav icons (e.g. Attendance History) are unchanged. */
-  var NAV_ICON = { "Dashboard": ICON.grid, "Attendance History": ICON.clock };
+  /* Dashboard and Attendance History no longer show a leading icon in the nav. */
+  var NAV_ICON = {};
 
   /* Time-of-day greeting used on the staff dashboard header.
      Icons are outline-style, matching the Tabler Icons set (tabler.io/icons):
