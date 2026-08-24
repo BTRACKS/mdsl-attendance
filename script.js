@@ -1065,9 +1065,7 @@
     var missing = staff.filter(function (u) { return !presentIds[u.id]; });
     var pct = staff.length ? Math.round((recs.length / staff.length) * 100) : 0;
 
-    return '<div class="page"><div class="page-head"><p class="eyebrow">Administration</p><h1>HSE Attendance</h1>' +
-      '<p class="dateline">HSE holds every Monday. Session: ' + esc(prettyDate(key)) +
-      (isMondayKey(key) ? "" : " (non-Monday session)") + "</p></div>" +
+    return '<div class="page"><div class="page-head"><p class="eyebrow">Administration</p><h1>HSE Attendance</h1></div>' +
 
       '<div class="stats">' +
       stat("Total Staff", staff.length, "", ICON.users) +
