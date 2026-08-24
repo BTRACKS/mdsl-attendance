@@ -1012,7 +1012,7 @@
       '<section class="section"><div class="section-head"><h2>My Profile</h2><span>Editable details</span></div>' +
       '<div class="photo-row">' + avatarHtml(u, "avatar-xl") +
       '<div class="photo-copy"><h3>Profile picture</h3>' +
-      '<p>JPG, PNG or WebP · up to 2MB. Shown on your dashboard and staff profile.</p>' +
+      '<p>JPG, PNG or WebP · up to 20MB. Shown on your dashboard and staff profile.</p>' +
       '<div class="photo-actions">' +
       '<input id="avatarInput" type="file" accept="image/png,image/jpeg,image/webp" hidden />' +
       '<button class="btn btn-ghost btn-sm" type="button" id="avatarPick">' + ICON.camera +
