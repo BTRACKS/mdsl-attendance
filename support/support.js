@@ -1595,122 +1595,304 @@
     });
   }
 
-  /* ---------- application settings ---------- */
-  var SETTING_TABLES = ["app_settings", "system_settings", "settings", "site_settings", "configuration"];
-  var SETTING_KEY_COLS = ["key", "setting_key", "name", "code", "slug"];
-  var SETTING_VALUE_COLS = ["value", "setting_value", "val", "content", "data"];
-  var SETTING_DESC_COLS = ["description", "label", "note", "help"];
+  /* ---------- Phase 8: controlled application settings ---------- */
+  /*
+     IMPORTANT:
+     This is deliberately NOT a generic database editor. The portal reads only
+     public.app_settings and only rows explicitly registered there. The database
+     RPC is the authority for writes and re-checks the caller's role and the
+     setting's editable_by/sensitive flags on every request.
+  */
+  var SETTINGS = {
+    rows: [],
+    loaded: false,
+    loading: false
+  };
 
-  var SETTINGS = { table: null, keyCol: null, valueCol: null, descCol: null, rows: [], loaded: false };
+  function settingValueText(value) {
+    if (value === null || value === undefined) return "";
+    if (typeof value === "boolean") return value ? "true" : "false";
+    if (typeof value === "object") return JSON.stringify(value);
+    return String(value);
+  }
 
-  async function detectSettings() {
-    if (SETTINGS.table) return true;
-    for (var i = 0; i < SETTING_TABLES.length; i++) {
-      var res = await sb.from(SETTING_TABLES[i]).select("*").limit(200);
-      if (res.error) continue;
-      var sample = (res.data && res.data[0]) || null;
-      if (!sample) continue;
-      var cols = Object.keys(sample);
-      var k = SETTING_KEY_COLS.filter(function (c) { return cols.indexOf(c) !== -1; })[0];
-      var v = SETTING_VALUE_COLS.filter(function (c) { return cols.indexOf(c) !== -1; })[0];
-      if (!k || !v) continue;
-      SETTINGS.table = SETTING_TABLES[i];
-      SETTINGS.keyCol = k;
-      SETTINGS.valueCol = v;
-      SETTINGS.descCol = SETTING_DESC_COLS.filter(function (c) { return cols.indexOf(c) !== -1; })[0] || null;
-      SETTINGS.rows = res.data;
-      return true;
+  function settingDisplayValue(value, type) {
+    if (value === null || value === undefined || value === "") return "Not set";
+    if (type === "boolean") return value ? "Enabled" : "Disabled";
+    return settingValueText(value);
+  }
+
+  function settingOptions(row) {
+    if (!row.options) return [];
+    if (Array.isArray(row.options)) return row.options;
+    try {
+      var parsed = typeof row.options === "string" ? JSON.parse(row.options) : row.options;
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) { return []; }
+  }
+
+  function settingInputHtml(row, i) {
+    var type = String(row.data_type || "text").toLowerCase();
+    var value = row.value;
+    var disabled = !isAdmin() && !(
+      ME.role === "it_support" &&
+      Array.isArray(row.editable_by) &&
+      row.editable_by.indexOf("it_support") !== -1 &&
+      !row.is_sensitive
+    );
+    var dis = disabled ? " disabled" : "";
+    var id = "st_" + i;
+    var val = settingValueText(value);
+
+    if (type === "boolean") {
+      return '<label class="setting-toggle" for="' + id + '">' +
+        '<input id="' + id + '" data-setting="' + i + '" type="checkbox"' +
+        (value === true ? " checked" : "") + dis + ' />' +
+        '<span>Enabled</span></label>';
     }
-    return false;
+
+    if (type === "number") {
+      return '<input id="' + id + '" data-setting="' + i + '" type="number" step="any" value="' +
+        esc(val) + '"' + dis + ' />';
+    }
+
+    if (type === "date") {
+      return '<input id="' + id + '" data-setting="' + i + '" type="date" value="' +
+        esc(val) + '"' + dis + ' />';
+    }
+
+    if (type === "datetime") {
+      var dtVal = val;
+      try {
+        if (dtVal) {
+          var d = new Date(dtVal);
+          if (!isNaN(d.getTime())) dtVal = d.toISOString().slice(0,16);
+        }
+      } catch (e) {}
+      return '<input id="' + id + '" data-setting="' + i + '" type="datetime-local" value="' +
+        esc(dtVal) + '"' + dis + ' />';
+    }
+
+    if (type === "select") {
+      return '<select id="' + id + '" data-setting="' + i + '"' + dis + '>' +
+        settingOptions(row).map(function (o) {
+          var ov = typeof o === "object" ? o.value : o;
+          var ol = typeof o === "object" ? (o.label || o.value) : o;
+          return '<option value="' + esc(String(ov)) + '"' +
+            (String(ov) === String(value == null ? "" : value) ? " selected" : "") + '>' +
+            esc(String(ol)) + '</option>';
+        }).join("") + '</select>';
+    }
+
+    return '<input id="' + id + '" data-setting="' + i + '" type="text" maxlength="500" value="' +
+      esc(val) + '"' + dis + ' />';
+  }
+
+  function settingReadInput(row, i) {
+    var input = $("st_" + i);
+    if (!input) return null;
+    var type = String(row.data_type || "text").toLowerCase();
+
+    if (type === "boolean") return !!input.checked;
+    if (type === "number") {
+      if (input.value.trim() === "") return null;
+      var n = Number(input.value);
+      return isFinite(n) ? n : NaN;
+    }
+    if (type === "date") return input.value || null;
+    if (type === "datetime") return input.value ? new Date(input.value).toISOString() : null;
+    if (type === "select") return input.value;
+    return input.value.trim();
   }
 
   function renderSettings() {
     var list = $("settingsList");
     var rows = SETTINGS.rows || [];
     if (!rows.length) {
-      list.innerHTML = "";
+      list.innerHTML =
+        '<div class="settings-empty">' +
+        '<h3>No supported settings are configured</h3>' +
+        '<p>The current website source does not expose a system configuration value that can safely be controlled from this portal yet. No placeholder settings have been invented.</p>' +
+        '</div>';
       $("settingsActions").hidden = true;
+      $("settingsState").textContent = "0 supported settings";
       return;
     }
-    $("settingsState").textContent = rows.length + " setting" + (rows.length === 1 ? "" : "s") +
-      " from " + SETTINGS.table + ".";
-    list.innerHTML = rows.map(function (r, i) {
-      var val = r[SETTINGS.valueCol];
-      var desc = SETTINGS.descCol ? r[SETTINGS.descCol] : null;
-      return '<div class="setting-row"><div class="setting-meta"><h4>' +
-        esc(labelize(String(r[SETTINGS.keyCol]))) + "</h4>" +
-        (desc ? "<p>" + esc(String(desc)) + "</p>" : "") + "</div>" +
-        '<div class="field"><label for="st_' + i + '" class="sr-label">Value</label>' +
-        '<input id="st_' + i + '" data-setting="' + i + '" type="text" maxlength="240"' +
-        (isAdmin() ? "" : " disabled") +
-        ' value="' + esc(val === null || val === undefined ? "" : (typeof val === "object" ? JSON.stringify(val) : String(val))) +
-        '" /></div></div>';
+
+    var categories = {};
+    rows.forEach(function (r, i) {
+      var cat = r.category || "General";
+      if (!categories[cat]) categories[cat] = [];
+      categories[cat].push([r, i]);
+    });
+
+    $("settingsState").textContent = rows.length + " supported setting" + (rows.length === 1 ? "" : "s") + ".";
+    list.innerHTML = Object.keys(categories).sort().map(function (cat) {
+      return '<div class="settings-category">' +
+        '<h3>' + esc(cat) + '</h3>' +
+        categories[cat].map(function (pair) {
+          var r = pair[0], i = pair[1];
+          var editable = isAdmin() || (
+            ME.role === "it_support" &&
+            Array.isArray(r.editable_by) &&
+            r.editable_by.indexOf("it_support") !== -1 &&
+            !r.is_sensitive
+          );
+          var sensitive = r.is_sensitive ? '<p class="setting-security">Sensitive setting — Administrator only</p>' : "";
+          return '<div class="setting-row">' +
+            '<div class="setting-meta"><h4>' + esc(r.label || labelize(String(r.key))) + '</h4>' +
+            (r.description ? '<p>' + esc(r.description) + '</p>' : '') +
+            '<p class="setting-current">Current value: <strong>' + esc(settingDisplayValue(r.value, r.data_type)) + '</strong></p>' +
+            sensitive + '</div>' +
+            '<div class="field"><label for="st_' + i + '" class="sr-label">New value</label>' +
+            settingInputHtml(r, i) + '</div>' +
+            (editable && r.default_value !== null && r.default_value !== undefined
+              ? '<button type="button" class="link-muted setting-reset" data-reset-setting="' + i + '">Restore default</button>'
+              : '') +
+            '</div>';
+        }).join("") +
+      '</div>';
     }).join("");
-    $("settingsActions").hidden = !isAdmin();
+
+    $("settingsActions").hidden = !rows.some(function (r) {
+      return isAdmin() || (
+        ME.role === "it_support" &&
+        Array.isArray(r.editable_by) &&
+        r.editable_by.indexOf("it_support") !== -1 &&
+        !r.is_sensitive
+      );
+    });
   }
 
   async function loadSettings() {
-    $("settingsState").textContent = "Loading application settings…";
-    var ok = await detectSettings();
-    if (!ok) {
-      SETTINGS.rows = [];
-      $("settingsList").innerHTML = "";
-      $("settingsActions").hidden = true;
-      $("settingsState").textContent =
-        "No application settings table is readable by your account, so there is nothing to manage here yet.";
-      return;
+    if (SETTINGS.loading) return;
+    SETTINGS.loading = true;
+    $("settingsState").textContent = "Loading supported settings…";
+    try {
+      var res = await sb.from("app_settings")
+        .select("key,label,description,category,data_type,options,value,default_value,editable_by,is_sensitive,updated_at")
+        .order("category", { ascending: true })
+        .order("label", { ascending: true });
+
+      if (res.error) {
+        SETTINGS.rows = [];
+        $("settingsList").innerHTML = "";
+        $("settingsActions").hidden = true;
+        $("settingsState").textContent = "Settings could not be loaded: " + res.error.message;
+        return;
+      }
+
+      SETTINGS.rows = res.data || [];
+      SETTINGS.loaded = true;
+      renderSettings();
+    } finally {
+      SETTINGS.loading = false;
     }
-    var res = await sb.from(SETTINGS.table).select("*").limit(200);
-    if (res.error) {
-      $("settingsState").textContent = "Settings could not be loaded: " + res.error.message;
-      return;
-    }
-    SETTINGS.rows = (res.data || []).sort(function (a, b) {
-      return String(a[SETTINGS.keyCol]).localeCompare(String(b[SETTINGS.keyCol]));
-    });
-    SETTINGS.loaded = true;
-    renderSettings();
   }
 
   async function writeSetting(key, value) {
-    var res = await sb.rpc("admin_update_setting", { p_key: key, p_value: value });
-    if (res.error && missingFunction(res.error)) {
-      var patch = {};
-      patch[SETTINGS.valueCol] = value;
-      res = await sb.from(SETTINGS.table).update(patch).eq(SETTINGS.keyCol, key);
-    }
-    return res;
+    return await sb.rpc("support_update_setting", {
+      p_key: key,
+      p_value: value
+    });
+  }
+
+  async function resetSetting(key) {
+    return await sb.rpc("support_reset_setting", {
+      p_key: key
+    });
+  }
+
+  function canEditSetting(row) {
+    return isAdmin() || (
+      ME.role === "it_support" &&
+      Array.isArray(row.editable_by) &&
+      row.editable_by.indexOf("it_support") !== -1 &&
+      !row.is_sensitive
+    );
   }
 
   function askSettingsSave() {
-    if (!isAdmin()) return;
     var diffs = [], jobs = [];
     SETTINGS.rows.forEach(function (r, i) {
-      var input = document.getElementById("st_" + i);
-      if (!input) return;
-      var cur = r[SETTINGS.valueCol];
-      var curText = cur === null || cur === undefined ? "" : (typeof cur === "object" ? JSON.stringify(cur) : String(cur));
-      var next = input.value.trim();
-      if (next === curText.trim()) return;
-      diffs.push([labelize(String(r[SETTINGS.keyCol])), curText, next]);
-      jobs.push({ key: String(r[SETTINGS.keyCol]), value: next });
+      if (!canEditSetting(r)) return;
+      var next = settingReadInput(r, i);
+      if (next !== null && typeof next === "number" && isNaN(next)) {
+        toast((r.label || r.key) + " must be a valid number.", "bad");
+        return;
+      }
+      var current = r.value;
+      if (JSON.stringify(next) === JSON.stringify(current)) return;
+      diffs.push([r.label || labelize(r.key), settingDisplayValue(current, r.data_type), settingDisplayValue(next, r.data_type)]);
+      jobs.push({ key: r.key, value: next });
     });
-    if (!diffs.length) { toast("No setting has been changed.", "bad"); return; }
+
+    if (!diffs.length) {
+      toast("No setting has been changed.", "bad");
+      return;
+    }
 
     openChange({
       title: "Confirm setting changes",
-      lede: "These application settings will be updated for everyone using the platform.",
+      lede: "Review the current and new values. Changes are applied only after you confirm.",
       rows: diffs,
       needReason: false,
       onConfirm: async function () {
         for (var i = 0; i < jobs.length; i++) {
-          var r = await writeSetting(jobs[i].key, jobs[i].value);
-          if (r.error) return { error: r.error };
+          var res = await writeSetting(jobs[i].key, jobs[i].value);
+          if (res.error) return { error: res.error };
         }
         return {};
       },
-      done: function () { toast("Settings saved.", "good"); loadSettings(); }
+      done: function () {
+        toast("Settings saved successfully.", "good");
+        loadSettings();
+      }
     });
+  }
+
+  function askSettingReset(index) {
+    var r = SETTINGS.rows[index];
+    if (!r || !canEditSetting(r)) return;
+
+    openChange({
+      title: "Restore default setting",
+      lede: "Only this selected setting will be restored. No other setting will change.",
+      rows: [[
+        r.label || labelize(r.key),
+        settingDisplayValue(r.value, r.data_type),
+        settingDisplayValue(r.default_value, r.data_type)
+      ]],
+      needReason: false,
+      onConfirm: async function () {
+        return await resetSetting(r.key);
+      },
+      done: function () {
+        toast("The selected setting was restored to its default.", "good");
+        loadSettings();
+      }
+    });
+  }
+
+  function initSettings() {
+    var root = $("tab-settings");
+    if (!root || root.getAttribute("data-ready") === "1") return;
+    root.setAttribute("data-ready", "1");
+
+    $("settingsScope").textContent = isAdmin() ? "Administrator configuration" : "IT Support — safe settings only";
+    $("settingsNote").textContent = isAdmin()
+      ? "Only explicitly supported application settings are shown. The database re-checks your administrator role for every write."
+      : "IT Support can edit only settings explicitly marked safe for that role. Sensitive settings remain Administrator-only.";
+
+    $("settingsSave").addEventListener("click", askSettingsSave);
+    $("settingsReload").addEventListener("click", loadSettings);
+    $("settingsList").addEventListener("click", function (e) {
+      var b = e.target.closest("[data-reset-setting]");
+      if (!b) return;
+      askSettingReset(Number(b.getAttribute("data-reset-setting")));
+    });
+
+    loadSettings();
   }
 
   /* ---------- system management tab ---------- */
@@ -1733,13 +1915,6 @@
       if (target) target.click();
     });
 
-    $("settingsSave").addEventListener("click", askSettingsSave);
-    $("settingsReload").addEventListener("click", function () { loadSettings(); });
-    $("settingsNote").textContent = isAdmin()
-      ? "Only settings the application already defines are listed. Adding or deleting settings, or editing other tables, is deliberately not possible from this portal."
-      : "Settings are read-only for IT Support accounts.";
-
-    loadSettings();
   }
 
   /* ------------------------- portal render ------------------------- */
@@ -1787,6 +1962,7 @@
     initRoleUi();
     initAttendance();
     initSystem();
+    initSettings();
     loadUsers();
 
     only("portalView");

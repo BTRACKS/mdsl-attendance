@@ -112,6 +112,7 @@
           <button type="button" data-tab="users">Users</button>
           <button type="button" data-tab="attendance">Attendance</button>
           <button type="button" data-tab="system" id="navSystemBtn">System management</button>
+          <button type="button" data-tab="settings" id="navSettingsBtn">Settings</button>
           <button type="button" data-tab="checks">System checks</button>
           <button type="button" data-tab="modules">Support modules</button>
           <button type="button" class="nav-signout" id="navSignout">
@@ -352,16 +353,30 @@
             </div>
           </div>
 
-          <div class="panel panel-span" id="settingsPanel">
-            <div class="panel-head">Application settings</div>
+
+        </div>
+      </section>
+
+      <!-- Settings / System Configuration (Phase 8) -->
+      <section class="section" id="tab-settings" hidden>
+        <div class="section-head">
+          <h2>Settings</h2>
+          <span id="settingsScope">&nbsp;</span>
+        </div>
+
+        <p class="role-note" id="settingsNote"></p>
+
+        <div class="settings-groups">
+          <div class="panel">
+            <div class="panel-head">Supported configuration</div>
             <div class="panel-body">
-              <p class="users-state" id="settingsState">Loading application settings…</p>
+              <p class="users-state" id="settingsState">Loading supported settings…</p>
               <div class="settings-list" id="settingsList"></div>
               <div class="edit-actions" id="settingsActions" hidden>
-                <button class="btn btn-primary btn-sm" id="settingsSave" type="button">Review changes</button>
+                <button class="btn btn-primary btn-sm" id="settingsSave" type="button">Save changes</button>
                 <button class="btn btn-ghost btn-sm" id="settingsReload" type="button">Reload</button>
               </div>
-              <p class="role-note" id="settingsNote"></p>
+              <p class="edit-hint">Only settings explicitly registered as supported by the application are shown here. This page never exposes raw database tables, SQL, credentials or secrets.</p>
             </div>
           </div>
         </div>
