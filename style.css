@@ -325,8 +325,8 @@ img{max-width:100%;display:block}
 .att-meta{margin:10px 0 18px;font-size:13.5px;color:var(--ink-3)}
 .att.locked{background:linear-gradient(180deg,#fffdf7,#fdf6e6);border-color:var(--amber-soft)}
 .locked-note{display:flex;gap:8px;align-items:center;font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);border-top:1px dashed var(--rule-strong);padding-top:14px}
-.lock-icon{width:14px;height:14px;border:2px solid var(--ink-3);border-radius:3px;position:relative;flex:0 0 auto}
-.lock-icon::before{content:"";position:absolute;left:2.5px;top:-6px;width:7px;height:7px;border:2px solid var(--ink-3);border-bottom:0;border-radius:4px 4px 0 0}
+.lock-icon{width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 16px;color:var(--ink-3);line-height:0}
+.lock-icon svg{width:16px;height:16px;display:block;stroke:currentColor;stroke-width:2;vector-effect:non-scaling-stroke}
 
 .tag{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;letter-spacing:.02em;padding:5px 11px;border-radius:var(--radius-pill);white-space:nowrap}
 .tag-ok{background:var(--ok-soft);color:var(--ok)}

@@ -35,6 +35,7 @@
     clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 16 14"/></svg>',
     users: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
     check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="8.5 12.5 11 15 16 9"/></svg>',
+    lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
     sunrise: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 18a5 5 0 0 0-10 0"/><line x1="12" y1="2" x2="12" y2="9"/><line x1="4.22" y1="10.22" x2="5.64" y2="11.64"/><line x1="18.36" y1="11.64" x2="19.78" y2="10.22"/><line x1="1" y1="18" x2="23" y2="18"/></svg>',
     sunset: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 18a5 5 0 0 0-10 0"/><line x1="12" y1="9" x2="12" y2="2"/><line x1="4.22" y1="10.22" x2="5.64" y2="11.64"/><line x1="18.36" y1="11.64" x2="19.78" y2="10.22"/><line x1="1" y1="18" x2="23" y2="18"/></svg>',
     alert: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
@@ -477,7 +478,7 @@
       '<p class="att-time' + (submitted ? "" : " pending") + '">' + (submitted ? esc(entry.time) : "--:--") + "</p>" +
       '<p class="att-meta">' + label + " time" + (submitted ? " recorded" : " not yet recorded") + ".</p>" +
       (submitted
-        ? '<div class="locked-note"><span class="lock-icon"></span> Locked — cannot be edited or resubmitted</div>'
+        ? '<div class="locked-note"><span class="lock-icon" aria-hidden="true">' + ICON.lock + '</span> Locked — cannot be edited or resubmitted</div>'
         : '<button class="btn btn-primary btn-block" data-att="' + kind + '"' + (disabled ? " disabled" : "") + ">Submit " + label.toLowerCase() + " time</button>") +
       "</div>";
   }
@@ -485,7 +486,7 @@
   function profilePanel(u) {
     return '<aside><div class="panel"><div class="panel-head">' + ICON.userCard + 'Staff Profile</div><div class="panel-body">' +
       '<div class="identity">' + avatarHtml(u) +
-      "<div><h3>" + esc(u.fullName) + "</h3></div></div>" +
+      "<div><h3>" + esc(u.fullName) + "</h3><p>" + esc(u.position) + "</p></div></div>" +
       '<dl class="dl">' +
       row("Staff ID", u.staffId) + row("Employment Type", u.employmentType) +
       row("Department", u.department) + row("Position", u.position) + row("Email", u.email) +
@@ -770,7 +771,7 @@
       staff.map(function (u) {
         var a = record(u.id, key);
         return '<tr><td><div class="staff-cell">' + avatarHtml(u, "avatar-sm") +
-          '<div class="staff-cell-info"><div class="who">' + esc(u.fullName) + '</div></div></div></td>' +
+          '<div class="staff-cell-info"><div class="who">' + esc(u.fullName) + '</div><div class="sub">' + esc(u.staffId) + " · " + esc(u.position) + "</div></div></div></td>" +
           "<td>" + esc(u.department) + "</td><td>" + esc(u.employmentType) + "</td>" +
           '<td class="num">' + (a && a.morning ? esc(a.morning.time) : "—") + "</td>" +
           '<td class="num">' + (a && a.evening ? esc(a.evening.time) : "—") + "</td>" +
@@ -993,7 +994,7 @@
       body = '<div class="hse-done"><span class="hse-done-mark" aria-hidden="true">' + ICON.check + "</span>" +
         "<div><p class=\"hse-done-title\">HSE Attendance Recorded</p>" +
         '<p class="hse-done-sub">Checked in at ' + esc(rec.time) + "</p></div></div>" +
-        '<div class="locked-note"><span class="lock-icon"></span> Locked — one check-in per HSE session</div>';
+        '<div class="locked-note"><span class="lock-icon" aria-hidden="true">' + ICON.lock + '</span> Locked — one check-in per HSE session</div>';
     } else if (st.phase === "not-monday") {
       body = '<p class="hse-note">The next HSE session is ' +
         esc(prettyDate(st.next)) + ', ' + esc(prettyClock(s.open_time)) + " – " + esc(prettyClock(s.close_time)) + ".</p>";
