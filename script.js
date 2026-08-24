@@ -486,6 +486,8 @@
           (!m ? '<p class="dateline" style="margin-top:12px">Closing time unlocks once your morning resumption has been submitted.</p>' : "")) +
       "</section>" +
 
+      hseStaffCard(u) +
+
       '<section class="section dashboard-leave-card">' +
         '<div class="section-head"><h2>Leave</h2><span>' + (leave ? "Currently on leave" : "Time away") + '</span></div>' +
         (leave
@@ -493,8 +495,6 @@
           : '<p class="dateline dashboard-leave-empty">You are not currently on leave.</p>') +
         '<div class="dashboard-leave-actions"><a class="btn btn-primary btn-sm" href="#/leave">Manage Leave</a></div>' +
       '</section>' +
-
-      hseStaffCard(u) +
 
       '<section class="section"><div class="section-head"><h2>Recent Records</h2><span><a class="link-muted" href="#/history">View full history</a></span></div>' +
       historyTable(u, 5) + "</section>" +

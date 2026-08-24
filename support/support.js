@@ -81,45 +81,81 @@
        2. public.support_roles        — dedicated role table (admin/it_support/staff)
        3. public.profiles.role        — legacy attendance role, admin only
      Never trust anything held in the browser. */
+  function accessTimeout(promise, ms) {
+    return Promise.race([
+      promise,
+      new Promise(function (_, reject) {
+        setTimeout(function () { reject(new Error("Access check timed out.")); }, ms);
+      })
+    ]);
+  }
+
   async function resolveAccess(user) {
     var result = { role: null, allowed: false, source: "none", error: null };
 
-    // 1. Preferred: a single security-definer function.
+    // 1. Preferred: the portal_role RPC. If it returns an old/unallowed role,
+    // continue to the other sources instead of stopping the access check.
     try {
-      var rpc = await sb.rpc("portal_role");
+      var rpc = await accessTimeout(sb.rpc("portal_role"), 7000);
       if (!rpc.error && rpc.data) {
-        result.role = String(rpc.data);
-        result.source = "portal_role() RPC";
-        result.allowed = ALLOWED_ROLES.indexOf(result.role) !== -1;
-        return result;
+        var rpcRole = String(rpc.data).trim().toLowerCase();
+        if (ALLOWED_ROLES.indexOf(rpcRole) !== -1) {
+          result.role = rpcRole;
+          result.source = "portal_role() RPC";
+          result.allowed = true;
+          return result;
+        }
+        result.error = "portal_role() returned " + rpcRole + ".";
       }
-    } catch (e) { /* function not deployed yet — fall through */ }
+    } catch (e) {
+      result.error = e.message;
+    }
 
-    // 2. Dedicated roles table (user_roles, falling back to legacy support_roles).
+    // 2. Dedicated role tables.
     try {
-      var rolesRes = await sb.from("user_roles").select("role").eq("user_id", user.id);
-      if (rolesRes.error) rolesRes = await sb.from("support_roles").select("role").eq("user_id", user.id);
+      var rolesRes = await accessTimeout(
+        sb.from("user_roles").select("role").eq("user_id", user.id),
+        7000
+      );
+      if (rolesRes.error) {
+        rolesRes = await accessTimeout(
+          sb.from("support_roles").select("role").eq("user_id", user.id),
+          7000
+        );
+      }
       if (!rolesRes.error && rolesRes.data && rolesRes.data.length) {
-        var roles = rolesRes.data.map(function (r) { return r.role; });
+        var roles = rolesRes.data.map(function (r) {
+          return String(r.role || "").trim().toLowerCase();
+        });
         result.role = roles.indexOf("admin") !== -1 ? "admin" : roles[0];
-        result.source = "user_roles table";
-        result.allowed = roles.some(function (r) { return ALLOWED_ROLES.indexOf(r) !== -1; });
-        return result;
+        result.source = "user_roles/support_roles table";
+        result.allowed = roles.some(function (r) {
+          return ALLOWED_ROLES.indexOf(r) !== -1;
+        });
+        if (result.allowed) return result;
       }
       if (rolesRes.error) result.error = rolesRes.error.message;
-    } catch (e) { result.error = e.message; }
+    } catch (e) {
+      result.error = e.message;
+    }
 
-    // 3. Fallback to the existing attendance profile role (admins only).
+    // 3. Legacy profiles.role fallback. Both Admin and IT Support are allowed.
     try {
-      var prof = await sb.from("profiles").select("role").eq("id", user.id).maybeSingle();
+      var prof = await accessTimeout(
+        sb.from("profiles").select("role").eq("id", user.id).maybeSingle(),
+        7000
+      );
       if (!prof.error && prof.data) {
-        result.role = prof.data.role || "staff";
+        var profileRole = String(prof.data.role || "staff").trim().toLowerCase();
+        result.role = profileRole;
         result.source = "profiles.role (legacy)";
-        result.allowed = result.role === "admin";
+        result.allowed = ALLOWED_ROLES.indexOf(profileRole) !== -1;
         return result;
       }
       if (prof.error) result.error = prof.error.message;
-    } catch (e) { result.error = e.message; }
+    } catch (e) {
+      result.error = e.message;
+    }
 
     return result;
   }
@@ -2086,31 +2122,40 @@
   /* ------------------------- gate ------------------------- */
   async function gate() {
     loader(true);
-    var sessionRes = await sb.auth.getSession();
-    var session = sessionRes.data && sessionRes.data.session;
-    if (!session) {
-      ME = { user: null, role: null, allowed: false };
-      loader(false);
-      only("loginView");
-      return;
-    }
-
-    var user = session.user;
-    var access = await resolveAccess(user);
-    loader(false);
-
-    if (!access.allowed) {
-      $("deniedEmail").textContent = user.email || user.id;
-      $("deniedRole").textContent = ROLE_LABEL[access.role] || access.role || "No role assigned";
-      if (access.error) {
-        $("deniedBody").innerHTML =
-          "We could not confirm your portal role. Ask the IT administrator to finish the portal database setup.<br /><small>" + esc(access.error) + "</small>";
+    try {
+      var sessionRes = await accessTimeout(sb.auth.getSession(), 10000);
+      var session = sessionRes.data && sessionRes.data.session;
+      if (!session) {
+        ME = { user: null, role: null, allowed: false };
+        loader(false);
+        only("loginView");
+        return;
       }
-      only("deniedView");
-      return;
-    }
 
-    await renderPortal(user, access);
+      var user = session.user;
+      var access = await resolveAccess(user);
+      loader(false);
+
+      if (!access.allowed) {
+        $("deniedEmail").textContent = user.email || user.id;
+        $("deniedRole").textContent = ROLE_LABEL[access.role] || access.role || "No role assigned";
+        $("deniedBody").innerHTML =
+          "We could not confirm your portal role. Ask the IT administrator to finish the portal database setup." +
+          (access.error ? "<br><small>" + esc(access.error) + "</small>" : "");
+        only("deniedView");
+        return;
+      }
+
+      await renderPortal(user, access);
+    } catch (e) {
+      loader(false);
+      $("deniedEmail").textContent = (ME.user && (ME.user.email || ME.user.id)) || "Signed-in account";
+      $("deniedRole").textContent = "Access check failed";
+      $("deniedBody").innerHTML =
+        "The Tech Support portal could not finish its access check. Please refresh and try again." +
+        "<br><small>" + esc(e && e.message ? e.message : "Unknown access error") + "</small>";
+      only("deniedView");
+    }
   }
 
 
@@ -2366,6 +2411,7 @@
       });
     }
     if (backdrop) backdrop.addEventListener("click", closeNav);
+    ensureLeavePortalTab();
     activatePortalSection(getPortalSection(), { skipPersist: true });
     window.addEventListener("popstate", function () {
       activatePortalSection(getPortalSection(), { skipPersist: true, closeNav: true });
