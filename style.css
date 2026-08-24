@@ -410,7 +410,7 @@ td .sub{font-size:12.5px;color:var(--ink-4)}
   padding:14px 18px;border:1px solid var(--rule);border-radius:var(--radius);
   background:var(--paper);min-width:0
 }
-.history-item{display:flex;flex-direction:column;gap:3px;min-width:110px;flex:0 1 auto}
+.history-item{display:flex;flex-direction:column;align-items:flex-start;gap:3px;min-width:110px;flex:0 1 auto}
 .history-item-date{min-width:150px}
 .history-item-status{min-width:120px;margin-left:auto}
 .history-label{font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-4)}
