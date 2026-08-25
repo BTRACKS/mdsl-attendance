@@ -899,3 +899,7 @@ body.maintenance-page{background:var(--gradient-hero);min-height:100vh}
   .collapsible-content{transition:none}
   .collapse-toggle-labelled svg{transition:none}
 }
+
+.panel-head.panel-head-collapsible{display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none}
+.panel-head.panel-head-collapsible .collapse-toggle-labelled{margin-left:auto}
+.panel-head.panel-head-collapsible:focus-visible{outline:2px solid var(--navy);outline-offset:-2px}

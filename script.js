@@ -2135,10 +2135,66 @@
     if (collapsed) close(content, btn, true); else sync(btn, false);
   }
 
+  /* Side panels (e.g. "Recent Attendance Activity") use .panel-head/.panel-body
+     instead of a section head, so they get the same treatment here. */
+  function enhancePanel(panel) {
+    if (panel.hasAttribute("data-collapsible")) return;
+    var head = panel.querySelector(":scope > .panel-head");
+    var body = panel.querySelector(":scope > .panel-body");
+    if (!head || !body) return;
+    if (head.classList.contains("panel-head-staff")) return;
+
+    var title = (head.textContent || "").trim();
+    if (!title || SKIP.test(title) || !HEAVY.test(title)) return;
+
+    panel.setAttribute("data-collapsible", "auto");
+
+    var content = document.createElement("div");
+    content.className = "collapsible-content";
+    content.id = "collapsible-" + (++uid);
+    panel.insertBefore(content, body);
+    content.appendChild(body);
+
+    var short = title.replace(/\s*—.*$/, "").trim() || "details";
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "collapse-toggle collapse-toggle-labelled";
+    btn.setAttribute("aria-controls", content.id);
+    btn.setAttribute("data-title", short);
+    btn.innerHTML = '<span class="collapse-label"></span>' + CHEVRON;
+    head.appendChild(btn);
+    head.classList.add("collapsible-head", "panel-head-collapsible");
+    head.setAttribute("role", "button");
+    head.setAttribute("tabindex", "0");
+
+    var key = short.toLowerCase();
+    var collapsed = state[key] === undefined ? true : state[key];
+
+    function toggle() {
+      collapsed = !collapsed;
+      state[key] = collapsed;
+      if (collapsed) close(content, btn); else open(content, btn);
+    }
+    head.addEventListener("click", function (e) {
+      if (e.target.closest("a, input, select, textarea")) return;
+      if (e.target.closest("button") && !e.target.closest(".collapse-toggle")) return;
+      toggle();
+    });
+    head.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); }
+    });
+
+    if (collapsed) close(content, btn, true); else sync(btn, false);
+  }
+
   function enhanceAll() {
     Array.prototype.forEach.call(
       document.querySelectorAll("#view .section, #view .card-collapsible"),
       enhance
+    );
+    Array.prototype.forEach.call(
+      document.querySelectorAll("#view .panel"),
+      enhancePanel
     );
   }
 
