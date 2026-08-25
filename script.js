@@ -79,6 +79,7 @@
   var authUser = null;     // the raw Supabase auth user (has .id, .email)
   var currentUser = null;  // the matching row from db.users (profile + role)
   var dataError = null;
+  var aboutCreatorProfiles = {};
 
   function mapProfile(p) {
     return {
@@ -1492,13 +1493,35 @@
       "</div></section>" +
       "</div>";
   }
+  function normalizeCreatorName(name) {
+    return String(name || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
+  }
   function findCreatorProfile(names) {
     var people = db.users || [];
-    var wanted = (names || []).map(function (name) { return String(name).trim().toLowerCase(); });
-    return people.find(function (person) {
-      var fullName = String(person.fullName || "").trim().toLowerCase();
-      return wanted.indexOf(fullName) !== -1;
+    var wanted = (names || []).map(normalizeCreatorName);
+    var cached = people.concat(Object.keys(aboutCreatorProfiles).map(function (key) { return aboutCreatorProfiles[key]; })).filter(Boolean);
+    return cached.find(function (person) {
+      var fullName = normalizeCreatorName(person.fullName);
+      return wanted.some(function (name) {
+        return fullName === name || fullName.indexOf(name) !== -1 || name.indexOf(fullName) !== -1;
+      });
     }) || null;
+  }
+  async function loadAboutCreatorProfiles() {
+    if (PAGE !== "about") return;
+    try {
+      var res = await supabaseClient.from("profiles")
+        .select("id,full_name,avatar_url,role,department,position")
+        .or("full_name.ilike.%Oladapo Salami%,full_name.ilike.%Dapo Salami%,full_name.ilike.%Victor Utoo%");
+      if (!res.error) {
+        (res.data || []).map(mapProfile).forEach(function (person) {
+          var key = normalizeCreatorName(person.fullName);
+          if (key) aboutCreatorProfiles[key] = person;
+        });
+      }
+    } catch (e) {
+      console.warn("About creator profile refresh:", e);
+    }
   }
   function creatorCard(name, role, profile) {
     var avatarProfile = profile || { fullName: name, avatarUrl: "" };
@@ -2289,10 +2312,10 @@
   }
   function chatHtml(c) {
     var p = c.person;
-    return '<div class="chat-header">' + messageAvatar(p, "avatar-sm") + '<div><h2>' + esc(p.fullName) + '</h2><span>End-to-end encrypted</span></div>' +
+    return '<div class="chat-header">' + messageAvatar(p, "avatar-sm") + '<div class="chat-identity"><h2>' + esc(p.fullName) + '</h2><span>End-to-end encrypted</span></div>' +
+      '<button type="button" class="chat-back" id="chatBack">Back</button>' +
       '<div class="chat-menu-wrap"><button type="button" class="chat-menu-btn" id="chatMenuBtn" aria-haspopup="true" aria-expanded="false" aria-label="Conversation options">&#8942;</button>' +
-      '<div class="chat-menu" id="chatMenu" hidden><button type="button" class="chat-menu-item" id="clearChatBtn">Clear chat</button></div></div>' +
-      '<button type="button" class="chat-back" id="chatBack">Back</button></div><div class="message-stream" id="messageStream"><div class="message-loading">Loading secure messages...</div></div><form class="message-composer" id="messageComposer"><textarea id="messageInput" rows="1" maxlength="4000" placeholder="Type a message..." autocomplete="off"></textarea><button class="btn btn-primary" type="submit">Send</button></form>';
+      '<div class="chat-menu" id="chatMenu" hidden><button type="button" class="chat-menu-item" id="clearChatBtn">Clear chat</button></div></div></div><div class="message-stream" id="messageStream"><div class="message-loading">Loading secure messages...</div></div><form class="message-composer" id="messageComposer"><textarea id="messageInput" rows="1" maxlength="4000" placeholder="Type a message..." autocomplete="off"></textarea><button class="btn btn-primary" type="submit">Send</button></form>';
   }
   /* Clear Chat is a per-device, per-user "hide history before now" cutoff (kept in
      localStorage). It never deletes or touches rows in the database, so the other
@@ -2789,6 +2812,7 @@
       }
     }
     await refreshData();
+    if (PAGE === "about") await loadAboutCreatorProfiles();
     if (dataError) {
       toast("Could not reach the database: " + dataError, "error");
     }
