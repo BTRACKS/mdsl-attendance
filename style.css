@@ -610,7 +610,6 @@ td .sub{font-size:12.5px;color:var(--ink-4)}
     border-bottom:1px solid var(--rule);font-size:15px;font-weight:700;justify-content:flex-start
   }
   .nav a.active{background:none;box-shadow:none}
-  [data-message-nav].has-unread::after{top:50%;right:4px;transform:translateY(-50%)}
   .nav-signout{
     display:flex;align-items:center;gap:10px;width:100%;padding:18px 4px;
     border:0;background:none;font-size:15px;font-weight:700;
@@ -925,12 +924,16 @@ body.maintenance-page{background:var(--gradient-hero);min-height:100vh}
 /* ========================= Internal Messaging ========================= */
 [data-message-nav]{position:relative}
 [data-message-nav].has-unread{font-weight:800}
-[data-message-nav].has-unread::after{content:"";width:7px;height:7px;border-radius:50%;background:var(--danger);position:absolute;right:9px;top:7px;border:2px solid var(--paper-2)}
+/* Centered on the nav item's own box (not a fixed pixel offset) so it lands correctly
+   whether the row is a short desktop pill or a tall mobile menu row. */
+[data-message-nav].has-unread::after{content:"";width:7px;height:7px;border-radius:50%;background:var(--danger);position:absolute;right:9px;top:50%;transform:translateY(-50%);border:2px solid var(--paper-2)}
 
-.messaging-page{max-width:1240px}
-.message-page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:20px}
+/* Fills the space below the page header instead of guessing a fixed vh offset, so the
+   composer/Send button always lands inside the visible area on any screen size. */
+.messaging-page{max-width:1240px;display:flex;flex-direction:column;min-height:0;height:calc(100vh - var(--header-h,64px));height:calc(100dvh - var(--header-h,64px))}
+.message-page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex:0 0 auto}
 .message-head-actions{display:flex;gap:10px;flex-wrap:wrap}
-.messenger-shell{display:grid;grid-template-columns:340px minmax(0,1fr);height:min(720px,calc(100vh - 250px));min-height:540px;background:var(--paper);border:1px solid var(--rule);border-radius:var(--radius-lg);box-shadow:var(--shadow);overflow:hidden}
+.messenger-shell{display:grid;grid-template-columns:340px minmax(0,1fr);flex:1 1 auto;min-height:0;max-height:720px;background:var(--paper);border:1px solid var(--rule);border-radius:var(--radius-lg);box-shadow:var(--shadow);overflow:hidden}
 .conversation-pane{border-right:1px solid var(--rule);background:var(--paper)}
 .conversation-search{padding:16px;border-bottom:1px solid var(--rule);background:var(--paper-2)}
 .conversation-search input,.message-picker input,.message-picker textarea,.message-composer textarea{width:100%;border:1px solid var(--rule-strong);background:var(--paper);border-radius:12px;outline:0;transition:border-color var(--t),box-shadow var(--t);font-size:14px}
@@ -950,23 +953,32 @@ body.maintenance-page{background:var(--gradient-hero);min-height:100vh}
 .message-empty-list{padding:40px 22px;text-align:center;color:var(--ink-4)}
 .message-empty-list p{font-weight:700;color:var(--ink-2);margin-bottom:5px}
 .message-empty-list span{font-size:12px}
-.chat-pane{min-width:0;display:flex;flex-direction:column;background:#fbfcfe}
-.chat-header{min-height:70px;padding:13px 18px;border-bottom:1px solid var(--rule);background:rgba(255,255,255,.9);display:flex;align-items:center;gap:11px}
+.chat-pane{min-width:0;min-height:0;display:flex;flex-direction:column;background:#fbfcfe}
+.chat-header{flex:0 0 auto;min-height:70px;padding:13px 18px;border-bottom:1px solid var(--rule);background:rgba(255,255,255,.9);display:flex;align-items:center;gap:11px}
 .chat-header>div{min-width:0;flex:1}
 .chat-header h2{font-size:15px}
 .chat-header span{display:block;font-size:11px;color:var(--ok);margin-top:2px}
 .chat-back{display:none;border:0;background:transparent;color:var(--navy);font-weight:700;cursor:pointer}
-.message-stream{flex:1;overflow:auto;padding:22px;display:flex;flex-direction:column;gap:8px}
+.chat-menu-wrap{position:relative;flex:0 0 auto}
+.chat-menu-btn{width:34px;height:34px;border-radius:10px;border:1px solid transparent;background:transparent;color:var(--ink-3);font-size:19px;line-height:1;cursor:pointer;display:grid;place-items:center;transition:background var(--t),color var(--t)}
+.chat-menu-btn:hover,.chat-menu-btn[aria-expanded="true"]{background:var(--paper-2);color:var(--ink)}
+.chat-menu{position:absolute;top:calc(100% + 6px);right:0;min-width:160px;background:var(--paper);border:1px solid var(--rule);border-radius:12px;box-shadow:var(--shadow);padding:6px;z-index:5}
+.chat-menu-item{width:100%;text-align:left;border:0;background:transparent;padding:9px 11px;border-radius:8px;font-size:13px;font-weight:600;color:#c0392b;cursor:pointer}
+.chat-menu-item:hover{background:#fdecea}
+.message-stream{flex:1;min-height:0;overflow:auto;padding:22px;display:flex;flex-direction:column;gap:8px}
 .message-row{display:flex;max-width:78%}
 .message-row.mine{align-self:flex-end;justify-content:flex-end}
 .message-row.theirs{align-self:flex-start}
 .message-bubble{position:relative;padding:10px 13px 20px;border-radius:16px;background:var(--paper);border:1px solid var(--rule);box-shadow:var(--shadow-xs);font-size:14px;line-height:1.5;word-break:break-word;min-width:72px}
 .message-row.mine .message-bubble{background:#eaf0f9;border-color:#dce6f4;border-bottom-right-radius:5px}
 .message-row.theirs .message-bubble{border-bottom-left-radius:5px}
+.message-row.pending .message-bubble{opacity:.62}
+.message-row.failed .message-bubble{border-color:#f3b4ac;background:#fdf1f0}
+.message-row.failed .message-meta{color:#c0392b}
 .message-meta{position:absolute;right:9px;bottom:4px;font-size:9px;color:var(--ink-4);white-space:nowrap}
-.message-composer{padding:12px;border-top:1px solid var(--rule);background:var(--paper);display:flex;gap:10px;align-items:flex-end}
+.message-composer{flex:0 0 auto;padding:12px;border-top:1px solid var(--rule);background:var(--paper);display:flex;gap:10px;align-items:flex-end}
 .message-composer textarea{resize:none;min-height:44px;max-height:130px;padding:11px 13px;line-height:1.45}
-.message-composer .btn{height:44px;padding:0 19px}
+.message-composer .btn{height:44px;padding:0 19px;flex:0 0 auto}
 .message-loading{text-align:center;color:var(--ink-4);font-size:13px;margin:auto}
 .chat-empty{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px;color:var(--ink-4)}
 .chat-empty-icon{width:54px;height:54px;border-radius:18px;background:var(--amber-soft);color:var(--navy);display:grid;place-items:center;margin-bottom:16px}
@@ -1001,13 +1013,16 @@ body.maintenance-page{background:var(--gradient-hero);min-height:100vh}
   .message-page-head{align-items:flex-start;flex-direction:column}
   .message-head-actions{width:100%}
   .message-head-actions .btn{flex:1}
-  .messenger-shell{height:calc(100vh - 225px);min-height:500px;display:block;position:relative}
+  .messenger-shell{flex:1 1 auto;min-height:0;max-height:none;display:block;position:relative}
   .conversation-pane{height:100%;border-right:0}
   .chat-pane{display:none;height:100%}
   .messenger-shell.chat-open .conversation-pane{display:none}
   .messenger-shell.chat-open .chat-pane{display:flex}
   .chat-back{display:block}
   .message-stream{padding:16px}
+  /* Re-declared here (after the base rule above) so it actually wins the cascade on
+     mobile, where the taller menu row needs the dot vertically re-centered. */
+  [data-message-nav].has-unread::after{top:50%;right:4px;transform:translateY(-50%)}
 }
 @media(max-width:520px){
   .message-lock-card{padding:25px 20px}

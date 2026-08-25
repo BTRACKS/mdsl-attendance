@@ -1868,10 +1868,13 @@
       var other = members.find(function (x) { return x.user_id !== u.id; });
       var person = conv.kind === "broadcast" ? { fullName: "Company", avatarUrl: "", id: null } : (other ? messagePerson(other.user_id) : { fullName: "Staff member", avatarUrl: "", id: null });
       var last = await supabaseClient.from("messages").select("id,sender_id,ciphertext,iv,created_at").eq("conversation_id", conv.id).order("created_at", { ascending: false }).limit(1);
+      var lastRow = last.data && last.data[0];
+      var clearedBefore = getClearedBefore(conv.id);
+      if (lastRow && clearedBefore && lastRow.created_at <= clearedBefore) lastRow = null;
       var lastText = "Encrypted message";
-      if (!last.error && last.data && last.data[0] && messageState.unlockedPrivateKey) {
-        var env = await supabaseClient.from("message_key_envelopes").select("encrypted_key").eq("message_id", last.data[0].id).eq("user_id", u.id).maybeSingle();
-        if (!env.error && env.data) lastText = await decryptMessage(last.data[0], env.data);
+      if (!last.error && lastRow && messageState.unlockedPrivateKey) {
+        var env = await supabaseClient.from("message_key_envelopes").select("encrypted_key").eq("message_id", lastRow.id).eq("user_id", u.id).maybeSingle();
+        if (!env.error && env.data) lastText = await decryptMessage(lastRow, env.data);
       }
       var unreadRows = await supabaseClient.from("messages").select("id,sender_id").eq("conversation_id", conv.id).neq("sender_id", u.id);
       var unreadCount = 0;
@@ -1880,7 +1883,7 @@
         var readMap = {}; (receiptRows.data || []).forEach(function(x){ if(x.read_at) readMap[x.message_id]=true; });
         unreadCount = unreadRows.data.filter(function(x){return !readMap[x.id];}).length;
       }
-      result.push({ id: conv.id, kind: conv.kind, person: person, last: last.data && last.data[0], preview: lastText, unread: unreadCount });
+      result.push({ id: conv.id, kind: conv.kind, person: person, last: lastRow, preview: lastRow ? lastText : "No messages yet", unread: unreadCount });
     }
     return result;
   }
@@ -1967,18 +1970,29 @@
   }
   function chatHtml(c) {
     var p = c.person;
-    return '<div class="chat-header">' + messageAvatar(p, "avatar-sm") + '<div><h2>' + esc(p.fullName) + '</h2><span>End-to-end encrypted</span></div><button type="button" class="chat-back" id="chatBack">Back</button></div><div class="message-stream" id="messageStream"><div class="message-loading">Loading secure messages...</div></div><form class="message-composer" id="messageComposer"><textarea id="messageInput" rows="1" maxlength="4000" placeholder="Type a message..." autocomplete="off"></textarea><button class="btn btn-primary" type="submit">Send</button></form>';
+    return '<div class="chat-header">' + messageAvatar(p, "avatar-sm") + '<div><h2>' + esc(p.fullName) + '</h2><span>End-to-end encrypted</span></div>' +
+      '<div class="chat-menu-wrap"><button type="button" class="chat-menu-btn" id="chatMenuBtn" aria-haspopup="true" aria-expanded="false" aria-label="Conversation options">&#8942;</button>' +
+      '<div class="chat-menu" id="chatMenu" hidden><button type="button" class="chat-menu-item" id="clearChatBtn">Clear chat</button></div></div>' +
+      '<button type="button" class="chat-back" id="chatBack">Back</button></div><div class="message-stream" id="messageStream"><div class="message-loading">Loading secure messages...</div></div><form class="message-composer" id="messageComposer"><textarea id="messageInput" rows="1" maxlength="4000" placeholder="Type a message..." autocomplete="off"></textarea><button class="btn btn-primary" type="submit">Send</button></form>';
   }
+  /* Clear Chat is a per-device, per-user "hide history before now" cutoff (kept in
+     localStorage). It never deletes or touches rows in the database, so the other
+     participant's copy of the conversation, and admin messaging, are unaffected. */
+  function messageClearKey(conversationId) { var u = session(); return "md_msg_clear_" + (u ? u.id : "") + "_" + conversationId; }
+  function getClearedBefore(conversationId) { try { return localStorage.getItem(messageClearKey(conversationId)) || null; } catch (e) { return null; } }
+  function setClearedBefore(conversationId, iso) { try { localStorage.setItem(messageClearKey(conversationId), iso); } catch (e) {} }
   async function loadMessagesForConversation(conversationId) {
     var u = session();
     var m = await supabaseClient.from("messages").select("id,conversation_id,sender_id,ciphertext,iv,created_at").eq("conversation_id", conversationId).order("created_at", { ascending: true }).limit(100);
     if (m.error) throw m.error;
-    var ids = (m.data || []).map(function (x) { return x.id; });
+    var clearedBefore = getClearedBefore(conversationId);
+    var rows = (m.data || []).filter(function (row) { return !clearedBefore || row.created_at > clearedBefore; });
+    var ids = rows.map(function (x) { return x.id; });
     var env = ids.length ? await supabaseClient.from("message_key_envelopes").select("message_id,encrypted_key").in("message_id", ids).eq("user_id", u.id) : { data: [] };
     var em = {}; (env.data || []).forEach(function (x) { em[x.message_id] = x; });
     var html = '';
-    for (var i = 0; i < (m.data || []).length; i++) {
-      var row = m.data[i], text = await decryptMessage(row, em[row.id]), mine = row.sender_id === u.id;
+    for (var i = 0; i < rows.length; i++) {
+      var row = rows[i], text = await decryptMessage(row, em[row.id]), mine = row.sender_id === u.id;
       html += '<div class="message-row ' + (mine ? 'mine' : 'theirs') + '"><div class="message-bubble">' + esc(text).replace(/\n/g,'<br>') + '<span class="message-meta">' + esc(messageTime(row.created_at)) + '</span></div></div>';
       if (!mine) await supabaseClient.rpc("mark_message_read", { p_message_id: row.id });
     }
@@ -1995,6 +2009,37 @@
     var pack = await encryptForRecipients(text, ids);
     var r = await supabaseClient.rpc("send_encrypted_message", { p_conversation_id: conversationId, p_ciphertext: pack.ciphertext, p_iv: pack.iv, p_envelopes: pack.envelopes });
     if (r.error) throw r.error;
+  }
+  /* --- Optimistic send: render the bubble immediately (we already hold the plaintext
+     before it's ever encrypted), then encrypt + save in the background. Each bubble
+     gets its own temp id, so a slow/late network response only ever updates its own
+     bubble in place -- it never triggers a re-render that could duplicate messages. */
+  function appendOptimisticMessage(text, tempId) {
+    var stream = el("messageStream"); if (!stream) return;
+    var empty = stream.querySelector(".chat-empty-small"); if (empty) empty.remove();
+    var row = document.createElement("div");
+    row.className = "message-row mine pending"; row.id = tempId; row.setAttribute("data-text", text);
+    row.innerHTML = '<div class="message-bubble">' + esc(text).replace(/\n/g,'<br>') + '<span class="message-meta">Sending&hellip;</span></div>';
+    stream.appendChild(row); stream.scrollTop = stream.scrollHeight;
+  }
+  function markOptimisticMessageSent(tempId) {
+    var row = document.getElementById(tempId); if (!row) return;
+    row.classList.remove("pending");
+    var meta = row.querySelector(".message-meta"); if (meta) meta.textContent = messageTime(new Date().toISOString());
+  }
+  function markOptimisticMessageFailed(tempId) {
+    var row = document.getElementById(tempId); if (!row) return;
+    row.classList.add("failed");
+    var meta = row.querySelector(".message-meta"); if (meta) meta.textContent = "Not sent \u2013 tap to retry";
+    row.style.cursor = "pointer";
+    row.addEventListener("click", function retry() {
+      row.removeEventListener("click", retry);
+      row.classList.remove("failed"); row.classList.add("pending");
+      if (meta) meta.textContent = "Sending\u2026";
+      var convId = messageState.activeConversation;
+      sendMessage(convId, row.getAttribute("data-text") || "").then(function () { markOptimisticMessageSent(tempId); refreshConversationList(); })
+        .catch(function () { markOptimisticMessageFailed(tempId); });
+    }, { once: true });
   }
   async function openDirectConversation(userId) {
     var r = await supabaseClient.rpc("get_or_create_direct_conversation", { p_other_user: userId });
@@ -2068,8 +2113,57 @@
     var n=el("newMessageBtn")||el("emptyNewMessage");if(n)n.addEventListener("click",showStaffPicker);var bc=el("broadcastBtn");if(bc)bc.addEventListener("click",showBroadcast);
     bindConversationList();
     var search=el("messageSearch");if(search)search.addEventListener("input",function(){var t=search.value.toLowerCase();Array.prototype.forEach.call(document.querySelectorAll(".conversation-item"),function(b){b.hidden=(b.textContent||"").toLowerCase().indexOf(t)===-1;});});
-    var composer=el("messageComposer");if(composer)composer.addEventListener("submit",async function(e){e.preventDefault();var input=el("messageInput"),text=(input.value||"").trim();if(!text)return;var btn=composer.querySelector("button[type=submit]");setBtnLoading(btn,true);var convId=messageState.activeConversation;try{await sendMessage(convId,text);input.value="";await loadMessagesForConversation(convId);refreshConversationList();}catch(err){toast(err.message||"Message could not be sent.","error");}finally{setBtnLoading(btn,false);}});
+    var composer=el("messageComposer");if(composer)composer.addEventListener("submit",function(e){
+      e.preventDefault();
+      var input=el("messageInput"),text=(input.value||"").trim();
+      if(!text)return;
+      var convId=messageState.activeConversation;
+      input.value="";
+      var tempId="pending-"+Date.now()+"-"+Math.random().toString(36).slice(2);
+      appendOptimisticMessage(text,tempId);
+      sendMessage(convId,text).then(function(){
+        markOptimisticMessageSent(tempId);
+        refreshConversationList();
+      }).catch(function(err){
+        markOptimisticMessageFailed(tempId);
+        toast(err.message||"Message could not be sent.","error");
+      });
+    });
     var back=el("chatBack");if(back)back.addEventListener("click",function(){messageState.activeConversation=null;renderMessagesKeepState();});
+    function closeChatMenu(){var menu=el("chatMenu"),btn=el("chatMenuBtn");if(menu)menu.hidden=true;if(btn)btn.setAttribute("aria-expanded","false");}
+    var menuBtn=el("chatMenuBtn");
+    if(menuBtn){
+      menuBtn.addEventListener("click",function(e){
+        e.stopPropagation();
+        var menu=el("chatMenu"),wasOpen=menu&&!menu.hidden;
+        closeChatMenu();
+        if(menu&&!wasOpen){menu.hidden=false;menuBtn.setAttribute("aria-expanded","true");}
+      });
+      if(!messageState.menuOutsideBound){
+        messageState.menuOutsideBound=true;
+        document.addEventListener("click",function(ev){
+          var menu=el("chatMenu"),btn=el("chatMenuBtn");
+          if(menu&&!menu.hidden&&!menu.contains(ev.target)&&ev.target!==btn)closeChatMenu();
+        });
+      }
+    }
+    var clearBtn=el("clearChatBtn");
+    if(clearBtn)clearBtn.addEventListener("click",function(){
+      closeChatMenu();
+      var convId=messageState.activeConversation;
+      var conv=(messageState.conversations||[]).find(function(x){return x.id===convId;});
+      var name=conv&&conv.person?conv.person.fullName:"this conversation";
+      confirmDialog(
+        "Clear chat with "+name+"?",
+        "This clears the conversation from your view on this device only \u2014 "+name+" will still see the full conversation on their side. This can't be undone from your end.",
+        function(){
+          setClearedBefore(convId,new Date().toISOString());
+          toast("Chat cleared.");
+          loadMessagesForConversation(convId);
+          refreshConversationList();
+        }
+      );
+    });
     if(messageState.activeConversation) loadMessagesForConversation(messageState.activeConversation);
   }
   async function initMessaging() {
