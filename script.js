@@ -2814,6 +2814,43 @@
 
   async function init() {
     el("view").innerHTML = loadingView();
+
+    /* Messages-only fast start: do not make the Messages screen wait for the
+       full attendance/HSE data bundle. The existing encrypted conversation and
+       message-history caches are rendered first, while the normal application
+       data refresh continues in the background. No other route changes here. */
+    if (PAGE === "app" && (location.hash || "") === "#/messages") {
+      try {
+        var msgSessionRes = await supabaseClient.auth.getSession();
+        authUser = (msgSessionRes.data && msgSessionRes.data.session) ? msgSessionRes.data.session.user : null;
+        if (authUser) {
+          var msgProfileRes = await supabaseClient.from("profiles").select("*").eq("id", authUser.id).maybeSingle();
+          if (!msgProfileRes.error && msgProfileRes.data) {
+            currentUser = mapProfile(msgProfileRes.data);
+            db.users = [currentUser];
+          }
+        }
+        await initMessaging();
+        render();
+
+        /* Refresh the rest of the application data after Messages is visible.
+           This does not replace the cached chat or change any ticket code. */
+        refreshData().then(function () {
+          if (dataError) toast("Could not reach the database: " + dataError, "error");
+          if (location.hash === "#/messages") {
+            var freshUser = authUser && db.users.find(function (u) { return u.id === authUser.id; });
+            if (freshUser) currentUser = freshUser;
+          }
+        }).catch(function (err) {
+          console.warn("Background data refresh:", err);
+        });
+        return;
+      } catch (msgInitError) {
+        console.warn("Fast Messages init:", msgInitError);
+        /* Fall back to the original startup path if the fast path cannot start. */
+      }
+    }
+
     await refreshData();
     if (dataError) {
       toast("Could not reach the database: " + dataError, "error");
