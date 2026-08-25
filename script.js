@@ -1976,11 +1976,36 @@
     if (c.error) throw c.error;
     var parts = await supabaseClient.from("message_participants").select("conversation_id,user_id").in("conversation_id", ids);
     if (parts.error) throw parts.error;
+
+    /* Staff users may not be allowed by the profiles RLS policy to select the
+       admin's profile directly. The messaging RPC safely returns profiles only
+       for users who share a conversation with the current user. */
+    var participantIds = [];
+    (parts.data || []).forEach(function (x) {
+      if (String(x.user_id) !== String(u.id) && participantIds.indexOf(x.user_id) === -1) participantIds.push(x.user_id);
+    });
+    var peopleById = {};
+    if (participantIds.length) {
+      var peopleRes = await supabaseClient.rpc("get_message_people", { p_user_ids: participantIds });
+      if (peopleRes.error) throw peopleRes.error;
+      (peopleRes.data || []).forEach(function (person) {
+        peopleById[String(person.id)] = {
+          id: person.id,
+          fullName: person.full_name || "Staff member",
+          avatarUrl: person.avatar_url || "",
+          role: person.role || "staff",
+          department: person.department || ""
+        };
+      });
+    }
+
     var result = [];
     for (var i = 0; i < (c.data || []).length; i++) {
       var conv = c.data[i], members = (parts.data || []).filter(function (x) { return x.conversation_id === conv.id; });
-      var other = members.find(function (x) { return x.user_id !== u.id; });
-      var person = conv.kind === "broadcast" ? { fullName: "Company", avatarUrl: "", id: null } : (other ? messagePerson(other.user_id) : { fullName: "Staff member", avatarUrl: "", id: null });
+      var other = members.find(function (x) { return String(x.user_id) !== String(u.id); });
+      var person = conv.kind === "broadcast"
+        ? { fullName: "Company", avatarUrl: "", id: null }
+        : (other ? (peopleById[String(other.user_id)] || messagePerson(other.user_id)) : { fullName: "Staff member", avatarUrl: "", id: null });
       var last = await supabaseClient.from("messages").select("id,sender_id,ciphertext,iv,created_at").eq("conversation_id", conv.id).order("created_at", { ascending: false }).limit(1);
       var lastRow = last.data && last.data[0];
       var clearedBefore = getClearedBefore(conv.id);
