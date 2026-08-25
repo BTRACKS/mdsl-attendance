@@ -1971,7 +1971,7 @@
   var messageState = {
     conversations: [], activeConversation: null, unlockedPrivateKey: null,
     ownPublicKey: null, pinSessionExpiresAt: 0, unread: 0, sound: localStorage.getItem("md_message_sound") !== "off",
-    realtime: null, initialized: false, loading: false, audioContext: null, audioUnlockBound: false, soundSeen: {}
+    realtime: null, initialized: false, loading: false, audioContext: null, audioUnlockBound: false, audioBuffer: null, audioLoadPromise: null, soundSeen: {}
   };
   var MESSAGE_ATTACHMENT_PREFIX = "MDMSG1:";
   var MESSAGE_ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024;
@@ -2338,6 +2338,32 @@
       return messageState.audioContext;
     } catch (e) { return null; }
   }
+  function loadMessageNotificationSound() {
+    if (messageState.audioBuffer) return Promise.resolve(messageState.audioBuffer);
+    if (messageState.audioLoadPromise) return messageState.audioLoadPromise;
+    var ctx = ensureMessageAudioContext();
+    if (!ctx) return Promise.resolve(null);
+    var soundUrl = new URL("assets/message-notification.wav", document.baseURI).href;
+    messageState.audioLoadPromise = fetch(soundUrl, { cache: "force-cache" })
+      .then(function (response) {
+        if (!response.ok) throw new Error("Notification sound failed to load");
+        return response.arrayBuffer();
+      })
+      .then(function (data) {
+        return new Promise(function (resolve, reject) {
+          ctx.decodeAudioData(data, resolve, reject);
+        });
+      })
+      .then(function (buffer) {
+        messageState.audioBuffer = buffer;
+        return buffer;
+      })
+      .catch(function () {
+        messageState.audioLoadPromise = null;
+        return null;
+      });
+    return messageState.audioLoadPromise;
+  }
   function unlockMessageAudio() {
     var ctx = ensureMessageAudioContext();
     if (!ctx) return;
@@ -2347,6 +2373,7 @@
         if (resumed && typeof resumed.catch === "function") resumed.catch(function(){});
       }
     } catch (e) {}
+    loadMessageNotificationSound();
   }
   function bindMessageAudioUnlock() {
     if (messageState.audioUnlockBound) return;
@@ -2359,34 +2386,39 @@
   function playMessageSound(messageId) {
     if (!messageState.sound) return;
     if (messageId && messageState.soundSeen[messageId]) return;
-    if (messageId) {
-      messageState.soundSeen[messageId] = true;
-      var seenIds = Object.keys(messageState.soundSeen);
-      if (seenIds.length > 250) delete messageState.soundSeen[seenIds[0]];
-    }
-    /* Reuse one local AudioContext and resume it after a user gesture so browser
-       autoplay policies do not leave the notification tone permanently silent. */
+    /* Reuse one local AudioContext and the supplied project asset. The sound is
+       decoded/preloaded without playing, then started only for a new incoming
+       message after the browser audio context has been unlocked by user input. */
     var ctx = ensureMessageAudioContext();
     if (!ctx) return;
-    var playTone = function () {
+    var playBuffer = function (buffer) {
+      if (!buffer || ctx.state !== "running") return;
+      if (messageId && messageState.soundSeen[messageId]) return;
       try {
-        var osc = ctx.createOscillator(), gain = ctx.createGain();
-        osc.type = "sine";
-        osc.frequency.value = 660;
-        gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.055, ctx.currentTime + .01);
-        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + .18);
-        osc.connect(gain); gain.connect(ctx.destination);
-        osc.start(); osc.stop(ctx.currentTime + .19);
+        var source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        source.start(0);
+        if (messageId) {
+          messageState.soundSeen[messageId] = true;
+          var seenIds = Object.keys(messageState.soundSeen);
+          if (seenIds.length > 250) delete messageState.soundSeen[seenIds[0]];
+        }
       } catch (e) {}
     };
-    try {
-      if (ctx.state === "running") playTone();
-      else {
-        var resumed = ctx.resume();
-        if (resumed && typeof resumed.then === "function") resumed.then(function () { if (ctx.state === "running") playTone(); }).catch(function(){});
-      }
-    } catch (e) {}
+    loadMessageNotificationSound().then(function (buffer) {
+      if (!buffer) return;
+      try {
+        if (ctx.state === "suspended") {
+          var resumed = ctx.resume();
+          if (resumed && typeof resumed.then === "function") {
+            resumed.then(function () { playBuffer(buffer); }).catch(function(){});
+          }
+        } else {
+          playBuffer(buffer);
+        }
+      } catch (e) {}
+    });
   }
   async function startMessagingRealtime() {
     if (messageState.realtime || !session()) return;
