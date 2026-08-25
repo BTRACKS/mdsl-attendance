@@ -2301,9 +2301,23 @@
         var r=await sb.from("support_tickets").update(patch).eq("id",t.id);
         if(r.error) throw r.error;
         t.status=patch.status; t.priority=patch.priority; t.assigned_to=patch.assigned_to;
-        closeSupportModal();
         await loadSupportTickets();
-        toast("Ticket updated.","good");
+        // Keep the ticket card/modal open after saving changes.
+        var statusBadge = document.querySelector("#supportTicketModalBody .ticket-admin-head > span");
+        if (statusBadge) {
+          statusBadge.className = supportTicketStatusClass(t.status);
+          statusBadge.textContent = t.status;
+        }
+        var meta = document.querySelector("#supportTicketModalBody .ticket-admin-meta");
+        if (meta) {
+          var metaSpans = meta.querySelectorAll("span");
+          if (metaSpans[1]) {
+            metaSpans[1].className = supportTicketPriorityClass(t.priority);
+            metaSpans[1].textContent = t.priority;
+          }
+          if (metaSpans[2]) metaSpans[2].textContent = "Assigned: " + (t.assigned_to ? supportTicketName(t.assigned_to) : "Unassigned");
+        }
+        toast("Ticket updated. The ticket remains open.","good");
       } catch(e) {
         toast(e.message||"Could not update ticket. Check the Supabase support-ticket RLS policies.","bad");
       } finally { setBtnLoading(b,false); }
