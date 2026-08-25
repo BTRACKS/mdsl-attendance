@@ -2236,7 +2236,24 @@
 
   async function loadSupportTicketBadge(){
     var badge=$("supportTicketNavBadge"); if(!badge)return;
-    try{var r=await sb.rpc("support_unread_notification_count");if(!r.error&&Number(r.data)>0){badge.hidden=false;badge.textContent=Number(r.data)>99?"99+":String(r.data);}else badge.hidden=true;}catch(e){badge.hidden=true;}
+    try{
+      /* The Support Tickets nav badge represents the tickets visible to IT Support.
+         It must remain visible whenever at least one ticket exists; it should not
+         depend on a notification row being created or marked unread. */
+      var r=await sb.from("support_tickets").select("id",{count:"exact",head:true});
+      var count=!r.error?Number(r.count||0):0;
+      if(count>0){
+        badge.hidden=false;
+        badge.textContent=count>99?"99+":String(count);
+        badge.setAttribute("aria-label",count+" support ticket"+(count===1?"":"s"));
+      }else{
+        badge.hidden=true;
+        badge.textContent="";
+        badge.removeAttribute("aria-label");
+      }
+    }catch(e){
+      badge.hidden=true;
+    }
   }
 
   function supportTicketCreateHtml(){
