@@ -2421,7 +2421,22 @@
       var stream = el("messageStream"); if (stream) {
         stream.innerHTML = html || '<div class="chat-empty chat-empty-small"><p>No messages yet. Say hello.</p></div>';
         stream.scrollTop = stream.scrollHeight;
+        /* Bind Edit after each message render because the message bubbles are
+           rebuilt dynamically. This keeps the existing 20-minute/security
+           checks intact while ensuring the button is actually clickable. */
         Array.prototype.forEach.call(stream.querySelectorAll("[data-edit-message]"), function(btn){
+          if (btn.getAttribute("data-edit-bound") === "1") return;
+          btn.setAttribute("data-edit-bound", "1");
+          btn.addEventListener("click", async function(e){
+            e.preventDefault();
+            e.stopPropagation();
+            var currentUser = session(), id = btn.getAttribute("data-edit-message");
+            if (!currentUser || !id) return;
+            var r = await supabaseClient.from("messages").select("id,conversation_id,sender_id,ciphertext,iv,created_at").eq("id",id).eq("sender_id",currentUser.id).maybeSingle();
+            if (r.error) { toast(r.error.message || "Message could not be opened for editing.", "error"); return; }
+            if (!r.data) { toast("Message not found or you are not allowed to edit it.", "error"); return; }
+            openEditMessage(r.data);
+          });
           var row = btn.closest("[data-message-id]"), created = row && new Date(row.getAttribute("data-created-at")).getTime();
           var remaining = created ? (created + MESSAGE_EDIT_WINDOW_MS - Date.now()) : 0;
           if (remaining > 0) setTimeout(function(){ if (btn.isConnected) btn.remove(); }, remaining);
@@ -2556,8 +2571,11 @@
       row.classList.remove("failed"); row.classList.add("pending");
       if (meta) meta.textContent = "Sending\u2026";
       var convId = messageState.activeConversation;
-      sendMessage(convId, row.getAttribute("data-text") || "").then(function () { markOptimisticMessageSent(tempId); refreshConversationList(); })
-        .catch(function () { markOptimisticMessageFailed(tempId); });
+      sendMessage(convId, row.getAttribute("data-text") || "").then(async function () {
+          markOptimisticMessageSent(tempId);
+          await loadMessagesForConversation(convId);
+          await refreshConversationList();
+        }).catch(function () { markOptimisticMessageFailed(tempId); });
     }, { once: true });
   }
   async function openDirectConversation(userId) {
@@ -2697,7 +2715,13 @@
         input.value=""; clearPendingAttachments();
         var tempId="pending-"+Date.now()+"-"+Math.random().toString(36).slice(2);
         appendOptimisticMessage(content,tempId);
-        sendMessage(convId,content).then(function(){ markOptimisticMessageSent(tempId); refreshConversationList(); }).catch(function(err){ markOptimisticMessageFailed(tempId); toast(err.message||"Message could not be sent.","error"); });
+        sendMessage(convId,content).then(async function(){
+          markOptimisticMessageSent(tempId);
+          /* Once the server confirms the send, reload the conversation so the
+             real message id/created_at are present and Edit appears immediately. */
+          await loadMessagesForConversation(convId);
+          await refreshConversationList();
+        }).catch(function(err){ markOptimisticMessageFailed(tempId); toast(err.message||"Message could not be sent.","error"); });
       } catch(err) { toast(err.message||"Attachment could not be sent.","error"); }
       finally { setBtnLoading(btn,false); }
     });
