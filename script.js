@@ -511,7 +511,7 @@
       passwordField("password", "Password", "Your password", { full: true }) +
       '</div><div class="form-foot">' +
       '<div class="inline-between"><a class="link-muted" href="#/forgot">Forgot password?</a>' +
-      '<a class="link-muted auth-link" href="#/signup">' + ICON.register + '<span>Create an account</span></a></div>' +
+      '<a class="link-muted auth-link" href="#/signup">' + '<span>Create an account</span></a></div>' +
       '<button class="btn btn-primary btn-lg btn-block" type="submit"><span>Sign in</span></button>' +
       "</div></form>" +
       "</div></div></div>";
