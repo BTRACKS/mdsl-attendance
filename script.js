@@ -1971,7 +1971,7 @@
   var messageState = {
     conversations: [], activeConversation: null, unlockedPrivateKey: null,
     ownPublicKey: null, pinSessionExpiresAt: 0, unread: 0, sound: localStorage.getItem("md_message_sound") !== "off",
-    realtime: null, initialized: false, loading: false
+    realtime: null, initialized: false, loading: false, audioContext: null, audioUnlockBound: false, soundSeen: {}
   };
   var MESSAGE_ATTACHMENT_PREFIX = "MDMSG1:";
   var MESSAGE_ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024;
@@ -2329,16 +2329,64 @@
     }
     a.classList.toggle("has-unread", messageState.unread > 0);
   }
-  function playMessageSound() {
-    if (messageState.sound) {
-      /* Browsers generally allow audio after user interaction; the generated tone is tiny and local. */
-      try {
-        var C = window.AudioContext || window.webkitAudioContext; if (!C) return;
-        var ctx = new C(), osc = ctx.createOscillator(), gain = ctx.createGain();
-        osc.frequency.value = 660; gain.gain.setValueAtTime(0.0001, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.055, ctx.currentTime + .01); gain.gain.exponentialRampToValueAtTime(.0001, ctx.currentTime + .18);
-        osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + .19); setTimeout(function(){ctx.close();},300);
-      } catch(e) {}
+  function ensureMessageAudioContext() {
+    if (messageState.audioContext) return messageState.audioContext;
+    try {
+      var C = window.AudioContext || window.webkitAudioContext;
+      if (!C) return null;
+      messageState.audioContext = new C();
+      return messageState.audioContext;
+    } catch (e) { return null; }
+  }
+  function unlockMessageAudio() {
+    var ctx = ensureMessageAudioContext();
+    if (!ctx) return;
+    try {
+      if (ctx.state === "suspended") {
+        var resumed = ctx.resume();
+        if (resumed && typeof resumed.catch === "function") resumed.catch(function(){});
+      }
+    } catch (e) {}
+  }
+  function bindMessageAudioUnlock() {
+    if (messageState.audioUnlockBound) return;
+    messageState.audioUnlockBound = true;
+    var unlock = function () { unlockMessageAudio(); };
+    ["pointerdown", "touchstart", "keydown"].forEach(function (eventName) {
+      document.addEventListener(eventName, unlock, { passive: true });
+    });
+  }
+  function playMessageSound(messageId) {
+    if (!messageState.sound) return;
+    if (messageId && messageState.soundSeen[messageId]) return;
+    if (messageId) {
+      messageState.soundSeen[messageId] = true;
+      var seenIds = Object.keys(messageState.soundSeen);
+      if (seenIds.length > 250) delete messageState.soundSeen[seenIds[0]];
     }
+    /* Reuse one local AudioContext and resume it after a user gesture so browser
+       autoplay policies do not leave the notification tone permanently silent. */
+    var ctx = ensureMessageAudioContext();
+    if (!ctx) return;
+    var playTone = function () {
+      try {
+        var osc = ctx.createOscillator(), gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.value = 660;
+        gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.055, ctx.currentTime + .01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + .18);
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.start(); osc.stop(ctx.currentTime + .19);
+      } catch (e) {}
+    };
+    try {
+      if (ctx.state === "running") playTone();
+      else {
+        var resumed = ctx.resume();
+        if (resumed && typeof resumed.then === "function") resumed.then(function () { if (ctx.state === "running") playTone(); }).catch(function(){});
+      }
+    } catch (e) {}
   }
   async function startMessagingRealtime() {
     if (messageState.realtime || !session()) return;
@@ -2354,7 +2402,7 @@
           if (messageState.activeConversation === m.conversation_id) await loadMessagesForConversation(m.conversation_id);
           refreshConversationList();
         }
-        if (document.hidden || messageState.sound) playMessageSound();
+        if (messageState.sound) playMessageSound(m.id);
         if ("Notification" in window && Notification.permission === "granted") {
           new Notification("New Message", { body: "You have a new secure message.", icon: "favicon.png" });
         }
@@ -2709,6 +2757,7 @@
   async function initMessaging() {
     if (!session()) { await stopMessagingRealtime(); return; }
     loadCachedMessagingState();
+    bindMessageAudioUnlock();
     try {
       var k=await getOwnKeyState();
       messageState.hasKey=!!k.hasPrivate && !!k.publicKey;
