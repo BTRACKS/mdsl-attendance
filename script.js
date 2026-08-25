@@ -2120,22 +2120,67 @@
   function messageClearKey(conversationId) { var u = session(); return "md_msg_clear_" + (u ? u.id : "") + "_" + conversationId; }
   function getClearedBefore(conversationId) { try { return localStorage.getItem(messageClearKey(conversationId)) || null; } catch (e) { return null; } }
   function setClearedBefore(conversationId, iso) { try { localStorage.setItem(messageClearKey(conversationId), iso); } catch (e) {} }
+  function messageHistoryCacheKey(conversationId) {
+    var u = session();
+    return "md_msg_history_v2_" + (u ? u.id : "") + "_" + conversationId;
+  }
+  function readMessageHistoryCache(conversationId) {
+    try {
+      var raw = sessionStorage.getItem(messageHistoryCacheKey(conversationId));
+      if (!raw) return null;
+      var cached = JSON.parse(raw);
+      return cached && Array.isArray(cached.rows) ? cached : null;
+    } catch (e) { return null; }
+  }
+  function writeMessageHistoryCache(conversationId, rows, envelopes) {
+    try {
+      sessionStorage.setItem(messageHistoryCacheKey(conversationId), JSON.stringify({ rows: rows, envelopes: envelopes, cachedAt: Date.now() }));
+    } catch (e) {
+      /* Ignore storage quota/private-mode errors; the live database remains authoritative. */
+    }
+  }
+  async function renderMessageRows(rows, envelopeMap, u, markRead) {
+    var html = '';
+    for (var i = 0; i < rows.length; i++) {
+      var row = rows[i], text = await decryptMessage(row, envelopeMap[row.id]), mine = row.sender_id === u.id;
+      html += '<div class="message-row ' + (mine ? 'mine' : 'theirs') + '"><div class="message-bubble">' + esc(text).replace(/\n/g,'<br>') + '<span class="message-meta">' + esc(messageTime(row.created_at)) + '</span></div></div>';
+      if (markRead && !mine) supabaseClient.rpc("mark_message_read", { p_message_id: row.id }).catch(function(){});
+    }
+    var stream = el("messageStream");
+    if (stream) {
+      stream.innerHTML = html || '<div class="chat-empty chat-empty-small"><p>No messages yet. Say hello.</p></div>';
+      stream.scrollTop = stream.scrollHeight;
+    }
+  }
   async function loadMessagesForConversation(conversationId) {
     var u = session();
+    if (!u || !conversationId) return;
+    var clearedBefore = getClearedBefore(conversationId);
+
+    /* Show the previous encrypted history immediately after a reload. The cache
+       contains ciphertext/envelopes only, never decrypted message text. The live
+       database is fetched afterwards and replaces the cache with fresh data. */
+    var cached = readMessageHistoryCache(conversationId);
+    if (cached) {
+      var cachedRows = cached.rows.filter(function (row) { return !clearedBefore || row.created_at > clearedBefore; });
+      var cachedMap = {}; (cached.envelopes || []).forEach(function (x) { cachedMap[x.message_id] = x; });
+      await renderMessageRows(cachedRows, cachedMap, u, false);
+    } else {
+      var stream = el("messageStream");
+      if (stream) stream.innerHTML = '<div class="message-loading">Loading secure messages...</div>';
+    }
+
     var m = await supabaseClient.from("messages").select("id,conversation_id,sender_id,ciphertext,iv,created_at").eq("conversation_id", conversationId).order("created_at", { ascending: true }).limit(100);
     if (m.error) throw m.error;
-    var clearedBefore = getClearedBefore(conversationId);
     var rows = (m.data || []).filter(function (row) { return !clearedBefore || row.created_at > clearedBefore; });
     var ids = rows.map(function (x) { return x.id; });
     var env = ids.length ? await supabaseClient.from("message_key_envelopes").select("message_id,encrypted_key").in("message_id", ids).eq("user_id", u.id) : { data: [] };
-    var em = {}; (env.data || []).forEach(function (x) { em[x.message_id] = x; });
-    var html = '';
-    for (var i = 0; i < rows.length; i++) {
-      var row = rows[i], text = await decryptMessage(row, em[row.id]), mine = row.sender_id === u.id;
-      html += '<div class="message-row ' + (mine ? 'mine' : 'theirs') + '"><div class="message-bubble">' + esc(text).replace(/\n/g,'<br>') + '<span class="message-meta">' + esc(messageTime(row.created_at)) + '</span></div></div>';
-      if (!mine) await supabaseClient.rpc("mark_message_read", { p_message_id: row.id });
-    }
-    var stream = el("messageStream"); if (stream) { stream.innerHTML = html || '<div class="chat-empty chat-empty-small"><p>No messages yet. Say hello.</p></div>'; stream.scrollTop = stream.scrollHeight; }
+    var envRows = env.data || [];
+    var em = {}; envRows.forEach(function (x) { em[x.message_id] = x; });
+
+    /* Replace the cached view with the authoritative server result. */
+    writeMessageHistoryCache(conversationId, rows, envRows);
+    await renderMessageRows(rows, em, u, true);
     await refreshMessageUnread();
   }
   async function sendMessage(conversationId, text) {
