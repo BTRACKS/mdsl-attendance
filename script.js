@@ -2170,10 +2170,19 @@
   function updateMessageBadge() {
     var a = document.querySelector('[data-message-nav]'); if (!a) return;
     var label = a.querySelector("[data-message-label]"); if (!label) return;
+    var count = Number(messageState.unread || 0);
     label.textContent = "Messages";
-    if (messageState.unread > 0) a.setAttribute("data-message-unread", messageState.unread > 99 ? "99+" : String(messageState.unread));
-    else a.removeAttribute("data-message-unread");
-    a.classList.toggle("has-unread", messageState.unread > 0);
+    var oldBadge = label.querySelector(".message-nav-badge");
+    if (oldBadge) oldBadge.remove();
+    a.classList.remove("has-unread");
+    if (count > 0) {
+      var badge = document.createElement("span");
+      badge.className = "message-nav-badge";
+      badge.textContent = count > 99 ? "99+" : String(count);
+      badge.setAttribute("aria-label", String(count) + " unread message" + (count === 1 ? "" : "s"));
+      badge.setAttribute("aria-hidden", "true");
+      label.appendChild(badge);
+    }
   }
   function playMessageSound() {
     if (messageState.sound) {
