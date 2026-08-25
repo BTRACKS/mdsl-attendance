@@ -1057,3 +1057,137 @@ body.modal-open{overflow:hidden}
 .support-ticket-modal-backdrop{z-index:150}
 @media (max-width:900px){.ticket-admin-controls{grid-template-columns:1fr 1fr}.ticket-admin-controls .btn{width:100%}}
 @media (max-width:560px){.support-admin-ticket-card{grid-template-columns:1fr}.ticket-admin-head{flex-direction:column}.ticket-admin-controls{grid-template-columns:1fr}.ticket-admin-controls .btn{width:100%}}
+
+/* ---------- Support Ticket layout refinements ---------- */
+#tab-tickets .section-head-actions{
+  display:flex;
+  align-items:center;
+  gap:14px;
+  flex-wrap:wrap;
+}
+#tab-tickets .section-head-actions .btn{
+  min-width:108px;
+}
+
+/* Give the ticket detail dialog enough horizontal room on desktop so the
+   status, priority and assignee controls remain readable. */
+.support-ticket-modal-backdrop .modal.modal-wide{
+  max-width:880px;
+  width:min(880px,100%);
+  padding:28px;
+}
+.ticket-admin-modal{
+  max-height:76vh;
+  overflow:auto;
+  padding-right:2px;
+}
+.ticket-admin-controls{
+  grid-template-columns:repeat(3,minmax(150px,1fr)) minmax(120px,auto);
+  gap:14px 16px;
+  padding:16px;
+  margin:18px 0 20px;
+}
+.ticket-admin-controls .field{
+  margin:0;
+}
+.ticket-admin-controls .field label{
+  white-space:nowrap;
+}
+.ticket-admin-controls select{
+  width:100%;
+  min-width:0;
+}
+.ticket-admin-controls .btn{
+  align-self:end;
+  white-space:nowrap;
+  min-width:126px;
+}
+.ticket-admin-thread{
+  gap:12px;
+  margin-top:20px;
+}
+.ticket-admin-reply{
+  margin-top:22px;
+  padding-top:18px;
+}
+.ticket-admin-reply .field{
+  margin-top:0;
+}
+.ticket-admin-reply .field + .field{
+  margin-top:16px;
+}
+.ticket-admin-reply textarea{
+  min-height:120px;
+}
+.ticket-admin-reply .check{
+  display:flex;
+  align-items:center;
+  gap:9px;
+  line-height:1.4;
+}
+.ticket-admin-reply .check input{
+  flex:0 0 auto;
+  margin:0;
+}
+.ticket-admin-reply > button[type="submit"]{
+  margin-top:14px;
+  min-width:90px;
+}
+
+@media (max-width:900px){
+  #tab-tickets .section-head-actions{gap:12px}
+  .support-ticket-modal-backdrop .modal.modal-wide{
+    max-width:760px;
+    padding:24px;
+  }
+  .ticket-admin-controls{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+  .ticket-admin-controls .btn{
+    width:100%;
+  }
+}
+
+@media (max-width:560px){
+  #tab-tickets .section-head-actions{
+    width:100%;
+    gap:12px;
+  }
+  #tab-tickets .section-head-actions .btn{
+    flex:1 1 0;
+    min-width:0;
+  }
+  .support-ticket-modal-backdrop{
+    padding:12px;
+  }
+  .support-ticket-modal-backdrop .modal.modal-wide{
+    max-width:100%;
+    width:100%;
+    padding:20px 16px;
+  }
+  .ticket-admin-modal{
+    max-height:74vh;
+  }
+  .ticket-admin-head{
+    gap:10px;
+  }
+  .ticket-admin-controls{
+    grid-template-columns:1fr;
+    gap:14px;
+    padding:14px;
+  }
+  .ticket-admin-controls .btn{
+    width:100%;
+  }
+  .ticket-admin-reply{
+    margin-top:20px;
+    padding-top:16px;
+  }
+  .ticket-admin-reply .field + .field{
+    margin-top:14px;
+  }
+  .ticket-admin-reply > button[type="submit"]{
+    width:100%;
+    margin-top:14px;
+  }
+}
