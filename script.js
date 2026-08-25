@@ -1917,8 +1917,15 @@
       '<p class="eyebrow">Secure Messaging</p><h2>' + (create ? "Set up secure messaging" : "Unlock your messages") + '</h2>' +
       '<p>' + (create ? "Create a private recovery passphrase. It protects your messaging private key and is never sent to the database." : "Enter the recovery passphrase you created for secure messaging on this account.") + '</p>' +
       '<form id="messageKeyForm" class="message-key-form">' +
-      '<div class="field"><label for="messageRecovery">Recovery passphrase</label><input id="messageRecovery" name="recovery" type="password" minlength="12" autocomplete="new-password" placeholder="At least 12 characters" /><span class="error"></span></div>' +
-      (create ? '<div class="field"><label for="messageRecoveryConfirm">Confirm passphrase</label><input id="messageRecoveryConfirm" name="confirm" type="password" minlength="12" autocomplete="new-password" placeholder="Repeat your passphrase" /><span class="error"></span></div>' : '') +
+      '<div class="field password-field"><label for="messageRecovery">Recovery passphrase</label>' +
+      '<div class="pw-wrap"><input id="messageRecovery" name="recovery" type="password" minlength="12" autocomplete="new-password" placeholder="At least 12 characters" />' +
+      '<button type="button" class="pw-toggle" aria-label="Show password" aria-pressed="false">' + ICON.eye + "</button></div>" +
+      (create ? '<div class="pw-strength" data-pw-strength hidden><span class="pw-strength-track"><i></i></span><span class="pw-strength-label"></span></div>' : "") +
+      '<span class="error"></span></div>' +
+      (create ? '<div class="field password-field"><label for="messageRecoveryConfirm">Confirm passphrase</label>' +
+        '<div class="pw-wrap"><input id="messageRecoveryConfirm" name="confirm" type="password" minlength="12" autocomplete="new-password" placeholder="Repeat your passphrase" />' +
+        '<button type="button" class="pw-toggle" aria-label="Show password" aria-pressed="false">' + ICON.eye + "</button></div>" +
+        '<span class="error"></span></div>' : "") +
       '<button class="btn btn-primary btn-block" type="submit">' + (create ? "Create encryption keys" : "Unlock messages") + '</button></form>' +
       '<p class="message-lock-note">Your recovery passphrase cannot be recovered by the administrator. Keep it somewhere safe.</p></div></div>';
   }
