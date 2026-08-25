@@ -2485,11 +2485,12 @@
     var ids = (p.data || []).map(function(x){return x.user_id;});
     if (ids.indexOf(u.id) === -1) ids.push(u.id);
     var pack = await encryptForRecipients(content, ids);
-    var cutoff = new Date(Date.now() - MESSAGE_EDIT_WINDOW_MS).toISOString();
-    var upd = await supabaseClient.from("messages").update({ ciphertext: pack.ciphertext, iv: pack.iv }).eq("id", messageId).eq("sender_id", u.id).gte("created_at", cutoff);
-    if (upd.error) throw upd.error;
-    var envRows = pack.envelopes.map(function(x){ return { message_id: messageId, user_id: x.user_id, encrypted_key: x.encrypted_key }; });
-    var envUp = await supabaseClient.from("message_key_envelopes").upsert(envRows, { onConflict: "message_id,user_id" });
+    var envUp = await supabaseClient.rpc("update_encrypted_message", {
+      p_message_id: messageId,
+      p_ciphertext: pack.ciphertext,
+      p_iv: pack.iv,
+      p_envelopes: pack.envelopes
+    });
     if (envUp.error) throw envUp.error;
   }
   function readAttachment(file) {
