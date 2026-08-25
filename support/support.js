@@ -57,6 +57,27 @@
     sp.className = "spinner";
     btn.appendChild(sp);
   }
+  /* Support-ticket actions use this loading helper. Keep the original button
+     markup so Save changes / Send can be restored cleanly after success or error. */
+  function setBtnLoading(btn, loading) {
+    if (!btn) return;
+    if (loading) {
+      if (btn.dataset.loadingHtml === undefined) btn.dataset.loadingHtml = btn.innerHTML;
+      btn.disabled = true;
+      btn.classList.add("is-loading");
+      var light = btn.classList.contains("btn-dark") ? " spinner-light" : "";
+      if (!btn.querySelector(".spinner")) {
+        btn.insertAdjacentHTML("beforeend", '<span class="spinner' + light + '" aria-hidden="true"></span>');
+      }
+    } else {
+      btn.disabled = false;
+      btn.classList.remove("is-loading");
+      if (btn.dataset.loadingHtml !== undefined) {
+        btn.innerHTML = btn.dataset.loadingHtml;
+        delete btn.dataset.loadingHtml;
+      }
+    }
+  }
   function message(text, kind) {
     var el = $("loginMsg");
     if (!text) { el.hidden = true; return; }
