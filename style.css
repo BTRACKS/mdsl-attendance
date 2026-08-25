@@ -79,7 +79,7 @@ img{max-width:100%;display:block}
   background:var(--paper-2);border:1px solid var(--rule);border-radius:var(--radius-pill);padding:5px
 }
 .nav a{
-  display:inline-flex;align-items:center;gap:8px;
+  display:inline-flex;align-items:center;gap:8px;position:relative;
   font-size:13px;font-weight:600;color:var(--ink-2);padding:9px 16px;border-radius:var(--radius-pill);
   white-space:nowrap;transition:background var(--t),color var(--t),box-shadow var(--t)
 }
@@ -610,6 +610,7 @@ td .sub{font-size:12.5px;color:var(--ink-4)}
     border-bottom:1px solid var(--rule);font-size:15px;font-weight:700;justify-content:flex-start
   }
   .nav a.active{background:none;box-shadow:none}
+  [data-message-nav].has-unread::after{top:50%;right:4px;transform:translateY(-50%)}
   .nav-signout{
     display:flex;align-items:center;gap:10px;width:100%;padding:18px 4px;
     border:0;background:none;font-size:15px;font-weight:700;
