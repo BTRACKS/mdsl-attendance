@@ -1552,6 +1552,8 @@
     var avatarProfile = profile || { fullName: name, avatarUrl: "" };
     if (normalizeCreatorName(name) === "oladapo salami") {
       avatarProfile = Object.assign({}, avatarProfile, { avatarUrl: "oladapo-salami.jpg" });
+    } else if (normalizeCreatorName(name) === "victor utoo") {
+      avatarProfile = Object.assign({}, avatarProfile, { avatarUrl: "victor-utoo.png" });
     }
     return '<div class="creator-card">' +
       avatarHtml(avatarProfile, "creator-avatar") +
