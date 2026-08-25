@@ -2187,11 +2187,104 @@
     initAttendance();
     initSystem();
     initSettings();
+    initSupportTickets();
     loadDashboard(false);
 
     only("portalView");
     var head = $("masthead");
     if (head) document.documentElement.style.setProperty("--header-h", head.offsetHeight + "px");
+  }
+
+
+  /* ------------------------- Support Tickets ------------------------- */
+  var SUPPORT_TICKET_BUCKET = "support-ticket-attachments";
+  var SUPPORT_TICKET_TYPES = ["Technical Issue","Login/Access Problem","Attendance Issue","Account/Profile Issue","System Error","Feature Request","Other"];
+  var SUPPORT_TICKET_PRIORITIES = ["Low","Medium","High","Urgent"];
+  var SUPPORT_TICKET_STATUSES = ["Open","In Progress","Resolved","Closed"];
+  var SUPPORT_TICKETS = { rows: [], active: null, loaded: false, loading: false };
+
+  function supportTicketNum(t){return t.ticket_number || "TKT-" + String(t.id||"").slice(0,8).toUpperCase();}
+  function supportTicketDate(t){var d=new Date(t||"");return isNaN(d)?"—":d.toLocaleString("en-GB",{day:"numeric",month:"short",year:"numeric",hour:"numeric",minute:"2-digit"});}
+  function supportTicketStatusClass(s){return "support-status support-status-"+String(s||"Open").toLowerCase().replace(/\s+/g,"-");}
+  function supportTicketPriorityClass(s){return "support-priority support-priority-"+String(s||"Medium").toLowerCase();}
+  function supportTicketPerson(id){var x=(USERS.rows||[]).find(function(r){return String(r.id||r.user_id)===String(id);});return x||{full_name:"Staff member",email:"",avatar_url:""};}
+  function supportTicketName(id){var x=supportTicketPerson(id);return displayName(x);}
+  function supportTicketAvatar(id){var x=supportTicketPerson(id);var name=displayName(x);var url=avatarUrl(x);return url?'<div class="avatar"><img src="'+esc(url)+'" alt="'+esc(name)+'" /></div>':'<div class="avatar">'+esc(initials(name))+'</div>';}
+
+  async function loadSupportTickets(){
+    if(SUPPORT_TICKETS.loading)return;
+    SUPPORT_TICKETS.loading=true; var state=$("supportTicketsState"); if(state)state.textContent="Loading tickets…";
+    try{
+      if(!USERS.loaded) await loadUsers(false);
+      var r=await sb.from("support_tickets").select("id,ticket_number,user_id,issue_type,subject,description,priority,status,assigned_to,created_at,updated_at,resolved_at").order("updated_at",{ascending:false});
+      if(r.error)throw r.error;
+      SUPPORT_TICKETS.rows=r.data||[]; SUPPORT_TICKETS.loaded=true;
+      renderSupportTickets(); await loadSupportTicketBadge();
+    }catch(e){if(state)state.textContent="Tickets could not be loaded. Run support-tickets.sql if this is the first deployment.";toast(e.message||"Could not load support tickets.","bad");}
+    finally{SUPPORT_TICKETS.loading=false;}
+  }
+
+  function renderSupportTickets(){
+    var list=$("supportTicketsList"),state=$("supportTicketsState"); if(!list)return;
+    var rows=SUPPORT_TICKETS.rows||[];
+    if(state)state.textContent=rows.length?rows.length+" ticket"+(rows.length===1?"":"s")+" visible to your support role.":"No support tickets yet.";
+    list.innerHTML=rows.length?'<div class="support-admin-ticket-list">'+rows.map(function(t){
+      return '<button type="button" class="support-admin-ticket-card" data-support-ticket="'+esc(t.id)+'"><div class="support-admin-ticket-avatar">'+supportTicketAvatar(t.user_id)+'</div><div class="support-admin-ticket-main"><div class="support-admin-ticket-top"><strong>'+esc(supportTicketNum(t))+'</strong><span class="'+supportTicketStatusClass(t.status)+'">'+esc(t.status)+'</span></div><h3>'+esc(t.subject)+'</h3><div class="support-admin-ticket-meta"><span>'+esc(supportTicketName(t.user_id))+'</span><span>'+esc(t.issue_type)+'</span><span class="'+supportTicketPriorityClass(t.priority)+'">'+esc(t.priority)+'</span><time>'+esc(supportTicketDate(t.updated_at||t.created_at))+'</time></div></div></button>';
+    }).join('')+'</div>':'<div class="settings-empty"><h3>No tickets</h3><p>New staff and administrator support requests will appear here.</p></div>';
+    Array.prototype.forEach.call(list.querySelectorAll("[data-support-ticket]"),function(b){b.addEventListener("click",function(){openSupportTicketAdmin(b.getAttribute("data-support-ticket"));});});
+  }
+
+  async function loadSupportTicketBadge(){
+    var badge=$("supportTicketNavBadge"); if(!badge)return;
+    try{var r=await sb.rpc("support_unread_notification_count");if(!r.error&&Number(r.data)>0){badge.hidden=false;badge.textContent=Number(r.data)>99?"99+":String(r.data);}else badge.hidden=true;}catch(e){badge.hidden=true;}
+  }
+
+  function supportTicketCreateHtml(){
+    return '<div class="ticket-admin-modal"><p class="eyebrow">Support / Help</p><h2>Submit a Support Ticket</h2><p class="dateline">Admins and IT Support can submit issues here too.</p><form id="supportAdminCreateForm" class="support-ticket-form">'+
+      '<div class="field"><label>Issue type</label><select id="supportAdminType"><option value="">Select issue type</option>'+SUPPORT_TICKET_TYPES.map(function(x){return '<option>'+esc(x)+'</option>';}).join('')+'</select></div>'+
+      '<div class="field"><label>Subject</label><input id="supportAdminSubject" maxlength="160" placeholder="Brief description" /></div>'+
+      '<div class="field"><label>Description</label><textarea id="supportAdminDescription" rows="6" maxlength="8000" placeholder="Explain the problem"></textarea></div>'+
+      '<div class="field"><label>Priority</label><select id="supportAdminPriority">'+SUPPORT_TICKET_PRIORITIES.map(function(x){return '<option'+(x==='Medium'?' selected':'')+'>'+esc(x)+'</option>';}).join('')+'</select></div>'+
+      '<div class="form-foot"><button class="btn btn-primary btn-block" type="submit">Submit Ticket</button></div></form></div>';
+  }
+
+  async function openSupportTicketAdmin(id){
+    var t=(SUPPORT_TICKETS.rows||[]).find(function(x){return String(x.id)===String(id);}); if(!t)return;
+    SUPPORT_TICKETS.active=t;
+    try { await sb.from("support_ticket_notifications").update({read_at:new Date().toISOString()}).eq("ticket_id",t.id).eq("user_id",ME.user.id).is("read_at",null); } catch(ignore) {}
+    await loadSupportTicketBadge();
+    renderSupportTicketAdminModal(t);
+  }
+
+  async function renderSupportTicketAdminModal(t){
+    var msgs=await sb.from("support_ticket_messages").select("id,sender_id,body,is_internal,created_at").eq("ticket_id",t.id).order("created_at",{ascending:true});
+    if(msgs.error){toast(msgs.error.message,"bad");return;}
+    var files=await sb.from("support_ticket_attachments").select("id,file_name,file_path,content_type,file_size,created_at").eq("ticket_id",t.id).order("created_at",{ascending:true});
+    var assignedName=t.assigned_to?supportTicketName(t.assigned_to):"Unassigned";
+    var body='<div class="ticket-admin-modal"><div class="ticket-admin-head"><div><p class="eyebrow">'+esc(supportTicketNum(t))+'</p><h2>'+esc(t.subject)+'</h2><p class="dateline">Submitted by '+esc(supportTicketName(t.user_id))+' · '+esc(supportTicketDate(t.created_at))+'</p></div><span class="'+supportTicketStatusClass(t.status)+'">'+esc(t.status)+'</span></div>'+
+      '<div class="ticket-admin-meta"><span>'+esc(t.issue_type)+'</span><span class="'+supportTicketPriorityClass(t.priority)+'">'+esc(t.priority)+'</span><span>Assigned: '+esc(assignedName)+'</span></div>'+
+      '<div class="support-ticket-description"><strong>Issue</strong><p>'+esc(t.description).replace(/\n/g,'<br>')+'</p></div>'+
+      '<div class="ticket-admin-controls"><div class="field"><label>Status</label><select id="ticketAdminStatus">'+SUPPORT_TICKET_STATUSES.map(function(x){return '<option'+(x===t.status?' selected':'')+'>'+esc(x)+'</option>';}).join('')+'</select></div><div class="field"><label>Priority</label><select id="ticketAdminPriority">'+SUPPORT_TICKET_PRIORITIES.map(function(x){return '<option'+(x===t.priority?' selected':'')+'>'+esc(x)+'</option>';}).join('')+'</select></div><div class="field"><label>Assign to IT</label><select id="ticketAdminAssignee"><option value="">Unassigned</option>'+(USERS.rows||[]).filter(function(x){return roleOf(x)==='admin'||roleOf(x)==='it_support';}).map(function(x){var id=x.id||x.user_id;return '<option value="'+esc(id)+'"'+(String(id)===String(t.assigned_to)?' selected':'')+'>'+esc(displayName(x))+'</option>';}).join('')+'</select></div><button class="btn btn-dark btn-sm" id="ticketAdminSave">Save changes</button></div>'+
+      '<div class="ticket-admin-thread">'+((msgs.data||[]).length?(msgs.data||[]).map(function(m){return '<div class="ticket-admin-message '+(m.is_internal?'internal ':'')+(String(m.sender_id)===String(ME.user.id)?'mine':'')+'"><div><strong>'+esc(supportTicketName(m.sender_id))+'</strong><span>'+esc(m.is_internal?'Internal note':'Reply')+'</span></div><p>'+esc(m.body).replace(/\n/g,'<br>')+'</p><time>'+esc(supportTicketDate(m.created_at))+'</time></div>';}).join(''):'<p class="settings-empty">No replies yet.</p>')+'</div>'+
+      ((files.data||[]).length?'<div class="ticket-admin-files"><strong>Attachments</strong><div>'+files.data.map(function(f){return '<button type="button" class="link-muted" data-ticket-file="'+esc(f.file_path)+'">'+esc(f.file_name)+'</button>';}).join('')+'</div></div>':'')+
+      '<form id="ticketAdminReplyForm" class="ticket-admin-reply"><div class="field"><label>Reply to user</label><textarea id="ticketAdminReply" rows="4" maxlength="8000" placeholder="Write a response…"></textarea></div><div class="field"><label class="check"><input id="ticketAdminInternal" type="checkbox" /> Internal note (user will not see this)</label></div><button class="btn btn-primary" type="submit">Send</button></form></div>';
+    showSupportModal(body);
+    $("ticketAdminSave").addEventListener("click",async function(){var b=this;setBtnLoading(b,true);try{var r=await sb.from('support_tickets').update({status:$("ticketAdminStatus").value,priority:$("ticketAdminPriority").value,assigned_to:$("ticketAdminAssignee").value||null}).eq('id',t.id);if(r.error)throw r.error;closeSupportModal();await loadSupportTickets();toast('Ticket updated.','good');}catch(e){toast(e.message||'Could not update ticket.','bad');}finally{setBtnLoading(b,false);}});
+    $("ticketAdminReplyForm").addEventListener("submit",async function(e){e.preventDefault();var text=($("ticketAdminReply").value||'').trim();if(!text)return;var b=this.querySelector('button[type=submit]');setBtnLoading(b,true);try{var r=await sb.from('support_ticket_messages').insert({ticket_id:t.id,sender_id:ME.user.id,body:text,is_internal:$("ticketAdminInternal").checked});if(r.error)throw r.error;closeSupportModal();await loadSupportTickets();openSupportTicketAdmin(t.id);toast('Reply sent.','good');}catch(e){toast(e.message||'Could not send reply.','bad');}finally{setBtnLoading(b,false);}});
+    Array.prototype.forEach.call(document.querySelectorAll('[data-ticket-file]'),function(b){b.addEventListener('click',async function(){try{var r=await sb.storage.from(SUPPORT_TICKET_BUCKET).createSignedUrl(b.getAttribute('data-ticket-file'),300);if(r.error)throw r.error;window.open(r.data.signedUrl,'_blank','noopener');}catch(e){toast(e.message||'Attachment could not be opened.','bad');}});});
+  }
+
+  function showSupportModal(html){
+    var wrap=document.createElement('div');wrap.className='modal-backdrop support-ticket-modal-backdrop';wrap.id='supportTicketModal';wrap.innerHTML='<div class="modal modal-wide" role="dialog" aria-modal="true"><div id="supportTicketModalBody">'+html+'</div><div class="modal-actions"><button class="btn btn-ghost" type="button" id="supportTicketModalClose">Close</button></div></div>';
+    document.body.appendChild(wrap);wrap.querySelector('#supportTicketModalClose').addEventListener('click',closeSupportModal);wrap.addEventListener('click',function(e){if(e.target===wrap)closeSupportModal();});
+  }
+  function closeSupportModal(){var m=$("supportTicketModal");if(m)m.remove();}
+
+  function initSupportTickets(){
+    var root=$("tab-tickets");if(!root||root.getAttribute('data-ready')==='1')return;root.setAttribute('data-ready','1');
+    var refresh=$("supportTicketsRefresh");if(refresh)refresh.addEventListener('click',function(){loadSupportTickets();});
+    var newBtn=$("supportTicketNewBtn");if(newBtn)newBtn.addEventListener('click',function(){showSupportModal(supportTicketCreateHtml());var f=$("supportAdminCreateForm");f.addEventListener('submit',async function(e){e.preventDefault();var type=$("supportAdminType").value,subject=$("supportAdminSubject").value.trim(),description=$("supportAdminDescription").value.trim(),priority=$("supportAdminPriority").value;if(!type||!subject||!description){toast('Complete the required fields.','bad');return;}var b=f.querySelector('button[type=submit]');setBtnLoading(b,true);try{var r=await sb.from('support_tickets').insert({user_id:ME.user.id,issue_type:type,subject:subject,description:description,priority:priority});if(r.error)throw r.error;closeSupportModal();await loadSupportTickets();toast('Support ticket created.','good');}catch(e){toast(e.message||'Could not create ticket.','bad');}finally{setBtnLoading(b,false);}});});
+    loadSupportTickets();
   }
 
   /* ------------------------- gate ------------------------- */
@@ -2333,7 +2426,7 @@
     /* ------------------------- persistent portal section ------------------------- */
     var PORTAL_SECTION_KEY = "tech_support_active_section";
     function validPortalSection(name) {
-      return ["overview", "users", "attendance", "system", "leave", "settings", "checks"].indexOf(name) !== -1;
+      return ["overview", "users", "attendance", "system", "leave", "settings", "tickets", "checks"].indexOf(name) !== -1;
     }
     function getPortalSection() {
       var hash = String(location.hash || "").replace(/^#\/?/, "").toLowerCase();
@@ -2363,6 +2456,7 @@
       });
       if (!options.skipPersist) setPortalSection(name, !!options.replace);
       if (name === "leave") renderSupportLeave();
+      if (name === "tickets") loadSupportTickets();
       if (options.closeNav && typeof closeNav === "function") closeNav();
     }
 

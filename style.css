@@ -1029,3 +1029,52 @@ body.maintenance-page{background:var(--gradient-hero);min-height:100vh}
   .message-lock-card h2{font-size:22px}
   .messenger-shell{margin-left:-8px;margin-right:-8px;border-radius:16px}
 }
+
+/* ---------- Support Tickets ---------- */
+.support-ticket-section{margin-top:20px}
+.support-ticket-loading,.support-ticket-empty{padding:18px;border:1px dashed var(--rule-strong);border-radius:var(--radius);background:var(--paper-2);color:var(--ink-3)}
+.support-ticket-empty strong{display:block;color:var(--ink);margin-bottom:4px}
+.support-ticket-empty p{font-size:13.5px}
+.support-ticket-list{display:grid;gap:10px;margin-top:16px}
+.support-ticket-card{display:block;width:100%;text-align:left;border:1px solid var(--rule);border-radius:var(--radius);background:var(--paper);padding:16px;cursor:pointer;box-shadow:var(--shadow-xs);transition:border-color var(--t),box-shadow var(--t),transform var(--t)}
+.support-ticket-card:hover{border-color:var(--navy);box-shadow:var(--shadow-sm);transform:translateY(-1px)}
+.support-ticket-card-top,.support-ticket-card-meta,.support-ticket-detail-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.support-ticket-card-top{justify-content:space-between}
+.support-ticket-card h3{font-size:15px;margin:8px 0 7px}
+.support-ticket-card-meta{font-size:12px;color:var(--ink-4)}
+.support-status,.support-priority{display:inline-flex;align-items:center;border-radius:999px;padding:4px 9px;font-size:11px;font-weight:800;line-height:1.2}
+.support-status-open{background:#fff4dc;color:#8a6100}
+.support-status-in-progress{background:#eaf1ff;color:#315b9a}
+.support-status-resolved{background:#e3f5ec;color:#0f7a4a}
+.support-status-closed{background:#eef1f6;color:#5b6577}
+.support-priority-low{color:#5b6577}.support-priority-medium{color:#8a6100}.support-priority-high{color:#a34a00}.support-priority-urgent{color:#c0392b}
+.support-ticket-modal{max-height:min(76vh,720px);overflow:auto;padding-right:2px}
+.support-ticket-modal h2{font-size:22px;margin-bottom:6px}
+.support-ticket-form{margin-top:12px}
+.support-ticket-form .field{margin-top:14px}
+.support-optional{font-weight:600;color:var(--ink-4);font-size:11px}
+.support-file-hint{font-size:11.5px;color:var(--ink-4);margin-top:2px}
+.support-ticket-detail-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
+.support-ticket-detail-meta{margin:12px 0 16px;color:var(--ink-4);font-size:12.5px}
+.support-ticket-description{padding:14px;border:1px solid var(--rule);background:var(--paper-2);border-radius:var(--radius);margin-bottom:16px}
+.support-ticket-description strong{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-4)}
+.support-ticket-description p{margin-top:7px;color:var(--ink-2);font-size:14px}
+.support-ticket-thread{display:grid;gap:10px;margin:14px 0}
+.support-ticket-message{max-width:86%;padding:11px 13px;border-radius:14px;background:var(--paper-2);border:1px solid var(--rule);justify-self:start}
+.support-ticket-message.mine{justify-self:end;background:#fff7e8;border-color:#f5dca7}
+.support-ticket-message p{font-size:14px;color:var(--ink-2);overflow-wrap:anywhere}
+.support-ticket-message span{display:block;margin-top:6px;font-size:10.5px;color:var(--ink-4)}
+.support-ticket-attachments{border-top:1px solid var(--rule);padding-top:14px;margin-top:14px;font-size:13px}
+.support-ticket-attachments>div{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.support-ticket-attachments a{padding:7px 10px;border:1px solid var(--rule);border-radius:10px;color:var(--navy);background:var(--paper-2);font-weight:700;font-size:12px}
+.support-ticket-reply{border-top:1px solid var(--rule);padding-top:14px;margin-top:14px}
+.support-ticket-reply label{display:block;font-size:12px;font-weight:800;color:var(--ink-2);margin-bottom:7px}
+.support-ticket-reply textarea{width:100%;border:1px solid var(--rule-strong);border-radius:12px;padding:12px;resize:vertical}
+.support-ticket-reply textarea:focus{outline:none;border-color:var(--navy);box-shadow:0 0 0 4px rgba(18,58,107,.1)}
+.support-ticket-reply .btn{margin-top:10px}
+.message-modal .modal{max-width:760px}
+@media (max-width:640px){
+  .support-ticket-detail-head{flex-direction:column}
+  .support-ticket-message{max-width:94%}
+}
+.modal.message-modal{max-width:760px}

@@ -113,6 +113,7 @@
           <button type="button" data-tab="attendance">Attendance</button>
           <button type="button" data-tab="system" id="navSystemBtn">System management</button>
           <button type="button" data-tab="settings" id="navSettingsBtn">Settings</button>
+          <button type="button" data-tab="tickets">Support Tickets <span id="supportTicketNavBadge" hidden></span></button>
           <button type="button" data-tab="checks">System checks</button>
           <button type="button" class="nav-signout" id="navSignout">
             <span>Sign out</span>
@@ -157,6 +158,12 @@
 
 
       <!-- Users & profiles -->
+      <section class="section" id="tab-tickets" hidden>
+        <div class="section-head"><div><h2>Support Tickets</h2><p class="overview-lede">Review, assign and resolve staff support requests.</p></div><div class="section-head-actions"><button class="btn btn-ghost btn-sm" id="supportTicketsRefresh" type="button">Refresh</button><button class="btn btn-primary btn-sm" id="supportTicketNewBtn" type="button">+ New Ticket</button></div></div>
+        <div id="supportTicketsState" class="users-state">Loading tickets…</div>
+        <div id="supportTicketsList"></div>
+      </section>
+
       <section class="section" id="tab-users" hidden>
         <div class="section-head">
           <h2>Users &amp; profiles</h2>
