@@ -2231,56 +2231,6 @@
   function supportTicketPerson(id){var x=(USERS.rows||[]).find(function(r){return String(r.id||r.user_id)===String(id);});return x||{full_name:"Staff member",email:"",avatar_url:""};}
   function supportTicketName(id){var x=supportTicketPerson(id);return displayName(x);}
   function supportTicketAvatar(id){var x=supportTicketPerson(id);var name=displayName(x);var url=avatarUrl(x);return url?'<div class="avatar"><img src="'+esc(url)+'" alt="'+esc(name)+'" /></div>':'<div class="avatar">'+esc(initials(name))+'</div>';}
-  var supportTicketRealtimeChannel = null;
-  var supportTicketRealtimeTimer = null;
-  var supportTicketRealtimeBusy = false;
-
-  async function refreshSupportTicketsLive(ticketId) {
-    if (supportTicketRealtimeBusy) return;
-    supportTicketRealtimeBusy = true;
-    try {
-      await loadSupportTickets();
-      if (ticketId && SUPPORT_TICKETS.active && String(SUPPORT_TICKETS.active.id) === String(ticketId)) {
-        var reply = $("ticketAdminReply");
-        /* Do not replace the modal while an IT agent is typing a reply. */
-        if (!reply || !reply.value.trim()) await openSupportTicketAdmin(ticketId);
-      }
-    } catch (e) { console.warn("Support ticket live refresh:", e); }
-    finally { supportTicketRealtimeBusy = false; }
-  }
-
-  function startSupportTicketRealtime() {
-    if (!ME.user || supportTicketRealtimeChannel) return;
-    var uid = ME.user.id;
-    supportTicketRealtimeChannel = sb.channel("support-tickets-it-" + uid)
-      .on("postgres_changes", { event: "*", schema: "public", table: "support_tickets" }, function(payload) {
-        var id = payload.new && payload.new.id || payload.old && payload.old.id;
-        refreshSupportTicketsLive(id);
-      })
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "support_ticket_messages" }, function(payload) {
-        var id = payload.new && payload.new.ticket_id;
-        refreshSupportTicketsLive(id);
-      })
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "support_ticket_notifications" }, function(payload) {
-        var id = payload.new && payload.new.ticket_id;
-        refreshSupportTicketsLive(id);
-      })
-      .subscribe();
-
-    /* Five-second fallback keeps the dashboard live even when Realtime has not
-       been enabled for the support tables in the Supabase publication. */
-    supportTicketRealtimeTimer = setInterval(function() {
-      if (ME.user) refreshSupportTicketsLive(SUPPORT_TICKETS.active && SUPPORT_TICKETS.active.id);
-    }, 5000);
-  }
-
-  function stopSupportTicketRealtime() {
-    if (supportTicketRealtimeChannel) {
-      try { sb.removeChannel(supportTicketRealtimeChannel); } catch (e) {}
-      supportTicketRealtimeChannel = null;
-    }
-    if (supportTicketRealtimeTimer) { clearInterval(supportTicketRealtimeTimer); supportTicketRealtimeTimer = null; }
-  }
 
   async function loadSupportTickets(){
     if(SUPPORT_TICKETS.loading)return;
@@ -2352,22 +2302,7 @@
         if(r.error) throw r.error;
         t.status=patch.status; t.priority=patch.priority; t.assigned_to=patch.assigned_to;
         await loadSupportTickets();
-        // Keep the ticket card/modal open after saving changes.
-        var statusBadge = document.querySelector("#supportTicketModalBody .ticket-admin-head > span");
-        if (statusBadge) {
-          statusBadge.className = supportTicketStatusClass(t.status);
-          statusBadge.textContent = t.status;
-        }
-        var meta = document.querySelector("#supportTicketModalBody .ticket-admin-meta");
-        if (meta) {
-          var metaSpans = meta.querySelectorAll("span");
-          if (metaSpans[1]) {
-            metaSpans[1].className = supportTicketPriorityClass(t.priority);
-            metaSpans[1].textContent = t.priority;
-          }
-          if (metaSpans[2]) metaSpans[2].textContent = "Assigned: " + (t.assigned_to ? supportTicketName(t.assigned_to) : "Unassigned");
-        }
-        toast("Ticket updated. The ticket remains open.","good");
+        toast("Ticket updated.","good");
       } catch(e) {
         toast(e.message||"Could not update ticket. Check the Supabase support-ticket RLS policies.","bad");
       } finally { setBtnLoading(b,false); }
@@ -2405,7 +2340,7 @@
     var root=$("tab-tickets");if(!root||root.getAttribute('data-ready')==='1')return;root.setAttribute('data-ready','1');
     var refresh=$("supportTicketsRefresh");if(refresh)refresh.addEventListener('click',function(){loadSupportTickets();});
     var newBtn=$("supportTicketNewBtn");if(newBtn)newBtn.addEventListener('click',function(){showSupportModal(supportTicketCreateHtml());var f=$("supportAdminCreateForm");f.addEventListener('submit',async function(e){e.preventDefault();var type=$("supportAdminType").value,subject=$("supportAdminSubject").value.trim(),description=$("supportAdminDescription").value.trim(),priority=$("supportAdminPriority").value;if(!type||!subject||!description){toast('Complete the required fields.','bad');return;}var b=f.querySelector('button[type=submit]');setBtnLoading(b,true);try{var r=await sb.from('support_tickets').insert({user_id:ME.user.id,issue_type:type,subject:subject,description:description,priority:priority});if(r.error)throw r.error;closeSupportModal();await loadSupportTickets();toast('Support ticket created.','good');}catch(e){toast(e.message||'Could not create ticket.','bad');}finally{setBtnLoading(b,false);}});});
-    loadSupportTickets().then(function(){ startSupportTicketRealtime(); }).catch(function(){ startSupportTicketRealtime(); });
+    loadSupportTickets();
   }
 
   /* ------------------------- gate ------------------------- */
