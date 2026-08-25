@@ -1752,10 +1752,14 @@
   }
 
   /* ========================= INTERNAL MESSAGING ========================= */
+  var MESSAGE_IDLE_TIMEOUT = 60 * 60 * 1000; // 1 hour of messaging inactivity
+  var MESSAGE_UNLOCK_KEY_PREFIX = "md_msg_unlock_";
+
   var messageState = {
     conversations: [], activeConversation: null, unlockedPrivateKey: null,
     ownPublicKey: null, unread: 0, sound: localStorage.getItem("md_message_sound") !== "off",
-    realtime: null, initialized: false, loading: false
+    realtime: null, initialized: false, loading: false, menuOutsideBound: false,
+    lastActivity: 0, inactivityTimer: null
   };
 
   function b64(bytes) {
@@ -1772,6 +1776,113 @@
     return crypto.subtle.deriveKey({ name: "PBKDF2", salt: salt, iterations: 250000, hash: "SHA-256" }, base,
       { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
   }
+  function messageUnlockStorageKey() {
+    var u = session();
+    return MESSAGE_UNLOCK_KEY_PREFIX + (u ? u.id : "");
+  }
+
+  async function rememberMessagingUnlock() {
+    if (!messageState.unlockedPrivateKey) return;
+    try {
+      var jwk = await crypto.subtle.exportKey("jwk", messageState.unlockedPrivateKey);
+      var now = Date.now();
+      messageState.lastActivity = now;
+      sessionStorage.setItem(messageUnlockStorageKey(), JSON.stringify({ jwk: jwk, lastActivity: now }));
+    } catch (e) {
+      /* sessionStorage/export can fail in hardened browser modes; PIN unlock still works. */
+    }
+    armMessagingInactivityTimer();
+  }
+
+  async function restoreMessagingUnlock() {
+    var u = session();
+    if (!u || !messageState.hasKey) return false;
+    try {
+      var raw = sessionStorage.getItem(messageUnlockStorageKey());
+      if (!raw) return false;
+      var saved = JSON.parse(raw);
+      if (!saved || !saved.jwk || !saved.lastActivity || Date.now() - Number(saved.lastActivity) >= MESSAGE_IDLE_TIMEOUT) {
+        sessionStorage.removeItem(messageUnlockStorageKey());
+        return false;
+      }
+      messageState.unlockedPrivateKey = await crypto.subtle.importKey(
+        "jwk",
+        saved.jwk,
+        { name: "RSA-OAEP", hash: "SHA-256" },
+        true,
+        ["decrypt"]
+      );
+      messageState.lastActivity = Number(saved.lastActivity);
+      armMessagingInactivityTimer();
+      return true;
+    } catch (e) {
+      try { sessionStorage.removeItem(messageUnlockStorageKey()); } catch (ignore) {}
+      messageState.unlockedPrivateKey = null;
+      return false;
+    }
+  }
+
+  function touchMessagingActivity() {
+    if (!messageState.unlockedPrivateKey || location.hash !== "#/messages") return;
+    var now = Date.now();
+    messageState.lastActivity = now;
+    try {
+      var raw = sessionStorage.getItem(messageUnlockStorageKey());
+      if (raw) {
+        var saved = JSON.parse(raw);
+        if (saved && saved.jwk) {
+          saved.lastActivity = now;
+          sessionStorage.setItem(messageUnlockStorageKey(), JSON.stringify(saved));
+        }
+      }
+    } catch (e) {}
+    armMessagingInactivityTimer();
+  }
+
+  function lockMessagingForInactivity() {
+    if (!messageState.unlockedPrivateKey) return;
+    messageState.unlockedPrivateKey = null;
+    messageState.activeConversation = null;
+    messageState.lastActivity = 0;
+    try { sessionStorage.removeItem(messageUnlockStorageKey()); } catch (e) {}
+    if (messageState.inactivityTimer) {
+      clearTimeout(messageState.inactivityTimer);
+      messageState.inactivityTimer = null;
+    }
+    if (location.hash === "#/messages") {
+      render();
+      toast("Secure messaging was locked after 1 hour of inactivity.");
+    }
+  }
+
+  function armMessagingInactivityTimer() {
+    if (messageState.inactivityTimer) {
+      clearTimeout(messageState.inactivityTimer);
+      messageState.inactivityTimer = null;
+    }
+    if (!messageState.unlockedPrivateKey || !messageState.lastActivity) return;
+    var remaining = MESSAGE_IDLE_TIMEOUT - (Date.now() - messageState.lastActivity);
+    if (remaining <= 0) {
+      lockMessagingForInactivity();
+      return;
+    }
+    messageState.inactivityTimer = setTimeout(function () {
+      if (Date.now() - messageState.lastActivity >= MESSAGE_IDLE_TIMEOUT) {
+        lockMessagingForInactivity();
+      } else {
+        armMessagingInactivityTimer();
+      }
+    }, Math.min(remaining + 1000, 60 * 1000));
+  }
+
+  function startMessagingActivityTracking() {
+    if (messageState.activityTracking) return;
+    messageState.activityTracking = true;
+    ["pointerdown", "keydown", "touchstart", "scroll"].forEach(function (eventName) {
+      document.addEventListener(eventName, touchMessagingActivity, { passive: true });
+    });
+  }
+
   async function generateMessagingKeys(passphrase) {
     if (!crypto || !crypto.subtle) throw new Error("This browser does not support the required Web Crypto API.");
     var pair = await crypto.subtle.generateKey({ name: "RSA-OAEP", modulusLength: 2048, publicExponent: new Uint8Array([1,0,1]), hash: "SHA-256" }, true, ["encrypt", "decrypt"]);
@@ -1787,6 +1898,7 @@
     if (b.error) throw b.error;
     messageState.ownPublicKey = pub;
     messageState.unlockedPrivateKey = pair.privateKey;
+    await rememberMessagingUnlock();
   }
   async function unlockMessagingKeys(passphrase) {
     var u = session();
@@ -1799,6 +1911,7 @@
     var pubRes = await supabaseClient.from("user_public_keys").select("public_key").eq("user_id", u.id).maybeSingle();
     if (pubRes.error || !pubRes.data) throw new Error("Your public encryption key is missing.");
     messageState.ownPublicKey = pubRes.data.public_key;
+    await rememberMessagingUnlock();
   }
   async function changeMessagingSecret(oldSecret, newSecret) {
     var u = session();
@@ -1813,6 +1926,7 @@
     var upd = await supabaseClient.from("user_private_keys").update({ encrypted_private_key: b64(reEncrypted), iv: b64(newIv), salt: b64(newSalt) }).eq("user_id", u.id);
     if (upd.error) throw upd.error;
     messageState.unlockedPrivateKey = await crypto.subtle.importKey("pkcs8", raw, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["decrypt"]);
+    await rememberMessagingUnlock();
   }
   async function getOwnKeyState() {
     var u = session();
@@ -1970,7 +2084,7 @@
   }
   function chatHtml(c) {
     var p = c.person;
-    return '<div class="chat-header">' + messageAvatar(p, "avatar-sm") + '<div><h2>' + esc(p.fullName) + '</h2><span>End-to-end encrypted</span></div>' +
+    return '<div class="chat-header">' + messageAvatar(p, "avatar-sm") + '<div class="chat-identity"><h2>' + esc(p.fullName) + '</h2><span>End-to-end encrypted</span></div>' +
       '<div class="chat-menu-wrap"><button type="button" class="chat-menu-btn" id="chatMenuBtn" aria-haspopup="true" aria-expanded="false" aria-label="Conversation options">&#8942;</button>' +
       '<div class="chat-menu" id="chatMenu" hidden><button type="button" class="chat-menu-item" id="clearChatBtn">Clear chat</button></div></div>' +
       '<button type="button" class="chat-back" id="chatBack">Back</button></div><div class="message-stream" id="messageStream"><div class="message-loading">Loading secure messages...</div></div><form class="message-composer" id="messageComposer"><textarea id="messageInput" rows="1" maxlength="4000" placeholder="Type a message..." autocomplete="off"></textarea><button class="btn btn-primary" type="submit">Send</button></form>';
@@ -2167,8 +2281,21 @@
     if(messageState.activeConversation) loadMessagesForConversation(messageState.activeConversation);
   }
   async function initMessaging() {
-    if (!session()) { await stopMessagingRealtime(); return; }
-    try { var k=await getOwnKeyState(); messageState.hasKey=!!k.hasPrivate && !!k.publicKey; messageState.ownPublicKey=k.publicKey||null; await startMessagingRealtime(); await refreshMessageUnread(); } catch(e) { console.warn("Messaging init:",e); }
+    if (!session()) {
+      await stopMessagingRealtime();
+      messageState.unlockedPrivateKey = null;
+      messageState.activeConversation = null;
+      return;
+    }
+    try {
+      var k=await getOwnKeyState();
+      messageState.hasKey=!!k.hasPrivate && !!k.publicKey;
+      messageState.ownPublicKey=k.publicKey||null;
+      if (messageState.hasKey) await restoreMessagingUnlock();
+      startMessagingActivityTracking();
+      await startMessagingRealtime();
+      await refreshMessageUnread();
+    } catch(e) { console.warn("Messaging init:",e); }
     if ("Notification" in window && Notification.permission === "default") { /* request only after the user opens Messages */ }
   }
 
