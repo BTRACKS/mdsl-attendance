@@ -1096,3 +1096,64 @@ body.maintenance-page{background:var(--gradient-hero);min-height:100vh}
   .message-attachment-image{max-width:220px;max-height:220px}
   .message-attachment-file strong{max-width:150px}
 }
+
+/* ---------- Chat attachment composer / previews ---------- */
+.message-attachment-stage{width:100%;min-width:0;display:flex;flex-direction:column;gap:8px}
+.message-compose-row{display:flex;align-items:flex-end;gap:10px;width:100%}
+.message-attach-btn{font-size:0}
+.message-attach-btn svg{width:20px;height:20px;display:block}
+.message-attachment-previews{display:flex;gap:8px;flex-wrap:wrap;max-height:150px;overflow:auto;padding:2px}
+.message-preview-item{position:relative;display:flex;align-items:center;gap:8px;min-width:0;width:min(280px,100%);padding:7px 30px 7px 7px;border:1px solid var(--rule);border-radius:11px;background:var(--paper-2)}
+.message-preview-thumb,.message-preview-pdf{width:46px;height:46px;flex:0 0 46px;border-radius:8px;overflow:hidden;background:var(--paper);border:1px solid var(--rule);display:grid;place-items:center}
+.message-preview-thumb{object-fit:cover}
+.message-preview-pdf .message-attachment-icon{width:32px;height:32px}
+.message-preview-info{min-width:0;display:grid;gap:2px}
+.message-preview-info strong{font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:185px}
+.message-preview-info small{font-size:10px;color:var(--ink-4)}
+.message-preview-remove{position:absolute;right:6px;top:6px;width:22px;height:22px;border:0;border-radius:50%;background:var(--paper);color:var(--ink-3);font-size:16px;line-height:1;cursor:pointer;display:grid;place-items:center}
+.message-preview-remove:hover{background:#fdecea;color:#c0392b}
+.message-attachments{display:grid;gap:8px;margin-top:7px}
+.message-attachment{margin-top:0}
+.message-attachment-info{display:flex;align-items:center;gap:7px;min-width:0}
+.message-attachment-info small,.message-attachment-file small{font-size:10px;color:var(--ink-4);white-space:nowrap}
+
+/* ---------- Admin SQL editor ---------- */
+.admin-sql-page{max-width:1240px}
+.sql-editor-card,.sql-results-card{overflow:hidden}
+.sql-toolbar{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;padding:0 0 14px}
+.sql-toolbar-left,.sql-toolbar-right{display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap}
+.sql-toolbar label{display:block;font-size:11px;font-weight:700;color:var(--ink-3);margin-bottom:6px;width:100%}
+.sql-toolbar select{height:38px;min-width:220px;border:1px solid var(--rule-strong);border-radius:10px;background:var(--paper);padding:0 10px;color:var(--ink);font-size:12px}
+.sql-editor-wrap{display:grid;grid-template-columns:52px minmax(0,1fr);height:430px;border:1px solid #202938;border-radius:14px;overflow:hidden;background:#101722;box-shadow:var(--shadow-xs)}
+.sql-line-numbers{padding:15px 10px 15px 0;text-align:right;overflow:hidden;color:#687386;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace;user-select:none;background:#0c131d;border-right:1px solid #253044}
+.sql-line-numbers span{display:block;height:19.2px}
+.sql-code-wrap{position:relative;min-width:0;overflow:hidden}
+.sql-code-wrap pre,.sql-code-wrap textarea{position:absolute;inset:0;margin:0;padding:15px 16px;border:0;font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace;white-space:pre;tab-size:2}
+.sql-code-wrap pre{overflow:hidden;color:#dce4ef;pointer-events:none}
+.sql-code-wrap textarea{resize:none;outline:0;background:transparent;color:transparent;-webkit-text-fill-color:transparent;caret-color:#fff;overflow:auto;z-index:2}
+.sql-code-wrap textarea::selection{background:rgba(91,145,214,.35)}
+.sql-keyword{color:#7db5ff;font-weight:700}
+.sql-string{color:#b8d98d}
+.sql-comment{color:#6f7d90}
+.sql-status{margin-top:10px;font-size:12px;color:var(--ink-4)}
+.sql-status.loading{color:var(--navy)}
+.sql-status.success{color:#217a4a}
+.sql-status.error{color:#b53d35}
+.sql-results-card{margin-top:18px}
+.sql-empty{padding:24px;text-align:center;color:var(--ink-4);font-size:13px}
+.sql-error{padding:14px;border:1px solid #efc1bc;border-radius:10px;background:#fff4f2;color:#9f3028;font-size:12px;white-space:pre-wrap}
+.sql-result-json{margin:0;padding:16px;border-radius:10px;background:#101722;color:#dce4ef;overflow:auto;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace}
+.sql-result-table{max-height:420px;overflow:auto}
+
+@media(max-width:760px){
+  .message-compose-row{gap:7px}
+  .message-attachment-previews{max-height:128px}
+  .message-preview-item{width:100%;max-width:none}
+  .sql-toolbar{align-items:stretch;flex-direction:column}
+  .sql-toolbar-left,.sql-toolbar-right{width:100%}
+  .sql-toolbar select{min-width:0;flex:1}
+  .sql-toolbar-right .btn{width:100%}
+  .sql-editor-wrap{height:360px;grid-template-columns:42px minmax(0,1fr)}
+  .sql-line-numbers{padding-right:7px}
+  .sql-code-wrap pre,.sql-code-wrap textarea{padding-left:12px;padding-right:12px;font-size:12px}
+}

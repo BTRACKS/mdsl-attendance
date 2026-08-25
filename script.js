@@ -51,6 +51,7 @@
     logout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>',
     settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.06A1.7 1.7 0 0 0 8.9 19.3a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.7 15a1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.06A1.7 1.7 0 0 0 4.7 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.7h.06A1.7 1.7 0 0 0 10.1 3.14V3a2 2 0 1 1 4 0v.06A1.7 1.7 0 0 0 15 4.7a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.3 9v.06A1.7 1.7 0 0 0 20.86 10.1H21a2 2 0 1 1 0 4h-.06A1.7 1.7 0 0 0 19.4 15z"/></svg>',
     camera: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h1.2a1.5 1.5 0 0 0 1.3-.75l.6-1A1.5 1.5 0 0 1 9.9 3.5h4.2a1.5 1.5 0 0 1 1.3.75l.6 1A1.5 1.5 0 0 0 17.3 6h1.2A2.5 2.5 0 0 1 21 8.5v9A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5z"/><circle cx="12" cy="13" r="3.4"/></svg>',
+    paperclip: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>',
     eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7.5 11-7.5S23 12 23 12s-4 7.5-11 7.5S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>',
     eyeOff: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19.5C5 19.5 1 12 1 12a19.4 19.4 0 0 1 5.06-5.94M9.9 4.24A10.6 10.6 0 0 1 12 4.5c7 0 11 7.5 11 7.5a19.5 19.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>',
     sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M3 12h1m8 -9v1m8 8h1m-9 8v1m-6.4 -15.4l.7 .7m12.1 -.7l-.7 .7m0 11.4l.7 .7m-12.1 -.7l-.7 .7"/></svg>',
@@ -386,7 +387,7 @@
       links = [["#/login", "Sign in"], ["#/signup", "Register"]];
     } else {
       links = u.role === "admin"
-        ? [["#/admin", "Overview"], ["#/admin/attendance", "Attendance Management"], ["#/admin/hse", "HSE Attendance"], ["#/dashboard", "My Dashboard"], ["#/messages", "Messages"], ["#/settings", "Settings"]]
+        ? [["#/admin", "Overview"], ["#/admin/attendance", "Attendance Management"], ["#/admin/hse", "HSE Attendance"], ["#/admin/sql", "SQL Editor"], ["#/dashboard", "My Dashboard"], ["#/messages", "Messages"], ["#/settings", "Settings"]]
         : [["#/dashboard", "Dashboard"], ["#/history", "Attendance History"], ["#/leave", "Leave"], ["#/messages", "Messages"], ["#/settings", "Settings"]];
 
     }
@@ -1518,6 +1519,30 @@
           var key = normalizeCreatorName(person.fullName);
           if (key) aboutCreatorProfiles[key] = person;
         });
+
+        /* About Us keeps using the existing avatar records. For Oladapo's card,
+           prefer the earliest existing avatar file in that same profile folder
+           when storage history is available. This restores the original uploaded
+           photo without creating, replacing or duplicating any image record. */
+        var dapo = findCreatorProfile(["Oladapo Salami", "Dapo Salami"]);
+        if (dapo && dapo.id) {
+          try {
+            var files = await supabaseClient.storage.from(AVATAR_BUCKET).list(String(dapo.id), {
+              limit: 100, offset: 0, sortBy: { column: "created_at", order: "asc" }
+            });
+            if (!files.error && files.data && files.data.length) {
+              var firstImage = files.data.find(function (f) {
+                return f && f.name && /\.(jpe?g|png|webp)$/i.test(f.name);
+              });
+              if (firstImage) {
+                var publicUrl = supabaseClient.storage.from(AVATAR_BUCKET).getPublicUrl(String(dapo.id) + "/" + firstImage.name);
+                if (publicUrl && publicUrl.data && publicUrl.data.publicUrl) dapo.avatarUrl = publicUrl.data.publicUrl;
+              }
+            }
+          } catch (avatarHistoryError) {
+            console.warn("About original creator avatar lookup:", avatarHistoryError);
+          }
+        }
       }
     } catch (e) {
       console.warn("About creator profile refresh:", e);
@@ -1933,6 +1958,7 @@
   };
   var MESSAGE_ATTACHMENT_PREFIX = "MDMSG1:";
   var MESSAGE_ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024;
+  var MESSAGE_ATTACHMENT_TOTAL_MAX_BYTES = 10 * 1024 * 1024;
   var MESSAGE_EDIT_WINDOW_MS = 20 * 60 * 1000;
   function messageCacheKey(kind, id) {
     var u = session();
@@ -2153,27 +2179,37 @@
   }
   function parseMessageContent(text) {
     var value = String(text == null ? "" : text);
-    if (value.indexOf(MESSAGE_ATTACHMENT_PREFIX) !== 0) return { text: value, attachment: null };
+    if (value.indexOf(MESSAGE_ATTACHMENT_PREFIX) !== 0) return { text: value, attachment: null, attachments: [] };
     try {
       var payload = JSON.parse(value.slice(MESSAGE_ATTACHMENT_PREFIX.length));
-      if (!payload || payload.v !== 1 || !payload.attachment || !payload.attachment.dataUrl) return { text: value, attachment: null };
-      return { text: String(payload.text || ""), attachment: payload.attachment };
-    } catch (e) { return { text: value, attachment: null }; }
+      if (!payload || payload.v !== 1) return { text: value, attachment: null, attachments: [] };
+      var attachments = Array.isArray(payload.attachments) ? payload.attachments.filter(function (a) { return a && a.dataUrl; }) : [];
+      if (!attachments.length && payload.attachment && payload.attachment.dataUrl) attachments = [payload.attachment];
+      return { text: String(payload.text || ""), attachment: attachments[0] || null, attachments: attachments };
+    } catch (e) { return { text: value, attachment: null, attachments: [] }; }
   }
-  function buildMessageContent(text, attachment) {
-    if (!attachment) return String(text || "");
-    return MESSAGE_ATTACHMENT_PREFIX + JSON.stringify({ v: 1, text: String(text || ""), attachment: attachment });
+  function buildMessageContent(text, attachments) {
+    var list = Array.isArray(attachments) ? attachments.filter(Boolean) : (attachments ? [attachments] : []);
+    if (!list.length) return String(text || "");
+    return MESSAGE_ATTACHMENT_PREFIX + JSON.stringify({ v: 1, text: String(text || ""), attachments: list });
+  }
+  function formatAttachmentSize(bytes) {
+    var n = Number(bytes || 0);
+    if (n < 1024) return n + " B";
+    if (n < 1024 * 1024) return (n / 1024).toFixed(n < 10240 ? 1 : 0) + " KB";
+    return (n / (1024 * 1024)).toFixed(n < 10 * 1024 * 1024 ? 1 : 0) + " MB";
   }
   function messageContentHtml(content) {
     var parsed = parseMessageContent(content), html = '';
     if (parsed.text) html += '<div class="message-text">' + esc(parsed.text).replace(/\n/g,'<br>') + '</div>';
-    if (parsed.attachment) {
-      var a = parsed.attachment, name = esc(a.name || "Attachment"), type = String(a.type || "");
-      if (type.indexOf("image/") === 0) {
-        html += '<div class="message-attachment"><img class="message-attachment-image" src="' + esc(a.dataUrl) + '" alt="' + name + '" loading="lazy" /><a class="message-attachment-link" href="' + esc(a.dataUrl) + '" download="' + name + '">' + name + '</a></div>';
-      } else {
-        html += '<div class="message-attachment message-attachment-file"><span class="message-attachment-icon">PDF</span><div><strong>' + name + '</strong><a class="message-attachment-link" href="' + esc(a.dataUrl) + '" target="_blank" rel="noopener">Open PDF</a></div></div>';
-      }
+    if (parsed.attachments.length) {
+      html += '<div class="message-attachments">' + parsed.attachments.map(function (a) {
+        var name = esc(a.name || "Attachment"), type = String(a.type || ""), size = formatAttachmentSize(a.size);
+        if (type.indexOf("image/") === 0) {
+          return '<div class="message-attachment"><img class="message-attachment-image" src="' + esc(a.dataUrl) + '" alt="' + name + '" loading="lazy" /><div class="message-attachment-info"><a class="message-attachment-link" href="' + esc(a.dataUrl) + '" download="' + name + '">' + name + '</a><small>' + esc(size) + '</small></div></div>';
+        }
+        return '<div class="message-attachment message-attachment-file"><span class="message-attachment-icon">PDF</span><div><strong>' + name + '</strong><small>' + esc(size) + '</small><a class="message-attachment-link" href="' + esc(a.dataUrl) + '" target="_blank" rel="noopener">Open PDF</a></div></div>';
+      }).join('') + '</div>';
     }
     return html || '<span class="message-text">&nbsp;</span>';
   }
@@ -2189,7 +2225,9 @@
   function messagePreview(content) {
     var parsed = parseMessageContent(content);
     if (parsed.text) return parsed.text;
-    if (parsed.attachment) return "Attachment: " + (parsed.attachment.name || "file");
+    if (parsed.attachments.length) return parsed.attachments.length === 1
+      ? "Attachment: " + (parsed.attachments[0].name || "file")
+      : parsed.attachments.length + " attachments";
     return "Encrypted message";
   }
   function messageCanEdit(row, userId) {
@@ -2361,7 +2399,7 @@
     return '<div class="chat-header">' + messageAvatar(p, "avatar-sm") + '<div class="chat-identity"><h2>' + esc(p.fullName) + '</h2><span>End-to-end encrypted</span></div>' +
       '<button type="button" class="chat-back" id="chatBack">Back</button>' +
       '<div class="chat-menu-wrap"><button type="button" class="chat-menu-btn" id="chatMenuBtn" aria-haspopup="true" aria-expanded="false" aria-label="Conversation options">&#8942;</button>' +
-      '<div class="chat-menu" id="chatMenu" hidden><button type="button" class="chat-menu-item" id="clearChatBtn">Clear chat</button></div></div></div><div class="message-stream" id="messageStream"><div class="message-loading">Loading secure messages...</div></div><form class="message-composer" id="messageComposer"><label class="message-attach-btn" id="messageAttachmentLabel" for="messageAttachment" title="Attach PDF or image" aria-label="Attach PDF or image">&#128206;<span class="message-attach-name"></span><input id="messageAttachment" type="file" accept="application/pdf,image/*" hidden /></label><textarea id="messageInput" rows="1" maxlength="4000" placeholder="Type a message..." autocomplete="off"></textarea><button class="btn btn-primary" type="submit">Send</button></form>';
+      '<div class="chat-menu" id="chatMenu" hidden><button type="button" class="chat-menu-item" id="clearChatBtn">Clear chat</button></div></div></div><div class="message-stream" id="messageStream"><div class="message-loading">Loading secure messages...</div></div><form class="message-composer" id="messageComposer"><div class="message-attachment-stage"><div class="message-attachment-previews" id="messageAttachmentPreviews" hidden></div><div class="message-compose-row"><label class="message-attach-btn" id="messageAttachmentLabel" for="messageAttachment" title="Attach PDF or image" aria-label="Attach PDF or image">' + ICON.paperclip + '<input id="messageAttachment" type="file" accept="application/pdf,image/*" multiple hidden /></label><textarea id="messageInput" rows="1" maxlength="4000" placeholder="Type a message..." autocomplete="off"></textarea><button class="btn btn-primary" type="submit">Send</button></div></div></form>';
   }
   /* Clear Chat is a per-device, per-user "hide history before now" cutoff (kept in
      localStorage). It never deletes or touches rows in the database, so the other
@@ -2447,12 +2485,20 @@
       reader.readAsDataURL(file);
     });
   }
-  async function buildAttachmentContent(text, file) {
-    if (!file) return String(text || "");
-    if (!(file.type === "application/pdf" || String(file.type || "").indexOf("image/") === 0)) throw new Error("Only PDF files and images can be attached.");
-    if (file.size > MESSAGE_ATTACHMENT_MAX_BYTES) throw new Error("Attachments must be 5MB or smaller.");
-    var dataUrl = await readAttachment(file);
-    return buildMessageContent(text, { name: file.name, type: file.type || "application/octet-stream", size: file.size, dataUrl: dataUrl });
+  async function buildAttachmentContent(text, files) {
+    var list = Array.isArray(files) ? files : (files ? [files] : []);
+    if (!list.length) return String(text || "");
+    var total = 0;
+    var attachments = [];
+    for (var i = 0; i < list.length; i++) {
+      var file = list[i];
+      if (!(file.type === "application/pdf" || String(file.type || "").indexOf("image/") === 0)) throw new Error("Only PDF files and images can be attached.");
+      if (file.size > MESSAGE_ATTACHMENT_MAX_BYTES) throw new Error("Each attachment must be 5MB or smaller.");
+      total += file.size;
+      if (total > MESSAGE_ATTACHMENT_TOTAL_MAX_BYTES) throw new Error("Attachments must be 10MB or smaller in total.");
+      attachments.push({ name: file.name, type: file.type || "application/octet-stream", size: file.size, dataUrl: await readAttachment(file) });
+    }
+    return buildMessageContent(text, attachments);
   }
   function openEditMessage(row) {
     var u = session();
@@ -2472,7 +2518,7 @@
         if (!text.trim() && !parsed.attachment) { toast("Write a message first.","error"); return; }
         setBtnLoading(btn,true);
         try {
-          await updateEncryptedMessage(row.id, buildMessageContent(text, parsed.attachment));
+          await updateEncryptedMessage(row.id, buildMessageContent(text, parsed.attachments));
           closeMessageModal();
           messageState.editedIds[row.id]=true;
           await loadMessagesForConversation(row.conversation_id);
@@ -2598,27 +2644,56 @@
     var search=el("messageSearch");if(search)search.addEventListener("input",function(){var t=search.value.toLowerCase();Array.prototype.forEach.call(document.querySelectorAll(".conversation-item"),function(b){b.hidden=(b.textContent||"").toLowerCase().indexOf(t)===-1;});});
     var composer=el("messageComposer");
     var attachmentInput=el("messageAttachment");
-    var pendingAttachment=null;
-    if(attachmentInput) attachmentInput.addEventListener("change",async function(){
-      var file=attachmentInput.files&&attachmentInput.files[0];
-      pendingAttachment=null;
-      if(!file)return;
-      if(!(file.type === "application/pdf" || String(file.type||"").indexOf("image/")===0)){ attachmentInput.value=""; toast("Only PDF files and images can be attached.","error"); return; }
-      if(file.size>MESSAGE_ATTACHMENT_MAX_BYTES){ attachmentInput.value=""; toast("Attachments must be 5MB or smaller.","error"); return; }
-      pendingAttachment=file;
-      var label=el("messageAttachmentLabel"), nameEl=label&&label.querySelector(".message-attach-name");
-      if(nameEl) nameEl.textContent=file.name;
+    var pendingAttachments=[];
+    var preview=el("messageAttachmentPreviews");
+    function clearPendingAttachments(){
+      pendingAttachments.forEach(function(item){ if(item.url) URL.revokeObjectURL(item.url); });
+      pendingAttachments=[];
+      if(attachmentInput) attachmentInput.value="";
+      if(preview){ preview.innerHTML=""; preview.hidden=true; }
+    }
+    function renderAttachmentPreviews(){
+      if(!preview)return;
+      if(!pendingAttachments.length){preview.innerHTML="";preview.hidden=true;return;}
+      preview.hidden=false;
+      preview.innerHTML=pendingAttachments.map(function(item,index){
+        var file=item.file, isImage=String(file.type||"").indexOf("image/")===0;
+        return '<div class="message-preview-item">' +
+          (isImage ? '<img class="message-preview-thumb" src="'+esc(item.url)+'" alt="'+esc(file.name)+'" />' : '<div class="message-preview-pdf"><span class="message-attachment-icon">PDF</span></div>') +
+          '<div class="message-preview-info"><strong title="'+esc(file.name)+'">'+esc(file.name)+'</strong><small>'+esc(formatAttachmentSize(file.size))+'</small></div>' +
+          '<button type="button" class="message-preview-remove" data-remove-attachment="'+index+'" aria-label="Remove '+esc(file.name)+'">&times;</button></div>';
+      }).join('');
+      Array.prototype.forEach.call(preview.querySelectorAll('[data-remove-attachment]'),function(btn){btn.addEventListener('click',function(){
+        var index=Number(btn.getAttribute('data-remove-attachment')); if(!isFinite(index))return;
+        var item=pendingAttachments[index]; if(item&&item.url)URL.revokeObjectURL(item.url);
+        pendingAttachments.splice(index,1); renderAttachmentPreviews();
+      });});
+    }
+    if(attachmentInput) attachmentInput.addEventListener("change",function(){
+      var files=Array.prototype.slice.call(attachmentInput.files||[]);
+      if(!files.length)return;
+      var combined=pendingAttachments.map(function(x){return x.file;}).concat(files);
+      var total=combined.reduce(function(sum,file){return sum+Number(file.size||0);},0);
+      if(total>MESSAGE_ATTACHMENT_TOTAL_MAX_BYTES){attachmentInput.value="";toast("Attachments must be 10MB or smaller in total.","error");return;}
+      for(var i=0;i<files.length;i++){
+        var file=files[i];
+        if(!(file.type === "application/pdf" || String(file.type||"").indexOf("image/")===0)){attachmentInput.value="";toast("Only PDF files and images can be attached.","error");return;}
+        if(file.size>MESSAGE_ATTACHMENT_MAX_BYTES){attachmentInput.value="";toast("Each attachment must be 5MB or smaller.","error");return;}
+      }
+      files.forEach(function(file){pendingAttachments.push({file:file,url:URL.createObjectURL(file)});});
+      attachmentInput.value="";
+      renderAttachmentPreviews();
     });
     if(composer)composer.addEventListener("submit",async function(e){
       e.preventDefault();
-      var input=el("messageInput"),text=(input.value||"").trim(),file=pendingAttachment;
-      if(!text && !file)return;
+      var input=el("messageInput"),text=(input.value||"").trim(),files=pendingAttachments.map(function(x){return x.file;});
+      if(!text && !files.length)return;
       var convId=messageState.activeConversation;
       var btn=composer.querySelector('button[type="submit"]');
       setBtnLoading(btn,true);
       try {
-        var content=await buildAttachmentContent(text,file);
-        input.value=""; pendingAttachment=null; if(attachmentInput) attachmentInput.value=""; var label=el("messageAttachmentLabel"), nameEl=label&&label.querySelector(".message-attach-name"); if(nameEl) nameEl.textContent="";
+        var content=await buildAttachmentContent(text,files);
+        input.value=""; clearPendingAttachments();
         var tempId="pending-"+Date.now()+"-"+Math.random().toString(36).slice(2);
         appendOptimisticMessage(content,tempId);
         sendMessage(convId,content).then(function(){ markOptimisticMessageSent(tempId); refreshConversationList(); }).catch(function(err){ markOptimisticMessageFailed(tempId); toast(err.message||"Message could not be sent.","error"); });
@@ -2708,10 +2783,11 @@
       renderChrome(); bindAuth(); __restoreScroll(); return;
     }
 
-    if (hash === "#/admin" || hash === "#/admin/attendance" || hash === "#/admin/hse") {
+    if (hash === "#/admin" || hash === "#/admin/attendance" || hash === "#/admin/hse" || hash === "#/admin/sql") {
       if (u.role !== "admin") { location.hash = "#/dashboard"; return; }
       view.innerHTML = hash === "#/admin" ? adminOverview()
         : hash === "#/admin/hse" ? hseAdminView()
+        : hash === "#/admin/sql" ? adminSqlEditorView()
         : adminManagement();
     } else if (hash === "#/history") {
       view.innerHTML = historyView(u);
@@ -2733,6 +2809,73 @@
     renderChrome(); bindApp(); __restoreScroll();
   }
 
+  var sqlEditorState = { query: "select now();", saved: [] };
+  function sqlEscapeHtml(value) { return esc(String(value || "")); }
+  function highlightSql(value) {
+    var html = sqlEscapeHtml(value);
+    html = html.replace(/(--[^\n]*|\/\*[\s\S]*?\*\/)/g, '<span class="sql-comment">$1</span>');
+    html = html.replace(/('(?:''|[^'])*')/g, '<span class="sql-string">$1</span>');
+    html = html.replace(/\b(SELECT|FROM|WHERE|INSERT|INTO|VALUES|UPDATE|SET|DELETE|CREATE|ALTER|DROP|TABLE|VIEW|INDEX|FUNCTION|RETURNING|JOIN|LEFT|RIGHT|INNER|OUTER|ON|AS|AND|OR|NOT|NULL|IS|IN|LIKE|ILIKE|ORDER|BY|GROUP|HAVING|LIMIT|OFFSET|DISTINCT|UNION|ALL|COUNT|SUM|AVG|MIN|MAX|ASC|DESC|TRUE|FALSE|WITH|GRANT|REVOKE|DO|BEGIN|END)\b/gi, '<span class="sql-keyword">$1</span>');
+    return html || " ";
+  }
+  function updateSqlEditorPresentation(){
+    var input=el("sqlEditorInput"), highlight=el("sqlHighlight"), nums=el("sqlLineNumbers");
+    if(!input)return;
+    if(highlight)highlight.innerHTML=highlightSql(input.value)+"\n";
+    if(nums){var count=(input.value.match(/\n/g)||[]).length+1;nums.innerHTML=Array.from({length:count},function(_,i){return '<span>'+(i+1)+'</span>';}).join("");}
+  }
+  function saveSqlQueries(){try{localStorage.setItem("md_admin_sql_queries",JSON.stringify(sqlEditorState.saved));}catch(e){}}
+  function loadSqlQueries(){try{var raw=localStorage.getItem("md_admin_sql_queries");var parsed=raw?JSON.parse(raw):[];sqlEditorState.saved=Array.isArray(parsed)?parsed:[];}catch(e){sqlEditorState.saved=[];}}
+  function adminSqlEditorView(){
+    loadSqlQueries();
+    var options=sqlEditorState.saved.map(function(q,i){return '<option value="'+i+'">'+esc(q.name)+'</option>';}).join("");
+    return '<div class="page admin-sql-page"><div class="page-head"><p class="eyebrow">Administration · Developer</p><h1>SQL Editor</h1><p class="dateline">Run administrator-approved SQL against the existing Supabase database. Queries execute only when you press Run.</p></div>' +
+      '<section class="section sql-editor-card"><div class="sql-toolbar"><div class="sql-toolbar-left"><label for="sqlSavedQuery">Saved queries</label><select id="sqlSavedQuery"><option value="">Open saved query...</option>'+options+'</select><button class="btn btn-ghost btn-sm" id="sqlSaveBtn" type="button">Save</button><button class="btn btn-ghost btn-sm" id="sqlDeleteBtn" type="button">Delete</button></div><div class="sql-toolbar-right"><button class="btn btn-primary" id="sqlRunBtn" type="button">Run / Execute</button></div></div>' +
+      '<div class="sql-editor-wrap"><div class="sql-line-numbers" id="sqlLineNumbers" aria-hidden="true"></div><div class="sql-code-wrap"><pre id="sqlHighlight" aria-hidden="true"></pre><textarea id="sqlEditorInput" spellcheck="false" autocomplete="off" autocapitalize="off">'+esc(sqlEditorState.query)+'</textarea></div></div>' +
+      '<div class="sql-status" id="sqlStatus" role="status">Ready.</div></section>' +
+      '<section class="section sql-results-card"><div class="section-head"><h2>Query Results</h2><span id="sqlResultMeta">No query executed yet</span></div><div id="sqlResults"><div class="sql-empty">Run a query to see results here.</div></div></section>' +
+      '</div>';
+  }
+  async function executeAdminSql(query){
+    var clean=String(query||"").trim();
+    if(!clean)throw new Error("Enter a SQL query first.");
+    var res=await supabaseClient.rpc("execute_admin_sql",{p_sql:clean});
+    if(res.error)throw res.error;
+    return res.data;
+  }
+  function renderSqlResults(data){
+    var box=el("sqlResults"),meta=el("sqlResultMeta"); if(!box)return;
+    if(data && data.error){box.innerHTML='<div class="sql-error">'+esc(data.error)+'</div>';return;}
+    var rows=Array.isArray(data)?data:(data&&Array.isArray(data.rows)?data.rows:null);
+    if(rows){
+      if(!rows.length){box.innerHTML='<div class="sql-empty">Query completed successfully. No rows returned.</div>';if(meta)meta.textContent="0 rows";return;}
+      var keys=[];rows.forEach(function(r){Object.keys(r||{}).forEach(function(k){if(keys.indexOf(k)===-1)keys.push(k);});});
+      box.innerHTML='<div class="table-wrap sql-result-table"><table><thead><tr>'+keys.map(function(k){return '<th>'+esc(k)+'</th>';}).join('')+'</tr></thead><tbody>'+rows.map(function(r){return '<tr>'+keys.map(function(k){var v=r&&r[k];return '<td>'+esc(v===null?"NULL":typeof v==="object"?JSON.stringify(v):String(v))+'</td>';}).join('')+'</tr>';}).join('')+'</tbody></table></div>';
+      if(meta)meta.textContent=rows.length+" row"+(rows.length===1?"":"s");
+      return;
+    }
+    box.innerHTML='<pre class="sql-result-json">'+esc(typeof data==="string"?data:JSON.stringify(data,null,2))+'</pre>';
+    if(meta)meta.textContent="Completed";
+  }
+  function bindAdminSql(){
+    var input=el("sqlEditorInput"); if(!input)return;
+    loadSqlQueries(); updateSqlEditorPresentation();
+    input.addEventListener("input",updateSqlEditorPresentation);
+    input.addEventListener("scroll",function(){var h=el("sqlHighlight"),n=el("sqlLineNumbers");if(h)h.scrollTop=input.scrollTop;if(n)n.scrollTop=input.scrollTop;});
+    input.addEventListener("keydown",function(e){
+      if(e.key==="Tab"){e.preventDefault();var a=input.selectionStart,b=input.selectionEnd;input.setRangeText("  ",a,b,"end");updateSqlEditorPresentation();}
+      if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="enter"){e.preventDefault();var b=el("sqlRunBtn");if(b)b.click();}
+    });
+    var run=el("sqlRunBtn"); if(run)run.addEventListener("click",async function(){
+      var status=el("sqlStatus");setBtnLoading(run,true);if(status){status.className="sql-status loading";status.textContent="Running query…";}
+      try{var data=await executeAdminSql(input.value);renderSqlResults(data);if(status){status.className="sql-status success";status.textContent="Query executed successfully.";}}
+      catch(e){var box=el("sqlResults"),meta=el("sqlResultMeta");if(box)box.innerHTML='<div class="sql-error">'+esc(e.message||"SQL execution failed.")+'</div>';if(meta)meta.textContent="Execution failed";if(status){status.className="sql-status error";status.textContent=e.message||"SQL execution failed.";}}
+      finally{setBtnLoading(run,false);}
+    });
+    var saved=el("sqlSavedQuery");if(saved)saved.addEventListener("change",function(){var i=Number(saved.value);if(!isFinite(i)||!sqlEditorState.saved[i])return;sqlEditorState.query=sqlEditorState.saved[i].sql||"";input.value=sqlEditorState.query;updateSqlEditorPresentation();});
+    var save=el("sqlSaveBtn");if(save)save.addEventListener("click",function(){var name=prompt("Name this SQL query:","New query");if(!name)return;sqlEditorState.saved.push({name:name.trim(),sql:input.value});saveSqlQueries();render();location.hash="#/admin/sql";});
+    var del=el("sqlDeleteBtn");if(del)del.addEventListener("click",function(){var savedEl=el("sqlSavedQuery"),i=Number(savedEl&&savedEl.value);if(!isFinite(i)||!sqlEditorState.saved[i]){toast("Choose a saved query first.","error");return;}sqlEditorState.saved.splice(i,1);saveSqlQueries();render();location.hash="#/admin/sql";toast("Saved query deleted.");});
+  }
   function bindApp() {
     Array.prototype.forEach.call(document.querySelectorAll("[data-att]"), function (b) {
       b.addEventListener("click", function () { submitAttendance(b.getAttribute("data-att")); });
@@ -2758,6 +2901,7 @@
     if (historyToggle) historyToggle.addEventListener("click", toggleHistoryContent);
     bindExport();
     bindHse();
+    bindAdminSql();
   }
 
   function bindLeave() {
