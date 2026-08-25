@@ -900,6 +900,16 @@ body.maintenance-page{background:var(--gradient-hero);min-height:100vh}
   .collapse-toggle-labelled svg{transition:none}
 }
 
-.panel-head.panel-head-collapsible{display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none}
-.panel-head.panel-head-collapsible .collapse-toggle-labelled{margin-left:auto}
+.panel-head.panel-head-collapsible{display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;flex-wrap:nowrap}
+.panel-head.panel-head-collapsible .panel-head-title{min-width:0;flex:1 1 auto;overflow-wrap:break-word}
+.panel-head.panel-head-collapsible .collapse-toggle-labelled{margin-left:auto;flex:0 0 auto;max-width:50%}
+.collapse-toggle-compact{padding:7px 12px}
+.collapse-toggle-compact .collapse-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .panel-head.panel-head-collapsible:focus-visible{outline:2px solid var(--navy);outline-offset:-2px}
+
+.section-head.collapsible-head{min-width:0}
+.section-head.collapsible-head h2{min-width:0;overflow-wrap:break-word}
+.section-head-actions{flex-wrap:wrap;min-width:0}
+.collapse-toggle-labelled{max-width:100%}
+.collapse-toggle-labelled .collapse-label{overflow:hidden;text-overflow:ellipsis}
+.collapse-toggle-labelled svg{flex:0 0 auto}

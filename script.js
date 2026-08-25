@@ -2059,7 +2059,12 @@
     btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
     var label = btn.querySelector(".collapse-label");
     var name = btn.getAttribute("data-title") || "details";
-    if (label) label.textContent = (collapsed ? "View " : "Hide ") + name;
+    if (label) {
+      /* Narrow panels only get "View"/"Hide" so the pill never overflows. */
+      label.textContent = btn.hasAttribute("data-compact")
+        ? (collapsed ? "View" : "Hide")
+        : (collapsed ? "View " : "Hide ") + name;
+    }
     btn.setAttribute("aria-label", (collapsed ? "Expand " : "Collapse ") + name);
     var head = btn.closest(".section-head, .panel-head");
     if (head) head.classList.toggle("is-collapsed", collapsed);
@@ -2156,11 +2161,23 @@
     content.appendChild(body);
 
     var short = title.replace(/\s*—.*$/, "").trim() || "details";
+
+    /* Wrap the bare title text node so it can shrink/wrap next to the pill. */
+    Array.prototype.slice.call(head.childNodes).forEach(function (n) {
+      if (n.nodeType === 3 && n.textContent.trim()) {
+        var span = document.createElement("span");
+        span.className = "panel-head-title";
+        span.textContent = n.textContent.trim();
+        head.replaceChild(span, n);
+      }
+    });
+
     var btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "collapse-toggle collapse-toggle-labelled";
+    btn.className = "collapse-toggle collapse-toggle-labelled collapse-toggle-compact";
     btn.setAttribute("aria-controls", content.id);
     btn.setAttribute("data-title", short);
+    btn.setAttribute("data-compact", "");
     btn.innerHTML = '<span class="collapse-label"></span>' + CHEVRON;
     head.appendChild(btn);
     head.classList.add("collapsible-head", "panel-head-collapsible");
