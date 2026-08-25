@@ -2363,10 +2363,10 @@
     return '<div class="message-lock"><div class="message-lock-card">' +
       '<div class="message-lock-icon">' + ICON.lock + '</div>' +
       '<p class="eyebrow">Secure Messaging</p><h2>' + (create ? "Set up secure messaging" : "Unlock your messages") + '</h2>' +
-      '<p>' + (create ? "Create a private 6-digit PIN. It protects your messaging private key and is never sent to the database." : "Enter your PIN (or your old recovery passphrase, if you set one before PINs were added) to unlock secure messaging.") + '</p>' +
+      '<p>' + (create ? "Create a private 6-digit PIN. It protects your messaging private key and is never sent to the database." : "Enter your PIN to unlock secure messaging.") + '</p>' +
       '<form id="messageKeyForm" class="message-key-form">' +
-      '<div class="field password-field"><label for="messageRecovery">' + (create ? "Recovery PIN" : "PIN or passphrase") + '</label>' +
-      '<div class="pw-wrap"><input id="messageRecovery" name="recovery" type="password" autocomplete="' + (create ? "new-password" : "current-password") + '" placeholder="' + (create ? "6-digit PIN" : "Enter your PIN or passphrase") + '"' + pinAttrs + ' />' +
+      '<div class="field password-field"><label for="messageRecovery">' + (create ? "Recovery PIN" : "PIN") + '</label>' +
+      '<div class="pw-wrap"><input id="messageRecovery" name="recovery" type="password" autocomplete="' + (create ? "new-password" : "current-password") + '" placeholder="' + (create ? "6-digit PIN" : "Enter your PIN") + '"' + pinAttrs + ' />' +
       '<button type="button" class="pw-toggle" aria-label="Show PIN" aria-pressed="false">' + ICON.eye + "</button></div>" +
       '<span class="error"></span></div>' +
       (create ? '<div class="field password-field"><label for="messageRecoveryConfirm">Confirm PIN</label>' +
@@ -2374,7 +2374,7 @@
         '<button type="button" class="pw-toggle" aria-label="Show PIN" aria-pressed="false">' + ICON.eye + "</button></div>" +
         '<span class="error"></span></div>' : "") +
       '<button class="btn btn-primary btn-block" type="submit">' + (create ? "Create encryption keys" : "Unlock messages") + '</button></form>' +
-      (!create ? '<p class="message-lock-note">If you originally set a passphrase, it still works here — unlocking with it, then using <b>Change PIN</b> in Messages, switches you over to a PIN.</p>' : '<p class="message-lock-note">Your PIN cannot be recovered by the administrator. Keep it somewhere safe.</p>') + '</div></div>';
+      (!create ? '' : '<p class="message-lock-note">Your PIN cannot be recovered by the administrator. Keep it somewhere safe.</p>') + '</div></div>';
   }
 
   function messagesView() {
