@@ -2237,22 +2237,20 @@
   async function loadSupportTicketBadge(){
     var badge=$("supportTicketNavBadge"); if(!badge)return;
     try{
-      /* The Support Tickets nav badge represents the tickets visible to IT Support.
-         It must remain visible whenever at least one ticket exists; it should not
-         depend on a notification row being created or marked unread. */
+      /* The Support Tickets badge is a persistent ticket-count indicator,
+         not an unread-notification counter. It must remain visible whenever
+         at least one support ticket is visible to the IT/support role. */
       var r=await sb.from("support_tickets").select("id",{count:"exact",head:true});
-      var count=!r.error?Number(r.count||0):0;
-      if(count>0){
-        badge.hidden=false;
-        badge.textContent=count>99?"99+":String(count);
-        badge.setAttribute("aria-label",count+" support ticket"+(count===1?"":"s"));
-      }else{
-        badge.hidden=true;
-        badge.textContent="";
-        badge.removeAttribute("aria-label");
-      }
+      if(r.error) throw r.error;
+      var count=Number(r.count||0);
+      badge.hidden=count<=0;
+      if(count>0) badge.textContent=count>99?"99+":String(count);
     }catch(e){
-      badge.hidden=true;
+      /* Do not tamper with an already displayed badge if the count request
+         temporarily fails. Fall back to the tickets already loaded in memory. */
+      var fallback=(SUPPORT_TICKETS.rows||[]).length;
+      badge.hidden=fallback<=0;
+      if(fallback>0) badge.textContent=fallback>99?"99+":String(fallback);
     }
   }
 

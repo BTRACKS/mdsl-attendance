@@ -428,6 +428,16 @@ img{max-width:100%;display:block}
   }
 }
 
+/* Robust mobile header/menu fix. Keep the hamburger and mobile Sign out
+   available across phones and small tablets, including 768px-width devices. */
+@media (max-width:900px){
+  .masthead-inner{grid-template-columns:minmax(0,1fr) auto !important;grid-template-rows:auto !important;align-items:center !important;}
+  .nav{grid-column:1 / -1 !important;grid-row:2 !important;}
+  .masthead-right{grid-column:2 !important;grid-row:1 !important;display:flex !important;align-items:center !important;justify-self:end !important;z-index:60 !important;}
+  .menu-toggle{display:flex !important;visibility:visible !important;opacity:1 !important;position:relative !important;z-index:61 !important;}
+  #logoutBtn{display:none !important;}
+}
+
 @media (max-width:760px){
   .dashboard-grid{
     grid-template-columns:1fr;
@@ -597,10 +607,9 @@ img{max-width:100%;display:block}
   .page-head{padding:26px 22px}
 }
 @media (max-width:760px){
-  .masthead-inner{padding:12px 14px;gap:12px;flex-wrap:nowrap;position:relative}
-  .masthead-right{grid-column:2;grid-row:1;display:flex !important;align-items:center;justify-self:end;min-width:0;z-index:42}
-  .menu-toggle{display:flex !important;visibility:visible !important;opacity:1 !important;align-items:center;justify-content:center;z-index:43}
-  #logoutBtn{display:none !important}
+  .masthead-inner{padding:12px 14px;gap:12px;flex-wrap:nowrap}
+  .menu-toggle{display:flex}
+  #logoutBtn{display:none}
 
   /* Mobile support menu: match the clean full-width menu treatment used by
      the main E-Attendance menu (white panel, simple rows, no row icons). */
@@ -625,7 +634,7 @@ img{max-width:100%;display:block}
     overflow-y:auto;
     z-index:39;
   }
-  .nav.open{display:flex}
+  .nav.open{display:flex !important}
   .nav button{
     display:flex;
     align-items:center;
@@ -1023,3 +1032,38 @@ body.modal-open{overflow:hidden}
 #tab-leave .leave-empty-note{margin-top:8px!important;font-size:12px!important;color:var(--ink-4)!important}
 #tab-leave .leave-error-state{border-color:#e6b8b2;background:#fff8f7}
 @media(max-width:760px){#tab-leave .leave-summary-grid{grid-template-columns:1fr}#tab-leave .leave-support-toolbar{align-items:stretch}#tab-leave .leave-view-note{padding:0}}
+
+/* ---------- Support Ticket Management ---------- */
+#supportTicketNavBadge{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:var(--amber);color:var(--navy-deep);font-size:10px;font-weight:800}
+.support-admin-ticket-list{display:grid;gap:10px}
+.support-admin-ticket-card{display:grid;grid-template-columns:auto minmax(0,1fr);gap:14px;width:100%;text-align:left;padding:16px;background:var(--paper);border:1px solid var(--rule);border-radius:var(--radius);box-shadow:var(--shadow-xs);cursor:pointer;transition:border-color var(--t),box-shadow var(--t),transform var(--t)}
+.support-admin-ticket-card:hover{border-color:var(--navy);box-shadow:var(--shadow-sm);transform:translateY(-1px)}
+.support-admin-ticket-avatar .avatar{width:46px;height:46px}
+.support-admin-ticket-main{min-width:0}
+.support-admin-ticket-top{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.support-admin-ticket-top strong{font-size:12px;color:var(--navy)}
+.support-admin-ticket-card h3{font-size:15px;margin:7px 0 7px;overflow-wrap:anywhere}
+.support-admin-ticket-meta{display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--ink-4)}
+.ticket-admin-modal{max-height:72vh;overflow:auto}
+.ticket-admin-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.ticket-admin-head h2{font-size:22px;margin-bottom:4px}
+.ticket-admin-meta{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 16px;font-size:12.5px;color:var(--ink-4)}
+.ticket-admin-controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;gap:12px;align-items:end;padding:14px;border:1px solid var(--rule);background:var(--paper-2);border-radius:var(--radius);margin:16px 0}
+.ticket-admin-controls .field{margin:0;min-width:0}
+.ticket-admin-controls .btn{min-height:44px}
+.ticket-admin-thread{display:grid;gap:10px;margin-top:16px}
+.ticket-admin-message{border:1px solid var(--rule);border-radius:12px;padding:12px 14px;background:var(--paper)}
+.ticket-admin-message.internal{background:#fff7e8;border-color:#f2d69d}
+.ticket-admin-message.mine{border-left:4px solid var(--navy)}
+.ticket-admin-message>div{display:flex;justify-content:space-between;gap:12px;font-size:12px}
+.ticket-admin-message>div span{color:var(--ink-4);font-weight:700}
+.ticket-admin-message p{margin-top:7px;color:var(--ink-2);font-size:14px;overflow-wrap:anywhere}
+.ticket-admin-message time{display:block;margin-top:7px;color:var(--ink-4);font-size:10.5px}
+.ticket-admin-files{border-top:1px solid var(--rule);padding-top:14px;margin-top:16px}
+.ticket-admin-files>div{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.ticket-admin-files button{background:var(--paper-2);border:1px solid var(--rule);border-radius:10px;padding:7px 10px}
+.ticket-admin-reply{border-top:1px solid var(--rule);margin-top:16px;padding-top:14px}
+.ticket-admin-reply .check{font-size:13px}
+.support-ticket-modal-backdrop{z-index:150}
+@media (max-width:900px){.ticket-admin-controls{grid-template-columns:1fr 1fr}.ticket-admin-controls .btn{width:100%}}
+@media (max-width:560px){.support-admin-ticket-card{grid-template-columns:1fr}.ticket-admin-head{flex-direction:column}.ticket-admin-controls{grid-template-columns:1fr}.ticket-admin-controls .btn{width:100%}}
