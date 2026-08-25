@@ -839,3 +839,40 @@ body.maintenance-page{background:var(--gradient-hero);min-height:100vh}
   .leave-detail-grid{grid-template-columns:1fr}
   .leave-history-mini>div{flex-direction:column;gap:2px}
 }
+
+/* ---------- Working-day lock states (weekend / public holiday) ---------- */
+.day-lock{
+  display:flex;gap:16px;align-items:flex-start;
+  padding:22px;border-radius:var(--radius-lg);
+  border:1px solid var(--rule-strong);background:var(--paper-2);
+  box-shadow:var(--shadow-xs)
+}
+.day-lock.holiday{background:var(--warn-soft);border-color:#f2dca6}
+.day-lock.weekend{background:var(--paper-3)}
+.day-lock.compact{padding:14px 16px;margin-bottom:16px}
+.day-lock-icon{
+  flex:0 0 auto;width:42px;height:42px;display:grid;place-items:center;
+  border-radius:12px;background:var(--paper);border:1px solid var(--rule);color:var(--navy)
+}
+.day-lock-icon svg{width:20px;height:20px}
+.day-lock-title{font-weight:800;font-size:16px;letter-spacing:-.01em;color:var(--ink)}
+.day-lock-reason{margin-top:2px;font-weight:800;font-size:20px;letter-spacing:-.02em;color:var(--navy)}
+.day-lock.weekend .day-lock-reason{color:var(--ink-2)}
+.day-lock-date{margin-top:2px;font-size:13.5px;color:var(--ink-3)}
+.day-lock-note{margin-top:10px;font-size:14px;color:var(--ink-2);max-width:60ch}
+.day-lock.compact .day-lock-note{margin-top:4px}
+
+/* ---------- Admin: weekly attendance status ---------- */
+.week-status .week-grid{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px
+}
+.week-day{
+  display:flex;flex-direction:column;gap:6px;align-items:flex-start;
+  padding:14px;border-radius:var(--radius);border:1px solid var(--rule);
+  background:var(--paper);box-shadow:var(--shadow-xs)
+}
+.week-day.weekend{background:var(--paper-3)}
+.week-day.holiday{background:var(--warn-soft);border-color:#f2dca6}
+.week-day.is-today{border-color:var(--navy);box-shadow:0 0 0 2px rgba(18,58,107,.12)}
+.week-day-name{font-weight:700;font-size:14px;color:var(--ink)}
+.week-day-date{font-size:12.5px;color:var(--ink-4)}

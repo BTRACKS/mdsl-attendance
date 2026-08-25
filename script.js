@@ -162,6 +162,97 @@
   function clockTime(d) {
     return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
   }
+
+  /* =========================================================================
+     WORKING-DAY / PUBLIC HOLIDAY MODULE
+     Normal staff attendance is Monday–Friday only, and any Nigerian public
+     holiday that falls on a weekday is treated as a non-working day.
+     To update the calendar, simply edit NIGERIA_HOLIDAYS below (keys are
+     "YYYY-MM-DD", values are the holiday name). Islamic holidays are moon
+     sighting dependent, so confirm and adjust them each year.
+     ========================================================================= */
+  var NIGERIA_HOLIDAYS = {
+    /* ---- 2026 ---- */
+    "2026-01-01": "New Year's Day",
+    "2026-03-20": "Eid-el-Fitr",
+    "2026-03-23": "Eid-el-Fitr Holiday",
+    "2026-04-03": "Good Friday",
+    "2026-04-06": "Easter Monday",
+    "2026-05-01": "Workers' Day",
+    "2026-05-27": "Eid-el-Kabir",
+    "2026-05-28": "Eid-el-Kabir Holiday",
+    "2026-06-12": "Democracy Day",
+    "2026-08-25": "Eid-el-Maulud",
+    "2026-10-01": "Independence Day",
+    "2026-12-25": "Christmas Day",
+    "2026-12-26": "Boxing Day",
+    /* ---- 2027 ---- */
+    "2027-01-01": "New Year's Day",
+    "2027-03-10": "Eid-el-Fitr",
+    "2027-03-11": "Eid-el-Fitr Holiday",
+    "2027-03-26": "Good Friday",
+    "2027-03-29": "Easter Monday",
+    "2027-05-01": "Workers' Day",
+    "2027-05-17": "Eid-el-Kabir",
+    "2027-05-18": "Eid-el-Kabir Holiday",
+    "2027-06-12": "Democracy Day",
+    "2027-08-15": "Eid-el-Maulud",
+    "2027-10-01": "Independence Day",
+    "2027-12-25": "Christmas Day",
+    "2027-12-26": "Boxing Day"
+  };
+
+  function dateFromKey(key) {
+    var p = String(key).split("-");
+    return new Date(+p[0], +p[1] - 1, +p[2]);
+  }
+
+  /* Single source of truth for "is attendance open on this date?".
+     Returns { open, kind, title, reason, holiday, dateLabel, weekdayLabel }. */
+  function dayStatus(input) {
+    var d = input instanceof Date ? input : dateFromKey(input);
+    var key = dateKey(d);
+    var weekday = d.toLocaleDateString("en-GB", { weekday: "long" });
+    var dow = d.getDay();
+    if (dow === 0 || dow === 6) {
+      return {
+        open: false, kind: "weekend", title: "Attendance Unavailable",
+        reason: "Weekend", holiday: null, dateLabel: longDate(d), weekdayLabel: weekday,
+        note: "Attendance stamping is only available Monday–Friday."
+      };
+    }
+    var name = NIGERIA_HOLIDAYS[key];
+    if (name) {
+      return {
+        open: false, kind: "holiday", title: "Attendance Locked",
+        reason: name, holiday: name, dateLabel: longDate(d), weekdayLabel: weekday,
+        note: "Attendance stamping is unavailable today because today is a public holiday."
+      };
+    }
+    return {
+      open: true, kind: "working", title: "Attendance Open",
+      reason: "Working Day", holiday: null, dateLabel: longDate(d), weekdayLabel: weekday, note: ""
+    };
+  }
+
+  /* Locked-state card shown in place of the attendance blocks. */
+  function dayLockCard(st) {
+    return '<div class="day-lock ' + st.kind + '">' +
+      '<span class="day-lock-icon" aria-hidden="true">' + ICON.lock + "</span>" +
+      '<div class="day-lock-body">' +
+      '<p class="day-lock-title">' + esc(st.title) + "</p>" +
+      '<p class="day-lock-reason">' + esc(st.reason) + "</p>" +
+      '<p class="day-lock-date">' + esc(st.dateLabel) + "</p>" +
+      '<p class="day-lock-note">' + esc(st.note) + "</p>" +
+      "</div></div>";
+  }
+
+  function dayStatusTag(st) {
+    if (st.kind === "weekend") return '<span class="tag tag-miss">Weekend</span>';
+    if (st.kind === "holiday") return '<span class="tag tag-pending">Public Holiday</span>';
+    return '<span class="tag tag-ok">Working Day</span>';
+  }
+
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
@@ -466,6 +557,8 @@
     var rec = record(u.id, key);
     var leave = leaveForDate(u.id, key);
     var m = rec && rec.morning, e = rec && rec.evening;
+    var dayState = dayStatus(now);
+
 
     var greeting = greetingInfo(now);
     return '<div class="page"><div class="page-head"><p class="eyebrow">Staff Dashboard</p>' +
@@ -476,14 +569,17 @@
       "</h1></div>" +
       '<div class="layout"><div>' +
 
-      '<section class="section"><div class="section-head"><h2>Today\'s Attendance</h2><span>' + longDate(now) + "</span></div>" +
+      '<section class="section"><div class="section-head"><h2>Today\'s Attendance</h2><span>' + longDate(now) + " · " + esc(dayState.reason) + "</span></div>" +
       (leave
         ? '<div class="leave-active-banner"><strong>Leave</strong><span>' + esc(leaveTypeLabel(leave.leaveType)) + ' · ' + esc(prettyDate(leave.startDate)) + ' – ' + esc(prettyDate(leave.endDate)) + '</span></div>'
-        : '<div class="att-grid">' +
-          attBlock("Morning", "Resumption", m, "morning", !!m) +
-          attBlock("Evening", "Closing", e, "evening", !!e || !m) +
-          "</div>" +
-          (!m ? '<p class="dateline" style="margin-top:12px">Closing time unlocks once your morning resumption has been submitted.</p>' : "")) +
+        : !dayState.open
+          ? dayLockCard(dayState)
+          : '<div class="att-grid">' +
+            attBlock("Morning", "Resumption", m, "morning", !!m) +
+            attBlock("Evening", "Closing", e, "evening", !!e || !m) +
+            "</div>" +
+            (!m ? '<p class="dateline" style="margin-top:12px">Closing time unlocks once your morning resumption has been submitted.</p>' : "")) +
+
       "</section>" +
 
       hseStaffCard(u) +
@@ -826,7 +922,13 @@
       stat("Total Staff", staff.length, "", ICON.users) + stat("Staff Present", morning.length, "ok", ICON.check) +
       stat("Morning Submitted", morning.length, "ok", ICON.sunrise) + stat("Evening Submitted", evening.length, "accent", ICON.sunset) +
       stat("Missing Attendance", missing.length, missing.length ? "danger" : "", ICON.alert) + "</div>" +
-      '<div class="layout"><div><section class="section"><div class="section-head"><h2>Today\'s Register</h2><span>' + longDate(now) + "</span></div>" +
+      weekStatusPanel(now) +
+      '<div class="layout"><div><section class="section"><div class="section-head"><h2>Today\'s Register</h2><span>' + longDate(now) + " · " + esc(dayStatus(now).reason) + "</span></div>" +
+      (dayStatus(now).open ? "" : '<div class="day-lock compact ' + dayStatus(now).kind + '">' +
+        '<span class="day-lock-icon" aria-hidden="true">' + ICON.lock + "</span>" +
+        '<div class="day-lock-body"><p class="day-lock-title">Attendance locked today</p>' +
+        '<p class="day-lock-note">' + esc(dayStatus(now).kind === "weekend" ? "Weekend — attendance stamping is only available Monday–Friday." : "Public holiday: " + dayStatus(now).reason + ". Staff cannot stamp attendance today.") + "</p></div></div>") +
+
       adminTable(staff, key) + "</section></div>" +
       '<aside><div class="panel"><div class="panel-head">' + ICON.activity + 'Recent Attendance Activity</div><div class="panel-body">' +
       '<div class="feed">' + (activity.length ? activity.map(function (a) {
@@ -841,6 +943,28 @@
         : '<p class="dateline">All staff have submitted attendance.</p>') +
       "</div></div></aside></div></div>";
   }
+
+  /* Admin-facing week overview: which days of the current week are working
+     days, weekends or public holidays. */
+  function weekStatusPanel(now) {
+    var monday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    var shift = (monday.getDay() + 6) % 7;
+    monday.setDate(monday.getDate() - shift);
+    var todayKey = dateKey(now);
+    var cells = "";
+    for (var i = 0; i < 7; i++) {
+      var d = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i);
+      var st = dayStatus(d);
+      cells += '<div class="week-day ' + st.kind + (dateKey(d) === todayKey ? " is-today" : "") + '">' +
+        '<span class="week-day-name">' + esc(st.weekdayLabel) + "</span>" +
+        '<span class="week-day-date">' + esc(d.toLocaleDateString("en-GB", { day: "numeric", month: "short" })) + "</span>" +
+        dayStatusTag(st) + "</div>";
+    }
+    return '<section class="section week-status"><div class="section-head"><h2>Attendance Status</h2>' +
+      "<span>This week</span></div><div class=\"week-grid\">" + cells + "</div>" +
+      '<p class="dateline" style="margin-top:12px">Attendance stamping is automatically locked on weekends and Nigerian public holidays.</p></section>';
+  }
+
   function stat(label, value, tone, icon) {
     return '<div class="stat' + (tone ? " " + tone : "") + '"><div class="stat-top"><span class="stat-label">' + label + '</span>' +
       (icon ? '<span class="stat-icon">' + icon + '</span>' : '') + '</div><b>' + value + "</b></div>";
@@ -859,7 +983,12 @@
           "<td>" + esc(u.department) + "</td><td>" + esc(u.employmentType) + "</td>" +
           '<td class="num">' + (a && a.morning ? esc(a.morning.time) : "—") + "</td>" +
           '<td class="num">' + (a && a.evening ? esc(a.evening.time) : "—") + "</td>" +
-          "<td>" + (leaveForDate(u.id, key) ? '<span class="tag tag-leave">Leave</span>' : (a ? statusOf(a, u.id, key) : '<span class="tag tag-miss">Not submitted</span>')) + "</td></tr>";
+          "<td>" + (leaveForDate(u.id, key) ? '<span class="tag tag-leave">Leave</span>'
+            : (a ? statusOf(a, u.id, key)
+              : (!dayStatus(key).open
+                ? dayStatusTag(dayStatus(key))
+                : '<span class="tag tag-miss">Not submitted</span>'))) + "</td></tr>";
+
       }).join("") + "</tbody></table></div>";
   }
 
@@ -946,6 +1075,14 @@
     var u = session(); if (!u) return;
     var now = new Date(), key = dateKey(now);
     var rec = record(u.id, key);
+    var dayState = dayStatus(now);
+    if (!dayState.open) {
+      toast(dayState.kind === "weekend"
+        ? "Attendance is only available Monday–Friday."
+        : "Attendance is locked today — public holiday (" + dayState.reason + ").", "error");
+      return;
+    }
+
     if (rec && rec[kind]) { toast("This attendance is locked and cannot be changed.", "error"); return; }
     if (kind === "evening" && (!rec || !rec.morning)) { toast("Submit your morning resumption first.", "error"); return; }
 
