@@ -353,8 +353,8 @@
     pendingConfirm = onYes;
   }
   function closeModal() { var mm = el("modal"); mm.hidden = true; mm.classList.remove("message-modal"); el("modalKicker").hidden = false; el("modalConfirm").hidden = false; el("modalCancel").textContent = "Cancel"; pendingConfirm = null; }
-  el("modalCancel").addEventListener("click", function(){ if (el("modal").classList.contains("message-modal")) closeMainMessageModal(); else closeModal(); });
-  el("modal").addEventListener("click", function (e) { if (e.target === el("modal")) { if (el("modal").classList.contains("message-modal")) closeMainMessageModal(); else closeModal(); } });
+  el("modalCancel").addEventListener("click", closeModal);
+  el("modal").addEventListener("click", function (e) { if (e.target === el("modal")) closeModal(); });
   el("modalConfirm").addEventListener("click", function () {
     var fn = pendingConfirm; closeModal(); if (fn) fn();
   });
@@ -1520,139 +1520,6 @@
     return "";
   }
 
-  /* ========================= SUPPORT TICKETS ========================= */
-  var SUPPORT_TICKET_TYPES = ["Technical Issue", "Login/Access Problem", "Attendance Issue", "Account/Profile Issue", "System Error", "Feature Request", "Other"];
-  var SUPPORT_PRIORITIES = ["Low", "Medium", "High", "Urgent"];
-  var SUPPORT_STATUSES = ["Open", "In Progress", "Resolved", "Closed"];
-  var SUPPORT_ATTACHMENT_BUCKET = "support-ticket-attachments";
-  var SUPPORT_ATTACHMENT_MAX = 10 * 1024 * 1024;
-  var supportTicketState = { tickets: [], activeId: null, loading: false, unread: 0 };
-
-  function supportStatusClass(status) {
-    var s = String(status || "Open").toLowerCase().replace(/\s+/g, "-");
-    return "support-status support-status-" + s;
-  }
-  function supportPriorityClass(priority) {
-    return "support-priority support-priority-" + String(priority || "Medium").toLowerCase();
-  }
-  function supportTicketNumber(ticket) { return ticket.ticket_number || ticket.ticketNumber || "TKT-" + String(ticket.id || "").slice(0, 8).toUpperCase(); }
-  function supportTicketDate(ts) { if (!ts) return "—"; var d = new Date(ts); return isNaN(d) ? "—" : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }); }
-  function supportTicketTime(ts) { if (!ts) return ""; var d = new Date(ts); return isNaN(d) ? "" : d.toLocaleString("en-GB", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }); }
-  function supportTicketToastError(err) { toast((err && err.message) || "Support ticket action failed.", "error"); }
-
-  async function loadMySupportTickets() {
-    var u = session(); if (!u) return [];
-    supportTicketState.loading = true;
-    try {
-      var r = await supabaseClient.from("support_tickets").select("id,ticket_number,issue_type,subject,description,priority,status,created_at,updated_at,assigned_to").eq("user_id", u.id).order("created_at", { ascending: false });
-      if (r.error) throw r.error;
-      supportTicketState.tickets = r.data || [];
-      try { var n = await supabaseClient.rpc("support_unread_notification_count"); supportTicketState.unread = !n.error ? Number(n.data || 0) : 0; } catch (ignore) { supportTicketState.unread = 0; }
-      return supportTicketState.tickets;
-    } finally { supportTicketState.loading = false; }
-  }
-
-  function myTicketsHtml() {
-    var rows = supportTicketState.tickets || [];
-    return '<section class="section support-ticket-section" id="mySupportTickets">' +
-      '<div class="section-head"><div><h2>Support Tickets</h2><span>Get help from the IT team' + (supportTicketState.unread ? ' · ' + supportTicketState.unread + ' unread update' + (supportTicketState.unread === 1 ? '' : 's') : '') + '</span></div><button type="button" class="btn btn-primary btn-sm" id="createSupportTicketBtn">+ Create New Ticket</button></div>' +
-      '<p class="dateline">Submit technical, access, attendance or account issues and keep the entire support conversation in one place.</p>' +
-      (supportTicketState.loading ? '<div class="support-ticket-loading">Loading your tickets…</div>' : rows.length ? '<div class="support-ticket-list">' + rows.map(function (t) {
-        return '<button type="button" class="support-ticket-card" data-my-ticket="' + esc(t.id) + '">' +
-          '<div class="support-ticket-card-top"><strong>' + esc(supportTicketNumber(t)) + '</strong><span class="' + supportStatusClass(t.status) + '">' + esc(t.status) + '</span></div>' +
-          '<h3>' + esc(t.subject) + '</h3><div class="support-ticket-card-meta"><span>' + esc(t.issue_type) + '</span><span class="' + supportPriorityClass(t.priority) + '">' + esc(t.priority) + '</span><time>' + esc(supportTicketDate(t.updated_at || t.created_at)) + '</time></div>' +
-          '</button>';
-      }).join("") + '</div>' : '<div class="support-ticket-empty"><strong>No tickets yet.</strong><p>Create a ticket when you need help from IT. Your replies and status updates will appear here.</p></div>') +
-      '</section>';
-  }
-
-  function supportTicketFormHtml() {
-    return '<div class="support-ticket-modal"><p class="eyebrow">Support / Help</p><h2>Create New Ticket</h2><p class="dateline">Tell the IT team what is happening. You can attach a screenshot or document if it helps explain the issue.</p>' +
-      '<form id="supportTicketCreateForm" class="support-ticket-form" enctype="multipart/form-data">' +
-      '<div class="field"><label for="supportIssueType">Issue Type</label><select id="supportIssueType" name="issue_type"><option value="">Select issue type</option>' + SUPPORT_TICKET_TYPES.map(function(x){return '<option value="'+esc(x)+'">'+esc(x)+'</option>';}).join("") + '</select><span class="error"></span></div>' +
-      '<div class="field"><label for="supportSubject">Subject</label><input id="supportSubject" name="subject" maxlength="160" placeholder="Briefly describe the problem" /><span class="error"></span></div>' +
-      '<div class="field"><label for="supportDescription">Describe your issue</label><textarea id="supportDescription" name="description" rows="7" maxlength="8000" placeholder="Explain what happened, what you expected and any error message you saw."></textarea><span class="error"></span></div>' +
-      '<div class="field"><label for="supportPriority">Priority</label><select id="supportPriority" name="priority">' + SUPPORT_PRIORITIES.map(function(x){return '<option value="'+esc(x)+'"'+(x==="Medium"?' selected':'')+'>'+esc(x)+'</option>';}).join("") + '</select><span class="error"></span></div>' +
-      '<div class="field"><label for="supportAttachment">Attachment <span class="support-optional">(optional)</span></label><input id="supportAttachment" name="attachment" type="file" accept="image/*,.pdf,.txt,.doc,.docx,.xls,.xlsx,.csv" /><small class="support-file-hint">Maximum 10MB.</small><span class="error"></span></div>' +
-      '<div class="form-foot"><button class="btn btn-primary btn-block" type="submit">Submit Ticket</button></div></form></div>';
-  }
-
-  function showSupportTicketCreate() {
-    showMessageModalMain(supportTicketFormHtml(), "Create support ticket");
-    var form = el("supportTicketCreateForm");
-    if (!form) return;
-    form.addEventListener("submit", async function(e) {
-      e.preventDefault();
-      var u = session(); if (!u) return;
-      var type = el("supportIssueType").value, subject = (el("supportSubject").value || "").trim(), description = (el("supportDescription").value || "").trim(), priority = el("supportPriority").value;
-      var file = el("supportAttachment").files && el("supportAttachment").files[0];
-      if (!type || !subject || !description || !priority) { toast("Complete the required ticket fields.", "error"); return; }
-      if (file && file.size > SUPPORT_ATTACHMENT_MAX) { toast("Attachment must be 10MB or smaller.", "error"); return; }
-      var btn = form.querySelector('button[type="submit"]'); setBtnLoading(btn, true);
-      try {
-        var ticketRes = await supabaseClient.from("support_tickets").insert({ user_id: u.id, issue_type: type, subject: subject, description: description, priority: priority }).select("id,ticket_number").single();
-        if (ticketRes.error) throw ticketRes.error;
-        if (file && ticketRes.data) {
-          var safe = String(file.name || "attachment").replace(/[^a-zA-Z0-9._-]+/g, "_").slice(-120);
-          var path = ticketRes.data.id + "/" + Date.now() + "-" + safe;
-          var up = await supabaseClient.storage.from(SUPPORT_ATTACHMENT_BUCKET).upload(path, file, { upsert: false, contentType: file.type || "application/octet-stream" });
-          if (!up.error) {
-            var ar = await supabaseClient.from("support_ticket_attachments").insert({ ticket_id: ticketRes.data.id, uploaded_by: u.id, file_name: file.name, file_path: path, content_type: file.type || null, file_size: file.size });
-            if (ar.error) console.warn("Ticket attachment metadata:", ar.error);
-          } else { toast("Ticket created, but the attachment could not be uploaded.", "error"); }
-        }
-        closeMainMessageModal();
-        await loadMySupportTickets();
-        render();
-        toast("Ticket " + supportTicketNumber(ticketRes.data) + " created successfully.");
-      } catch (err) { supportTicketToastError(err); } finally { setBtnLoading(btn, false); }
-    });
-  }
-
-  async function openMySupportTicket(ticketId) {
-    var u = session(); if (!u) return;
-    try {
-      var t = (supportTicketState.tickets || []).find(function(x){return String(x.id)===String(ticketId);});
-      if (!t) { await loadMySupportTickets(); t = (supportTicketState.tickets || []).find(function(x){return String(x.id)===String(ticketId);}); }
-      if (!t) throw new Error("Ticket not found.");
-      try { await supabaseClient.from("support_ticket_notifications").update({ read_at: new Date().toISOString() }).eq("ticket_id", t.id).eq("user_id", u.id).is("read_at", null); } catch (ignore) {}
-      var msgs = await supabaseClient.from("support_ticket_messages").select("id,sender_id,body,is_internal,created_at").eq("ticket_id", t.id).eq("is_internal", false).order("created_at", { ascending: true });
-      if (msgs.error) throw msgs.error;
-      var attachments = await supabaseClient.from("support_ticket_attachments").select("id,file_name,file_path,content_type,file_size,created_at").eq("ticket_id", t.id).order("created_at", { ascending: true });
-      var html = '<div class="support-ticket-modal"><div class="support-ticket-detail-head"><div><p class="eyebrow">' + esc(supportTicketNumber(t)) + '</p><h2>' + esc(t.subject) + '</h2></div><div><span class="' + supportStatusClass(t.status) + '">' + esc(t.status) + '</span></div></div>' +
-        '<div class="support-ticket-detail-meta"><span>' + esc(t.issue_type) + '</span><span class="' + supportPriorityClass(t.priority) + '">' + esc(t.priority) + '</span><span>Submitted ' + esc(supportTicketDate(t.created_at)) + '</span></div>' +
-        '<div class="support-ticket-description"><strong>Issue</strong><p>' + esc(t.description).replace(/\n/g,"<br>") + '</p></div>' +
-        '<div class="support-ticket-thread">' + ((msgs.data || []).length ? (msgs.data || []).map(function(m){return '<div class="support-ticket-message ' + (String(m.sender_id)===String(u.id)?'mine':'theirs') + '"><p>'+esc(m.body).replace(/\n/g,"<br>")+'</p><span>'+esc(supportTicketTime(m.created_at))+'</span></div>';}).join("") : '<p class="support-ticket-empty">No replies yet. IT will respond here.</p>') + '</div>' +
-        ((attachments.data || []).length ? '<div class="support-ticket-attachments"><strong>Attachments</strong><div>' + (attachments.data || []).map(function(a){return '<a href="#" data-ticket-download="'+esc(a.file_path)+'">'+esc(a.file_name)+'</a>';}).join("") + '</div></div>' : '') +
-        '<form id="supportTicketReplyForm" class="support-ticket-reply"><label for="supportTicketReply">Reply to IT</label><textarea id="supportTicketReply" rows="4" maxlength="8000" placeholder="Add more information or reply to the IT team…"></textarea><button class="btn btn-primary" type="submit">Send Reply</button></form>' +
-        '</div>';
-      showMessageModalMain(html, supportTicketNumber(t));
-      var reply = el("supportTicketReplyForm");
-      if (reply) reply.addEventListener("submit", async function(e){e.preventDefault();var body=(el("supportTicketReply").value||"").trim();if(!body)return;var b=reply.querySelector('button[type="submit"]');setBtnLoading(b,true);try{var r=await supabaseClient.from("support_ticket_messages").insert({ticket_id:t.id,sender_id:u.id,body:body,is_internal:false});if(r.error)throw r.error;closeMainMessageModal();await openMySupportTicket(t.id);await loadMySupportTickets();}catch(err){supportTicketToastError(err);}finally{setBtnLoading(b,false);}});
-      Array.prototype.forEach.call(document.querySelectorAll("[data-ticket-download]"), function(a){a.addEventListener("click",async function(e){e.preventDefault();try{var r=await supabaseClient.storage.from(SUPPORT_ATTACHMENT_BUCKET).createSignedUrl(a.getAttribute("data-ticket-download"), 300);if(r.error)throw r.error;window.open(r.data.signedUrl,"_blank","noopener");}catch(err){supportTicketToastError(err);}});});
-    } catch (err) { supportTicketToastError(err); }
-  }
-
-  function showMessageModalMain(html, title) {
-    var m = el("modal"); if (!m) return;
-    el("modalKicker").hidden = true; el("modalTitle").textContent = title || "Support"; el("modalBody").innerHTML = html;
-    el("modalConfirm").hidden = true; el("modalCancel").textContent = "Close"; m.classList.add("message-modal"); m.hidden = false;
-  }
-  function closeMainMessageModal() {
-    var m = el("modal"); if (!m) return;
-    m.hidden = true; m.classList.remove("message-modal"); el("modalKicker").hidden = false; el("modalConfirm").hidden = false; el("modalCancel").textContent = "Cancel";
-  }
-
-  function bindMySupportTickets(skipLoad) {
-    var root = el("mySupportTickets"); if (!root) return;
-    var create = el("createSupportTicketBtn"); if (create) create.addEventListener("click", showSupportTicketCreate);
-    Array.prototype.forEach.call(root.querySelectorAll("[data-my-ticket]"), function(b){b.addEventListener("click", function(){openMySupportTicket(b.getAttribute("data-my-ticket"));});});
-    if (skipLoad) return;
-    loadMySupportTickets().then(function(){
-      if (location.hash === "#/settings") { var host = el("mySupportTickets"); if (host) { host.outerHTML = myTicketsHtml(); bindMySupportTickets(true); } }
-    }).catch(function(err){ console.warn("Support tickets:", err); });
-  }
-
   /* ------------------------- settings ------------------------- */
   function readonlyField(name, label, value, full) {
     return '<div class="field field-locked' + (full ? " full" : "") + '"><label for="r-' + name + '">' + label + "</label>" +
@@ -1697,8 +1564,6 @@
       '<button class="btn btn-dark" type="submit"><span>Update password</span></button>' +
       "</div></form></section>" +
 
-      myTicketsHtml() +
-
       "</div>" +
 
       '<aside><div class="panel"><div class="panel-head">' + ICON.userCard + 'Account Record</div><div class="panel-body">' +
@@ -1716,7 +1581,6 @@
   function bindSettings() {
     var u = session();
     if (!u) return;
-    bindMySupportTickets();
 
     /* ---- profile picture ---- */
     var input = el("avatarInput"), pick = el("avatarPick"), save = el("avatarSave"),
@@ -1888,15 +1752,27 @@
   }
 
   /* ========================= INTERNAL MESSAGING ========================= */
-  var MESSAGE_IDLE_TIMEOUT = 60 * 60 * 1000; // 1 hour of messaging inactivity
-  var MESSAGE_UNLOCK_KEY_PREFIX = "md_msg_unlock_";
-
   var messageState = {
     conversations: [], activeConversation: null, unlockedPrivateKey: null,
     ownPublicKey: null, unread: 0, sound: localStorage.getItem("md_message_sound") !== "off",
-    realtime: null, initialized: false, loading: false, menuOutsideBound: false,
-    lastActivity: 0, inactivityTimer: null
+    realtime: null, initialized: false, loading: false
   };
+  function messageCacheKey(kind, id) {
+    var u = session();
+    return "md_msg_cache_" + kind + "_" + (u ? u.id : "") + (id ? "_" + id : "");
+  }
+  function readMessageCache(kind, id) {
+    try { var raw = localStorage.getItem(messageCacheKey(kind, id)); return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
+  }
+  function writeMessageCache(kind, id, value) {
+    try { localStorage.setItem(messageCacheKey(kind, id), JSON.stringify(value)); } catch (e) {}
+  }
+  function loadCachedMessagingState() {
+    var cached = readMessageCache("conversations");
+    if (cached && Array.isArray(cached.conversations)) messageState.conversations = cached.conversations;
+    var active = readMessageCache("active");
+    if (active && active.id) messageState.activeConversation = active.id;
+  }
 
   function b64(bytes) {
     var bin = ""; for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
@@ -1912,113 +1788,6 @@
     return crypto.subtle.deriveKey({ name: "PBKDF2", salt: salt, iterations: 250000, hash: "SHA-256" }, base,
       { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
   }
-  function messageUnlockStorageKey() {
-    var u = session();
-    return MESSAGE_UNLOCK_KEY_PREFIX + (u ? u.id : "");
-  }
-
-  async function rememberMessagingUnlock() {
-    if (!messageState.unlockedPrivateKey) return;
-    try {
-      var jwk = await crypto.subtle.exportKey("jwk", messageState.unlockedPrivateKey);
-      var now = Date.now();
-      messageState.lastActivity = now;
-      sessionStorage.setItem(messageUnlockStorageKey(), JSON.stringify({ jwk: jwk, lastActivity: now }));
-    } catch (e) {
-      /* sessionStorage/export can fail in hardened browser modes; PIN unlock still works. */
-    }
-    armMessagingInactivityTimer();
-  }
-
-  async function restoreMessagingUnlock() {
-    var u = session();
-    if (!u || !messageState.hasKey) return false;
-    try {
-      var raw = sessionStorage.getItem(messageUnlockStorageKey());
-      if (!raw) return false;
-      var saved = JSON.parse(raw);
-      if (!saved || !saved.jwk || !saved.lastActivity || Date.now() - Number(saved.lastActivity) >= MESSAGE_IDLE_TIMEOUT) {
-        sessionStorage.removeItem(messageUnlockStorageKey());
-        return false;
-      }
-      messageState.unlockedPrivateKey = await crypto.subtle.importKey(
-        "jwk",
-        saved.jwk,
-        { name: "RSA-OAEP", hash: "SHA-256" },
-        true,
-        ["decrypt"]
-      );
-      messageState.lastActivity = Number(saved.lastActivity);
-      armMessagingInactivityTimer();
-      return true;
-    } catch (e) {
-      try { sessionStorage.removeItem(messageUnlockStorageKey()); } catch (ignore) {}
-      messageState.unlockedPrivateKey = null;
-      return false;
-    }
-  }
-
-  function touchMessagingActivity() {
-    if (!messageState.unlockedPrivateKey || location.hash !== "#/messages") return;
-    var now = Date.now();
-    messageState.lastActivity = now;
-    try {
-      var raw = sessionStorage.getItem(messageUnlockStorageKey());
-      if (raw) {
-        var saved = JSON.parse(raw);
-        if (saved && saved.jwk) {
-          saved.lastActivity = now;
-          sessionStorage.setItem(messageUnlockStorageKey(), JSON.stringify(saved));
-        }
-      }
-    } catch (e) {}
-    armMessagingInactivityTimer();
-  }
-
-  function lockMessagingForInactivity() {
-    if (!messageState.unlockedPrivateKey) return;
-    messageState.unlockedPrivateKey = null;
-    messageState.activeConversation = null;
-    messageState.lastActivity = 0;
-    try { sessionStorage.removeItem(messageUnlockStorageKey()); } catch (e) {}
-    if (messageState.inactivityTimer) {
-      clearTimeout(messageState.inactivityTimer);
-      messageState.inactivityTimer = null;
-    }
-    if (location.hash === "#/messages") {
-      render();
-      toast("Secure messaging was locked after 1 hour of inactivity.");
-    }
-  }
-
-  function armMessagingInactivityTimer() {
-    if (messageState.inactivityTimer) {
-      clearTimeout(messageState.inactivityTimer);
-      messageState.inactivityTimer = null;
-    }
-    if (!messageState.unlockedPrivateKey || !messageState.lastActivity) return;
-    var remaining = MESSAGE_IDLE_TIMEOUT - (Date.now() - messageState.lastActivity);
-    if (remaining <= 0) {
-      lockMessagingForInactivity();
-      return;
-    }
-    messageState.inactivityTimer = setTimeout(function () {
-      if (Date.now() - messageState.lastActivity >= MESSAGE_IDLE_TIMEOUT) {
-        lockMessagingForInactivity();
-      } else {
-        armMessagingInactivityTimer();
-      }
-    }, Math.min(remaining + 1000, 60 * 1000));
-  }
-
-  function startMessagingActivityTracking() {
-    if (messageState.activityTracking) return;
-    messageState.activityTracking = true;
-    ["pointerdown", "keydown", "touchstart", "scroll"].forEach(function (eventName) {
-      document.addEventListener(eventName, touchMessagingActivity, { passive: true });
-    });
-  }
-
   async function generateMessagingKeys(passphrase) {
     if (!crypto || !crypto.subtle) throw new Error("This browser does not support the required Web Crypto API.");
     var pair = await crypto.subtle.generateKey({ name: "RSA-OAEP", modulusLength: 2048, publicExponent: new Uint8Array([1,0,1]), hash: "SHA-256" }, true, ["encrypt", "decrypt"]);
@@ -2034,7 +1803,6 @@
     if (b.error) throw b.error;
     messageState.ownPublicKey = pub;
     messageState.unlockedPrivateKey = pair.privateKey;
-    await rememberMessagingUnlock();
   }
   async function unlockMessagingKeys(passphrase) {
     var u = session();
@@ -2047,7 +1815,6 @@
     var pubRes = await supabaseClient.from("user_public_keys").select("public_key").eq("user_id", u.id).maybeSingle();
     if (pubRes.error || !pubRes.data) throw new Error("Your public encryption key is missing.");
     messageState.ownPublicKey = pubRes.data.public_key;
-    await rememberMessagingUnlock();
   }
   async function changeMessagingSecret(oldSecret, newSecret) {
     var u = session();
@@ -2062,7 +1829,6 @@
     var upd = await supabaseClient.from("user_private_keys").update({ encrypted_private_key: b64(reEncrypted), iv: b64(newIv), salt: b64(newSalt) }).eq("user_id", u.id);
     if (upd.error) throw upd.error;
     messageState.unlockedPrivateKey = await crypto.subtle.importKey("pkcs8", raw, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["decrypt"]);
-    await rememberMessagingUnlock();
   }
   async function getOwnKeyState() {
     var u = session();
@@ -2107,47 +1873,22 @@
     var p = await supabaseClient.from("message_participants").select("conversation_id,user_id,joined_at").eq("user_id", u.id);
     if (p.error) throw p.error;
     var ids = (p.data || []).map(function (x) { return x.conversation_id; });
-    if (!ids.length) return [];
+    if (!ids.length) { writeMessageCache("conversations", null, { conversations: [] }); return []; }
     var c = await supabaseClient.from("message_conversations").select("id,kind,created_by,created_at").in("id", ids).order("created_at", { ascending: false });
     if (c.error) throw c.error;
     var parts = await supabaseClient.from("message_participants").select("conversation_id,user_id").in("conversation_id", ids);
     if (parts.error) throw parts.error;
 
-    /* Staff users may not be allowed by the profiles RLS policy to select the
-       admin's profile directly. The messaging RPC safely returns profiles only
-       for users who share a conversation with the current user. */
-    var participantIds = [];
-    (parts.data || []).forEach(function (x) {
-      if (String(x.user_id) !== String(u.id) && participantIds.indexOf(x.user_id) === -1) participantIds.push(x.user_id);
-    });
-    var peopleById = {};
-    if (participantIds.length) {
-      var peopleRes = await supabaseClient.rpc("get_message_people", { p_user_ids: participantIds });
-      if (peopleRes.error) throw peopleRes.error;
-      (peopleRes.data || []).forEach(function (person) {
-        peopleById[String(person.id)] = {
-          id: person.id,
-          fullName: person.full_name || "Staff member",
-          avatarUrl: person.avatar_url || "",
-          role: person.role || "staff",
-          department: person.department || ""
-        };
-      });
-    }
-
-    var result = [];
-    for (var i = 0; i < (c.data || []).length; i++) {
-      var conv = c.data[i], members = (parts.data || []).filter(function (x) { return x.conversation_id === conv.id; });
-      var other = members.find(function (x) { return String(x.user_id) !== String(u.id); });
-      var person = conv.kind === "broadcast"
-        ? { fullName: "Company", avatarUrl: "", id: null }
-        : (other ? (peopleById[String(other.user_id)] || messagePerson(other.user_id)) : { fullName: "Staff member", avatarUrl: "", id: null });
-      var last = await supabaseClient.from("messages").select("id,sender_id,ciphertext,iv,created_at").eq("conversation_id", conv.id).order("created_at", { ascending: false }).limit(1);
-      var lastRow = last.data && last.data[0];
+    var result = await Promise.all((c.data || []).map(async function (conv) {
+      var members = (parts.data || []).filter(function (x) { return x.conversation_id === conv.id; });
+      var other = members.find(function (x) { return x.user_id !== u.id; });
+      var person = conv.kind === "broadcast" ? { fullName: "Company", avatarUrl: "", id: null } : (other ? messagePerson(other.user_id) : { fullName: "Staff member", avatarUrl: "", id: null });
+      var lastRes = await supabaseClient.from("messages").select("id,sender_id,ciphertext,iv,created_at").eq("conversation_id", conv.id).order("created_at", { ascending: false }).limit(1);
+      var lastRow = lastRes.data && lastRes.data[0];
       var clearedBefore = getClearedBefore(conv.id);
       if (lastRow && clearedBefore && lastRow.created_at <= clearedBefore) lastRow = null;
       var lastText = "Encrypted message";
-      if (!last.error && lastRow && messageState.unlockedPrivateKey) {
+      if (!lastRes.error && lastRow && messageState.unlockedPrivateKey) {
         var env = await supabaseClient.from("message_key_envelopes").select("encrypted_key").eq("message_id", lastRow.id).eq("user_id", u.id).maybeSingle();
         if (!env.error && env.data) lastText = await decryptMessage(lastRow, env.data);
       }
@@ -2158,8 +1899,9 @@
         var readMap = {}; (receiptRows.data || []).forEach(function(x){ if(x.read_at) readMap[x.message_id]=true; });
         unreadCount = unreadRows.data.filter(function(x){return !readMap[x.id];}).length;
       }
-      result.push({ id: conv.id, kind: conv.kind, person: person, last: lastRow, preview: lastRow ? lastText : "No messages yet", unread: unreadCount });
-    }
+      return { id: conv.id, kind: conv.kind, person: person, last: lastRow, preview: lastRow ? lastText : "No messages yet", unread: unreadCount };
+    }));
+    writeMessageCache("conversations", null, { conversations: result });
     return result;
   }
   async function refreshMessageUnread() {
@@ -2170,19 +1912,8 @@
   function updateMessageBadge() {
     var a = document.querySelector('[data-message-nav]'); if (!a) return;
     var label = a.querySelector("[data-message-label]"); if (!label) return;
-    var count = Number(messageState.unread || 0);
-    label.textContent = "Messages";
-    var oldBadge = label.querySelector(".message-nav-badge");
-    if (oldBadge) oldBadge.remove();
-    a.classList.remove("has-unread");
-    if (count > 0) {
-      var badge = document.createElement("span");
-      badge.className = "message-nav-badge";
-      badge.textContent = count > 99 ? "99+" : String(count);
-      badge.setAttribute("aria-label", String(count) + " unread message" + (count === 1 ? "" : "s"));
-      badge.setAttribute("aria-hidden", "true");
-      label.appendChild(badge);
-    }
+    label.textContent = messageState.unread > 99 ? "Messages (99+)" : "Messages" + (messageState.unread ? " (" + messageState.unread + ")" : "");
+    a.classList.toggle("has-unread", messageState.unread > 0);
   }
   function playMessageSound() {
     if (messageState.sound) {
@@ -2256,7 +1987,7 @@
   }
   function chatHtml(c) {
     var p = c.person;
-    return '<div class="chat-header">' + messageAvatar(p, "avatar-sm") + '<div class="chat-identity"><h2>' + esc(p.fullName) + '</h2><span>End-to-end encrypted</span></div>' +
+    return '<div class="chat-header">' + messageAvatar(p, "avatar-sm") + '<div><h2>' + esc(p.fullName) + '</h2><span>End-to-end encrypted</span></div>' +
       '<div class="chat-menu-wrap"><button type="button" class="chat-menu-btn" id="chatMenuBtn" aria-haspopup="true" aria-expanded="false" aria-label="Conversation options">&#8942;</button>' +
       '<div class="chat-menu" id="chatMenu" hidden><button type="button" class="chat-menu-item" id="clearChatBtn">Clear chat</button></div></div>' +
       '<button type="button" class="chat-back" id="chatBack">Back</button></div><div class="message-stream" id="messageStream"><div class="message-loading">Loading secure messages...</div></div><form class="message-composer" id="messageComposer"><textarea id="messageInput" rows="1" maxlength="4000" placeholder="Type a message..." autocomplete="off"></textarea><button class="btn btn-primary" type="submit">Send</button></form>';
@@ -2267,54 +1998,24 @@
   function messageClearKey(conversationId) { var u = session(); return "md_msg_clear_" + (u ? u.id : "") + "_" + conversationId; }
   function getClearedBefore(conversationId) { try { return localStorage.getItem(messageClearKey(conversationId)) || null; } catch (e) { return null; } }
   function setClearedBefore(conversationId, iso) { try { localStorage.setItem(messageClearKey(conversationId), iso); } catch (e) {} }
-  function messageHistoryCacheKey(conversationId) {
-    var u = session();
-    return "md_msg_history_v2_" + (u ? u.id : "") + "_" + conversationId;
-  }
-  function readMessageHistoryCache(conversationId) {
-    try {
-      var raw = sessionStorage.getItem(messageHistoryCacheKey(conversationId));
-      if (!raw) return null;
-      var cached = JSON.parse(raw);
-      return cached && Array.isArray(cached.rows) ? cached : null;
-    } catch (e) { return null; }
-  }
-  function writeMessageHistoryCache(conversationId, rows, envelopes) {
-    try {
-      sessionStorage.setItem(messageHistoryCacheKey(conversationId), JSON.stringify({ rows: rows, envelopes: envelopes, cachedAt: Date.now() }));
-    } catch (e) {
-      /* Ignore storage quota/private-mode errors; the live database remains authoritative. */
-    }
-  }
-  async function renderMessageRows(rows, envelopeMap, u, markRead) {
-    var html = '';
-    for (var i = 0; i < rows.length; i++) {
-      var row = rows[i], text = await decryptMessage(row, envelopeMap[row.id]), mine = row.sender_id === u.id;
-      html += '<div class="message-row ' + (mine ? 'mine' : 'theirs') + '"><div class="message-bubble">' + esc(text).replace(/\n/g,'<br>') + '<span class="message-meta">' + esc(messageTime(row.created_at)) + '</span></div></div>';
-      if (markRead && !mine) supabaseClient.rpc("mark_message_read", { p_message_id: row.id }).catch(function(){});
-    }
-    var stream = el("messageStream");
-    if (stream) {
-      stream.innerHTML = html || '<div class="chat-empty chat-empty-small"><p>No messages yet. Say hello.</p></div>';
-      stream.scrollTop = stream.scrollHeight;
-    }
-  }
   async function loadMessagesForConversation(conversationId) {
     var u = session();
-    if (!u || !conversationId) return;
-    var clearedBefore = getClearedBefore(conversationId);
+    var renderRows = async function(rows, envelopes, markRead) {
+      var em = {}; (envelopes || []).forEach(function (x) { em[x.message_id] = x; });
+      var html = '';
+      for (var i = 0; i < rows.length; i++) {
+        var row = rows[i], text = await decryptMessage(row, em[row.id]), mine = row.sender_id === u.id;
+        html += '<div class="message-row ' + (mine ? 'mine' : 'theirs') + '"><div class="message-bubble">' + esc(text).replace(/\n/g,'<br>') + '<span class="message-meta">' + esc(messageTime(row.created_at)) + '</span></div></div>';
+        if (markRead && !mine) await supabaseClient.rpc("mark_message_read", { p_message_id: row.id });
+      }
+      var stream = el("messageStream"); if (stream) { stream.innerHTML = html || '<div class="chat-empty chat-empty-small"><p>No messages yet. Say hello.</p></div>'; stream.scrollTop = stream.scrollHeight; }
+    };
 
-    /* Show the previous encrypted history immediately after a reload. The cache
-       contains ciphertext/envelopes only, never decrypted message text. The live
-       database is fetched afterwards and replaces the cache with fresh data. */
-    var cached = readMessageHistoryCache(conversationId);
-    if (cached) {
+    var cached = readMessageCache("conversation", conversationId);
+    var clearedBefore = getClearedBefore(conversationId);
+    if (cached && Array.isArray(cached.rows) && cached.rows.length && messageState.unlockedPrivateKey) {
       var cachedRows = cached.rows.filter(function (row) { return !clearedBefore || row.created_at > clearedBefore; });
-      var cachedMap = {}; (cached.envelopes || []).forEach(function (x) { cachedMap[x.message_id] = x; });
-      await renderMessageRows(cachedRows, cachedMap, u, false);
-    } else {
-      var stream = el("messageStream");
-      if (stream) stream.innerHTML = '<div class="message-loading">Loading secure messages...</div>';
+      await renderRows(cachedRows, cached.envelopes || [], false);
     }
 
     var m = await supabaseClient.from("messages").select("id,conversation_id,sender_id,ciphertext,iv,created_at").eq("conversation_id", conversationId).order("created_at", { ascending: true }).limit(100);
@@ -2322,12 +2023,9 @@
     var rows = (m.data || []).filter(function (row) { return !clearedBefore || row.created_at > clearedBefore; });
     var ids = rows.map(function (x) { return x.id; });
     var env = ids.length ? await supabaseClient.from("message_key_envelopes").select("message_id,encrypted_key").in("message_id", ids).eq("user_id", u.id) : { data: [] };
-    var envRows = env.data || [];
-    var em = {}; envRows.forEach(function (x) { em[x.message_id] = x; });
-
-    /* Replace the cached view with the authoritative server result. */
-    writeMessageHistoryCache(conversationId, rows, envRows);
-    await renderMessageRows(rows, em, u, true);
+    var envelopes = env.data || [];
+    writeMessageCache("conversation", conversationId, { rows: rows, envelopes: envelopes });
+    await renderRows(rows, envelopes, true);
     await refreshMessageUnread();
   }
   async function sendMessage(conversationId, text) {
@@ -2376,16 +2074,26 @@
     var r = await supabaseClient.rpc("get_or_create_direct_conversation", { p_other_user: userId });
     if (r.error) throw r.error;
     messageState.activeConversation = r.data;
+    writeMessageCache("active",null,{id:messageState.activeConversation});
     await loadMessagingData();
     renderMessagesKeepState();
   }
   async function loadMessagingData() {
-    messageState.conversations = await fetchConversationList();
+    loadCachedMessagingState();
+    var fresh = await fetchConversationList();
+    messageState.conversations = fresh;
     await refreshMessageUnread();
   }
   function renderMessagesKeepState() { var v=el("view"); if(!v) return; v.innerHTML=messagesView(); var shell=v.querySelector(".messenger-shell"); if(shell && messageState.activeConversation) shell.classList.add("chat-open"); bindMessaging(); }
   async function showStaffPicker() {
     var staff = db.users.filter(function(u){return u.id !== session().id;});
+    if (!staff.length) {
+      var res = await supabaseClient.from("profiles").select("*");
+      if (!res.error) {
+        staff = (res.data || []).map(mapProfile).filter(function(u){return u.id !== session().id;});
+        if (staff.length) db.users = (db.users || []).concat(staff.filter(function(x){ return !db.users.some(function(y){return y.id === x.id;}); }));
+      }
+    }
     var body = '<div class="message-picker"><p class="eyebrow">New Message</p><h2>Choose a colleague</h2><input id="staffPickerSearch" type="search" placeholder="Search staff..." autocomplete="off" /><div id="staffPickerList">' + staff.map(function(u){return '<button type="button" class="staff-picker-item" data-staff="'+esc(u.id)+'">'+messageAvatar(u,"avatar-sm")+'<span><strong>'+esc(u.fullName)+'</strong><small>'+esc(u.department||"")+'</small></span></button>';}).join('') + '</div></div>';
     showMessageModal(body);
     var q=el("staffPickerSearch"); if(q) q.addEventListener("input",function(){var term=q.value.toLowerCase();Array.prototype.forEach.call(document.querySelectorAll(".staff-picker-item"),function(b){b.hidden=(b.textContent||"").toLowerCase().indexOf(term)===-1;});});
@@ -2427,7 +2135,7 @@
     el("sendBroadcastBtn").addEventListener("click",async function(){var text=(el("broadcastInput").value||"").trim();if(!text){toast("Write a message first.","error");return;}var b=setBtnLoading;setBtnLoading(this,true);try{var keyRes=await supabaseClient.from("user_public_keys").select("user_id").in("user_id",staff.map(function(u){return u.id;}));if(keyRes.error)throw keyRes.error;var ready={};(keyRes.data||[]).forEach(function(x){ready[x.user_id]=true;});var ids=staff.filter(function(u){return ready[u.id];}).map(function(u){return u.id;});if(!ids.length)throw new Error("No staff member has activated secure messaging yet.");var me=session();if(me&&ids.indexOf(me.id)===-1)ids.push(me.id);var pack=await encryptForRecipients(text,ids);var r=await supabaseClient.rpc("send_broadcast_message",{p_ciphertext:pack.ciphertext,p_iv:pack.iv,p_envelopes:pack.envelopes});if(r.error)throw r.error;closeMessageModal();toast("Broadcast sent securely to " + ids.length + " staff member" + (ids.length===1?".":"s."));await loadMessagingData();renderMessagesKeepState();}catch(e){toast(e.message||"Broadcast could not be sent.","error");}finally{setBtnLoading(this,false);}});
   }
   function bindConversationList() {
-    Array.prototype.forEach.call(document.querySelectorAll("[data-conversation]"),function(b){b.addEventListener("click",function(){messageState.activeConversation=b.getAttribute("data-conversation");renderMessagesKeepState();loadMessagesForConversation(messageState.activeConversation);});});
+    Array.prototype.forEach.call(document.querySelectorAll("[data-conversation]"),function(b){b.addEventListener("click",function(){messageState.activeConversation=b.getAttribute("data-conversation");writeMessageCache("active",null,{id:messageState.activeConversation});renderMessagesKeepState();loadMessagesForConversation(messageState.activeConversation);});});
   }
   async function refreshConversationList() {
     await loadMessagingData();
@@ -2441,7 +2149,7 @@
       return;}
     var soundBtn=el("messageSoundBtn");if(soundBtn)soundBtn.addEventListener("click",function(){messageState.sound=!messageState.sound;localStorage.setItem("md_message_sound",messageState.sound?"on":"off");renderMessagesKeepState();});
     var pinBtn=el("changePinBtn");if(pinBtn)pinBtn.addEventListener("click",showChangePin);
-    var n=el("newMessageBtn")||el("emptyNewMessage");if(n)n.addEventListener("click",showStaffPicker);var bc=el("broadcastBtn");if(bc)bc.addEventListener("click",showBroadcast);
+    Array.prototype.forEach.call(document.querySelectorAll("#newMessageBtn,#emptyNewMessage"),function(n){n.addEventListener("click",showStaffPicker);});var bc=el("broadcastBtn");if(bc)bc.addEventListener("click",showBroadcast);
     bindConversationList();
     var search=el("messageSearch");if(search)search.addEventListener("input",function(){var t=search.value.toLowerCase();Array.prototype.forEach.call(document.querySelectorAll(".conversation-item"),function(b){b.hidden=(b.textContent||"").toLowerCase().indexOf(t)===-1;});});
     var composer=el("messageComposer");if(composer)composer.addEventListener("submit",function(e){
@@ -2498,21 +2206,9 @@
     if(messageState.activeConversation) loadMessagesForConversation(messageState.activeConversation);
   }
   async function initMessaging() {
-    if (!session()) {
-      await stopMessagingRealtime();
-      messageState.unlockedPrivateKey = null;
-      messageState.activeConversation = null;
-      return;
-    }
-    try {
-      var k=await getOwnKeyState();
-      messageState.hasKey=!!k.hasPrivate && !!k.publicKey;
-      messageState.ownPublicKey=k.publicKey||null;
-      if (messageState.hasKey) await restoreMessagingUnlock();
-      startMessagingActivityTracking();
-      await startMessagingRealtime();
-      await refreshMessageUnread();
-    } catch(e) { console.warn("Messaging init:",e); }
+    if (!session()) { await stopMessagingRealtime(); return; }
+    loadCachedMessagingState();
+    try { var k=await getOwnKeyState(); messageState.hasKey=!!k.hasPrivate && !!k.publicKey; messageState.ownPublicKey=k.publicKey||null; await startMessagingRealtime(); refreshMessageUnread(); } catch(e) { console.warn("Messaging init:",e); }
     if ("Notification" in window && Notification.permission === "default") { /* request only after the user opens Messages */ }
   }
 
@@ -2760,6 +2456,27 @@
 
   async function init() {
     el("view").innerHTML = loadingView();
+    var initialHash = location.hash || "";
+    if (initialHash === "#/messages") {
+      var authRes = await supabaseClient.auth.getSession();
+      authUser = (authRes.data && authRes.data.session) ? authRes.data.session.user : null;
+      if (authUser) {
+        var profileRes = await supabaseClient.from("profiles").select("*").eq("id", authUser.id).maybeSingle();
+        if (!profileRes.error && profileRes.data) {
+          currentUser = mapProfile(profileRes.data);
+          db.users = [currentUser];
+          await initMessaging();
+          render();
+          /* Attendance/HSE/profile refresh continues in the background and does not block Messages. */
+          refreshData().then(function(){
+            refreshSessionUser().then(function(){
+              if (location.hash === "#/messages") { loadMessagingData().then(function(){ renderMessagesKeepState(); }).catch(function(e){ console.warn("Messaging refresh:",e); }); }
+            });
+          }).catch(function(e){ console.warn("Background data refresh:",e); });
+          return;
+        }
+      }
+    }
     await refreshData();
     if (dataError) {
       toast("Could not reach the database: " + dataError, "error");
