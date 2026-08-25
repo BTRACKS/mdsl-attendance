@@ -397,6 +397,7 @@
     document.body.classList.remove("nav-open");
     el("navBackdrop").hidden = true;
     el("navBackdrop").classList.remove("show");
+    updateMessageBadge(); /* nav was just rebuilt from scratch above, so re-apply the current unread count */
 
     syncHeaderHeight();
   }
@@ -1901,7 +1902,10 @@
         var participant = await supabaseClient.from("message_participants").select("conversation_id").eq("conversation_id", m.conversation_id).eq("user_id", u.id).maybeSingle();
         if (participant.error || !participant.data || m.sender_id === u.id) return;
         await refreshMessageUnread();
-        if (location.hash === "#/messages") renderMessagesKeepState();
+        if (location.hash === "#/messages") {
+          if (messageState.activeConversation === m.conversation_id) await loadMessagesForConversation(m.conversation_id);
+          refreshConversationList();
+        }
         if (document.hidden || messageState.sound) playMessageSound();
         if ("Notification" in window && Notification.permission === "granted") {
           new Notification("New Message", { body: "You have a new secure message.", icon: "favicon.png" });
@@ -1915,19 +1919,18 @@
     return '<div class="message-lock"><div class="message-lock-card">' +
       '<div class="message-lock-icon">' + ICON.lock + '</div>' +
       '<p class="eyebrow">Secure Messaging</p><h2>' + (create ? "Set up secure messaging" : "Unlock your messages") + '</h2>' +
-      '<p>' + (create ? "Create a private recovery passphrase. It protects your messaging private key and is never sent to the database." : "Enter the recovery passphrase you created for secure messaging on this account.") + '</p>' +
+      '<p>' + (create ? "Create a private 6-digit PIN. It protects your messaging private key and is never sent to the database." : "Enter the PIN you created for secure messaging on this account.") + '</p>' +
       '<form id="messageKeyForm" class="message-key-form">' +
-      '<div class="field password-field"><label for="messageRecovery">Recovery passphrase</label>' +
-      '<div class="pw-wrap"><input id="messageRecovery" name="recovery" type="password" minlength="12" autocomplete="new-password" placeholder="At least 12 characters" />' +
-      '<button type="button" class="pw-toggle" aria-label="Show password" aria-pressed="false">' + ICON.eye + "</button></div>" +
-      (create ? '<div class="pw-strength" data-pw-strength hidden><span class="pw-strength-track"><i></i></span><span class="pw-strength-label"></span></div>' : "") +
+      '<div class="field password-field"><label for="messageRecovery">Recovery PIN</label>' +
+      '<div class="pw-wrap"><input id="messageRecovery" name="recovery" type="password" inputmode="numeric" pattern="[0-9]*" minlength="6" maxlength="6" autocomplete="new-password" placeholder="6-digit PIN" />' +
+      '<button type="button" class="pw-toggle" aria-label="Show PIN" aria-pressed="false">' + ICON.eye + "</button></div>" +
       '<span class="error"></span></div>' +
-      (create ? '<div class="field password-field"><label for="messageRecoveryConfirm">Confirm passphrase</label>' +
-        '<div class="pw-wrap"><input id="messageRecoveryConfirm" name="confirm" type="password" minlength="12" autocomplete="new-password" placeholder="Repeat your passphrase" />' +
-        '<button type="button" class="pw-toggle" aria-label="Show password" aria-pressed="false">' + ICON.eye + "</button></div>" +
+      (create ? '<div class="field password-field"><label for="messageRecoveryConfirm">Confirm PIN</label>' +
+        '<div class="pw-wrap"><input id="messageRecoveryConfirm" name="confirm" type="password" inputmode="numeric" pattern="[0-9]*" minlength="6" maxlength="6" autocomplete="new-password" placeholder="Repeat your PIN" />' +
+        '<button type="button" class="pw-toggle" aria-label="Show PIN" aria-pressed="false">' + ICON.eye + "</button></div>" +
         '<span class="error"></span></div>' : "") +
       '<button class="btn btn-primary btn-block" type="submit">' + (create ? "Create encryption keys" : "Unlock messages") + '</button></form>' +
-      '<p class="message-lock-note">Your recovery passphrase cannot be recovered by the administrator. Keep it somewhere safe.</p></div></div>';
+      '<p class="message-lock-note">Your PIN cannot be recovered by the administrator. Keep it somewhere safe.</p></div></div>';
   }
 
   function messagesView() {
@@ -2005,14 +2008,24 @@
     showMessageModal(body);
     el("sendBroadcastBtn").addEventListener("click",async function(){var text=(el("broadcastInput").value||"").trim();if(!text){toast("Write a message first.","error");return;}var b=setBtnLoading;setBtnLoading(this,true);try{var keyRes=await supabaseClient.from("user_public_keys").select("user_id").in("user_id",staff.map(function(u){return u.id;}));if(keyRes.error)throw keyRes.error;var ready={};(keyRes.data||[]).forEach(function(x){ready[x.user_id]=true;});var ids=staff.filter(function(u){return ready[u.id];}).map(function(u){return u.id;});if(!ids.length)throw new Error("No staff member has activated secure messaging yet.");var me=session();if(me&&ids.indexOf(me.id)===-1)ids.push(me.id);var pack=await encryptForRecipients(text,ids);var r=await supabaseClient.rpc("send_broadcast_message",{p_ciphertext:pack.ciphertext,p_iv:pack.iv,p_envelopes:pack.envelopes});if(r.error)throw r.error;closeMessageModal();toast("Broadcast sent securely to " + ids.length + " staff member" + (ids.length===1?".":"s."));await loadMessagingData();renderMessagesKeepState();}catch(e){toast(e.message||"Broadcast could not be sent.","error");}finally{setBtnLoading(this,false);}});
   }
+  function bindConversationList() {
+    Array.prototype.forEach.call(document.querySelectorAll("[data-conversation]"),function(b){b.addEventListener("click",function(){messageState.activeConversation=b.getAttribute("data-conversation");renderMessagesKeepState();loadMessagesForConversation(messageState.activeConversation);});});
+  }
+  async function refreshConversationList() {
+    await loadMessagingData();
+    var list = el("conversationList");
+    if (list) { list.innerHTML = conversationListHtml(messageState.conversations); bindConversationList(); }
+  }
   function bindMessaging() {
     var form=el("messageKeyForm");
-    if(form){form.addEventListener("submit",async function(e){e.preventDefault();var r=el("messageRecovery"),c=el("messageRecoveryConfirm"),v=(r.value||"");if(v.length<12){toast("Use a recovery passphrase of at least 12 characters.","error");return;}if(c&&v!==c.value){toast("Recovery passphrases do not match.","error");return;}var btn=form.querySelector("button[type=submit]");setBtnLoading(btn,true);try{if(!messageState.hasKey){await generateMessagingKeys(v);}else{await unlockMessagingKeys(v);}await loadMessagingData();renderMessagesKeepState();toast("Secure messaging is ready.");}catch(err){toast(messageState.hasKey?"Incorrect recovery passphrase or damaged key.":(err.message||"Could not create secure keys."),"error");}finally{setBtnLoading(btn,false);}});return;}
+    if(form){form.addEventListener("submit",async function(e){e.preventDefault();var r=el("messageRecovery"),c=el("messageRecoveryConfirm"),v=(r.value||"");if(!/^\d{6}$/.test(v)){toast("Use a 6-digit PIN.","error");return;}if(c&&v!==c.value){toast("PINs do not match.","error");return;}var btn=form.querySelector("button[type=submit]");setBtnLoading(btn,true);try{if(!messageState.hasKey){await generateMessagingKeys(v);}else{await unlockMessagingKeys(v);}await loadMessagingData();renderMessagesKeepState();toast("Secure messaging is ready.");}catch(err){toast(messageState.hasKey?"Incorrect PIN or damaged key.":(err.message||"Could not create secure keys."),"error");}finally{setBtnLoading(btn,false);}});
+      Array.prototype.forEach.call(form.querySelectorAll('input[minlength="6"]'),function(inp){inp.addEventListener("input",function(){inp.value=inp.value.replace(/\D/g,"").slice(0,6);});});
+      return;}
     var soundBtn=el("messageSoundBtn");if(soundBtn)soundBtn.addEventListener("click",function(){messageState.sound=!messageState.sound;localStorage.setItem("md_message_sound",messageState.sound?"on":"off");renderMessagesKeepState();});
     var n=el("newMessageBtn")||el("emptyNewMessage");if(n)n.addEventListener("click",showStaffPicker);var bc=el("broadcastBtn");if(bc)bc.addEventListener("click",showBroadcast);
-    Array.prototype.forEach.call(document.querySelectorAll("[data-conversation]"),function(b){b.addEventListener("click",function(){messageState.activeConversation=b.getAttribute("data-conversation");renderMessagesKeepState();loadMessagesForConversation(messageState.activeConversation);});});
+    bindConversationList();
     var search=el("messageSearch");if(search)search.addEventListener("input",function(){var t=search.value.toLowerCase();Array.prototype.forEach.call(document.querySelectorAll(".conversation-item"),function(b){b.hidden=(b.textContent||"").toLowerCase().indexOf(t)===-1;});});
-    var composer=el("messageComposer");if(composer)composer.addEventListener("submit",async function(e){e.preventDefault();var input=el("messageInput"),text=(input.value||"").trim();if(!text)return;var btn=composer.querySelector("button[type=submit]");setBtnLoading(btn,true);try{await sendMessage(messageState.activeConversation,text);input.value="";await loadMessagingData();renderMessagesKeepState();await loadMessagesForConversation(messageState.activeConversation);}catch(err){toast(err.message||"Message could not be sent.","error");}finally{setBtnLoading(btn,false);}});
+    var composer=el("messageComposer");if(composer)composer.addEventListener("submit",async function(e){e.preventDefault();var input=el("messageInput"),text=(input.value||"").trim();if(!text)return;var btn=composer.querySelector("button[type=submit]");setBtnLoading(btn,true);var convId=messageState.activeConversation;try{await sendMessage(convId,text);input.value="";await loadMessagesForConversation(convId);refreshConversationList();}catch(err){toast(err.message||"Message could not be sent.","error");}finally{setBtnLoading(btn,false);}});
     var back=el("chatBack");if(back)back.addEventListener("click",function(){messageState.activeConversation=null;renderMessagesKeepState();});
     if(messageState.activeConversation) loadMessagesForConversation(messageState.activeConversation);
   }
