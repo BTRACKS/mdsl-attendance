@@ -1487,13 +1487,23 @@
       '<p class="about-purpose">We built this platform to make attendance effortless for staff and dependable for management — accurate records, fair reporting, and a culture of punctuality that runs on trust rather than paperwork.</p></section>' +
 
       '<section class="creator"><p class="creator-kicker">Created by</p><div class="creator-grid">' +
-      creatorCard("Oladapo Salami", "Computer Science Intern, University of Lagos") +
-      creatorCard("Victor Utoo", "Computer Engineering Intern, Afe Babalola University") +
+      creatorCard("Oladapo Salami", "Computer Science Intern, University of Lagos", findCreatorProfile(["Oladapo Salami", "Dapo Salami"])) +
+      creatorCard("Victor Utoo", "Computer Engineering Intern, Afe Babalola University", findCreatorProfile(["Victor Utoo"])) +
       "</div></section>" +
       "</div>";
   }
-  function creatorCard(name, role) {
-    return '<div class="creator-card"><span class="creator-ic">' + ICON.cap + "</span>" +
+  function findCreatorProfile(names) {
+    var people = db.users || [];
+    var wanted = (names || []).map(function (name) { return String(name).trim().toLowerCase(); });
+    return people.find(function (person) {
+      var fullName = String(person.fullName || "").trim().toLowerCase();
+      return wanted.indexOf(fullName) !== -1;
+    }) || null;
+  }
+  function creatorCard(name, role, profile) {
+    var avatarProfile = profile || { fullName: name, avatarUrl: "" };
+    return '<div class="creator-card">' +
+      avatarHtml(avatarProfile, "creator-avatar") +
       '<div><p class="creator-name">' + esc(name) + '</p>' +
       '<p class="creator-role">' + esc(role) + "</p></div></div>";
   }
