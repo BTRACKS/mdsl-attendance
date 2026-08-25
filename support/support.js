@@ -2124,14 +2124,18 @@
 
   /* ---------- system management tab ---------- */
   function initSystem() {
-    initProfileTools();
-
+    /* System management is optional. Some Tech-Support builds intentionally
+       remove the System Check/System Status UI. Never let missing system
+       elements stop the entire portal from rendering. */
     var root = $("tab-system");
     if (!root || root.getAttribute("data-ready") === "1") return;
     root.setAttribute("data-ready", "1");
+    try { initProfileTools(); } catch (e) {}
 
-    $("sysScope").textContent = isAdmin() ? "Administrator tools" : "IT Support view";
-    $("sysNote").textContent = isAdmin()
+    var scope = $("sysScope");
+    var note = $("sysNote");
+    if (scope) scope.textContent = isAdmin() ? "Administrator tools" : "IT Support view";
+    if (note) note.textContent = isAdmin()
       ? "Everything below writes to the data the main website already uses. Only the fields shown here can be changed — there is no raw table access, no SQL and no service key in the browser, and the database re-checks your role on every write."
       : "IT Support accounts can review staff records, roles and attendance. Account, profile, correction and settings changes are reserved for administrators and are refused by the database for other roles.";
 
@@ -2141,7 +2145,6 @@
       var target = document.querySelector('.nav button[data-tab="' + b.getAttribute("data-goto") + '"]');
       if (target) target.click();
     });
-
   }
 
   /* ------------------------- Phase 9: IT administration dashboard ------------------------- */
@@ -2153,8 +2156,12 @@
   function renderRecentAttendance(rows){var b=$("recentAttendance"),s=$("recentAttendanceState");if(!rows.length){b.innerHTML='';s.textContent='No attendance activity was found for today.';return;}s.textContent='';b.innerHTML=rows.slice(0,6).map(function(r){var id=attStaffId(r),u=(USERS.rows||[]).find(function(x){return String(x.id||x.user_id)===String(id);}),f=attFlags(r),l=f.in&&f.out?'Clock-in and clock-out recorded':f.in?'Clock-in recorded':f.out?'Clock-out recorded':'Attendance record';var d=dashboardAttendanceTime(r);var date=rowDate(r);var stamp=d?dashboardDateTime(d):dashboardDateOnly(date||localDateIso());return '<div class="activity-item"><div class="activity-main"><div class="activity-title"><strong>'+esc(u?displayName(u):'Staff member')+'</strong><span class="activity-separator">—</span><span class="activity-action">'+esc(l)+'</span></div></div><time class="activity-time" datetime="'+esc(d?d.toISOString():(date||localDateIso()))+'">'+esc(stamp)+'</time></div>';}).join('');}
   function renderRecentProfiles(){var b=$("recentProfiles"),s=$("recentProfilesState"),r=(USERS.rows||[]).slice().sort(function(a,b){return new Date(b.updated_at||b.created_at||0)-new Date(a.updated_at||a.created_at||0);}).slice(0,6);if(!r.length){b.innerHTML='';s.textContent='No profile or account updates are visible.';return;}s.textContent='';b.innerHTML=r.map(function(x){var w=x.updated_at||x.created_at,l=x.updated_at?'Profile updated':'Account created';var d=new Date(w);var stamp=!isNaN(d.getTime())?dashboardDateTime(d):String(w);return '<div class="activity-item"><div class="activity-main"><div class="activity-title"><strong>'+esc(displayName(x))+'</strong><span class="activity-separator">—</span><span class="activity-action">'+esc(l)+' · '+esc(roleLabel(roleOf(x)))+'</span></div></div><time class="activity-time" datetime="'+esc(!isNaN(d.getTime())?d.toISOString():"")+'">'+esc(stamp)+'</time></div>';}).join('');}
   async function loadDashboardAttendance(){await detectAttendance();if(ATT.error){$("dashboardAttendanceState").textContent='Attendance service is not available to this account.';return{ok:false};}var q=sb.from(ATT.table).select('*').limit(1000);if(ATT.dateKey)q=q.eq(ATT.dateKey,localDateIso()).order(ATT.dateKey,{ascending:false});var r=await q;if(r.error){$("dashboardAttendanceState").textContent="Today's attendance could not be loaded.";return{ok:false};}DASH.attendanceRows=r.data||[];var i=0,o=0,m=0;DASH.attendanceRows.forEach(function(x){var f=attFlags(x);if(f.in)i++;if(f.out)o++;if(f.in&&!f.out)m++;});$("attendanceSummary").innerHTML='<div><span>Clock-ins</span><strong>'+i+'</strong></div><div><span>Clock-outs</span><strong>'+o+'</strong></div><div><span>Missing clock-outs</span><strong>'+m+'</strong></div>';$("dashboardAttendanceState").textContent=DASH.attendanceRows.length?DASH.attendanceRows.length+' attendance record'+(DASH.attendanceRows.length===1?'':'s')+' found today.':'No attendance records found for today.';renderRecentAttendance(DASH.attendanceRows);return{ok:true};}
-  async function runDashboardChecks(){$("systemStatusList").innerHTML='<div class="service-row"><span>Authentication</span>'+dashStatus('Checking…','warn')+'</div><div class="service-row"><span>Supabase</span>'+dashStatus('Checking…','warn')+'</div><div class="service-row"><span>Database queries</span>'+dashStatus('Checking…','warn')+'</div>';var aok=!!(ME.user&&ME.allowed),sok=false,dok=false;try{var p=await sb.from('profiles').select('id').eq('id',ME.user.id).maybeSingle();sok=!p.error;dok=sok;}catch(e){}var a=await loadDashboardAttendance();dok=dok&&a.ok;$("systemStatusList").innerHTML='<div class="service-row"><span>Authentication</span>'+dashStatus(aok?'Connected':'Unavailable',aok?'ok':'bad')+'</div><div class="service-row"><span>Supabase</span>'+dashStatus(sok?'Connected':'Unavailable',sok?'ok':'bad')+'</div><div class="service-row"><span>Database queries</span>'+dashStatus(dok?'Available':'Partial / unavailable',dok?'ok':'warn')+'</div>';}
-  async function loadDashboard(force){if(DASH.loading)return;DASH.loading=true;loader(true);try{if(force)await loadUsers(true);else if(!USERS.loaded)await loadUsers(false);renderDashboardStats();renderRecentProfiles();await runDashboardChecks();}catch(e){$("dashboardAttendanceState").textContent='Some dashboard information could not be loaded. Please retry.';}finally{DASH.loading=false;loader(false);}}
+  async function runDashboardChecks(){
+    /* Deprecated: System Checks were removed from the dashboard. Keep this
+       function harmless for older markup that may still contain a retry button. */
+    return {ok:true, skipped:true};
+  }
+  async function loadDashboard(force){if(DASH.loading)return;DASH.loading=true;loader(true);try{if(force)await loadUsers(true);else if(!USERS.loaded)await loadUsers(false);renderDashboardStats();renderRecentProfiles();await loadDashboardAttendance();}catch(e){var st=$("dashboardAttendanceState");if(st)st.textContent='Some dashboard information could not be loaded. Please retry.';}finally{DASH.loading=false;loader(false);}}
   function removeDashboardQuickActions(){
     /* Remove ONLY the Quick Actions section. Leave all other dashboard markup and functionality unchanged. */
     var headings = document.querySelectorAll("#tab-overview h2, #tab-overview h3, #tab-overview .section-head");
@@ -2165,7 +2172,13 @@
       else el.remove();
     });
   }
-  function initDashboard(){var root=$("tab-overview");if(!root||root.getAttribute('data-ready')==='1')return;root.setAttribute('data-ready','1');removeDashboardQuickActions();var refresh=$("dashboardRefresh");if(refresh)refresh.addEventListener('click',function(){loadDashboard(true);});var retry=$("dashboardRetry");if(retry)retry.addEventListener('click',function(){runDashboardChecks();});root.addEventListener('click',function(e){var b=e.target.closest('[data-goto]');if(!b)return;var t=document.querySelector('.nav button[data-tab="'+b.getAttribute('data-goto')+'"]');if(t)t.click();});}
+  function removeDashboardSystemStatus(){
+    var list=$("systemStatusList");
+    if(!list) return;
+    var panel=list.closest(".panel");
+    if(panel) panel.remove(); else list.remove();
+  }
+  function initDashboard(){var root=$("tab-overview");if(!root||root.getAttribute('data-ready')==='1')return;root.setAttribute('data-ready','1');removeDashboardQuickActions();removeDashboardSystemStatus();var refresh=$("dashboardRefresh");if(refresh)refresh.addEventListener('click',function(){loadDashboard(true);});var retry=$("dashboardRetry");if(retry)retry.addEventListener('click',function(){runDashboardChecks();});root.addEventListener('click',function(e){var b=e.target.closest('[data-goto]');if(!b)return;var t=document.querySelector('.nav button[data-tab="'+b.getAttribute('data-goto')+'"]');if(t)t.click();});}
 
   /* ------------------------- portal render ------------------------- */
   async function renderPortal(user, access) {
@@ -2399,7 +2412,16 @@
       return;
     }
 
-    await renderPortal(user, access);
+    try {
+      await renderPortal(user, access);
+    } catch (e) {
+      console.error("Tech Support portal initialization failed:", e);
+      var boot = $("boot");
+      if (boot) {
+        boot.innerHTML = '<div class="auth-card" style="max-width:620px;margin:40px auto;padding:28px"><h2>Tech Support could not finish loading</h2><p>There was a problem initialising the portal. Please reload the page.</p><p class="hint">' + esc(e && e.message ? e.message : "Unknown initialisation error") + '</p></div>';
+        boot.hidden = false;
+      }
+    }
   }
 
 
