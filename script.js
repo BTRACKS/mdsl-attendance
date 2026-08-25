@@ -390,7 +390,7 @@
       var href = l[0].charAt(0) === "#" ? HOME + l[0] : l[0];
       var active = l[0].charAt(0) === "#" ? hash === l[0] : PAGE === "about";
       var messageNav = l[1] === "Messages" ? ' data-message-nav="1"' : "";
-      var label = l[1] === "Messages" ? '<span data-message-label>Messages</span>' : '<span>' + l[1] + "</span>";
+      var label = l[1] === "Messages" ? '<span data-message-label>Messages<span data-message-badge class="message-nav-badge" hidden>0</span></span>' : '<span>' + l[1] + "</span>";
       return '<a href="' + href + '" class="' + (active ? "active" : "") + '"' + messageNav + '>' + (NAV_ICON[l[1]] || "") + label + "</a>";
     }).join("") + (u ? '<button type="button" class="nav-signout" id="navSignout"><span>Sign out</span></button>' : "");
     el("nav").classList.remove("open");
@@ -1520,6 +1520,141 @@
     return "";
   }
 
+
+  /* ========================= SUPPORT TICKETS ========================= */
+  var SUPPORT_TICKET_TYPES = ["Technical Issue", "Login/Access Problem", "Attendance Issue", "Account/Profile Issue", "System Error", "Feature Request", "Other"];
+  var SUPPORT_PRIORITIES = ["Low", "Medium", "High", "Urgent"];
+  var SUPPORT_STATUSES = ["Open", "In Progress", "Resolved", "Closed"];
+  var SUPPORT_ATTACHMENT_BUCKET = "support-ticket-attachments";
+  var SUPPORT_ATTACHMENT_MAX = 10 * 1024 * 1024;
+  var supportTicketState = { tickets: [], activeId: null, loading: false, unread: 0 };
+
+  function supportStatusClass(status) {
+    var s = String(status || "Open").toLowerCase().replace(/\s+/g, "-");
+    return "support-status support-status-" + s;
+  }
+  function supportPriorityClass(priority) {
+    return "support-priority support-priority-" + String(priority || "Medium").toLowerCase();
+  }
+  function supportTicketNumber(ticket) { return ticket.ticket_number || ticket.ticketNumber || "TKT-" + String(ticket.id || "").slice(0, 8).toUpperCase(); }
+  function supportTicketDate(ts) { if (!ts) return "—"; var d = new Date(ts); return isNaN(d) ? "—" : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }); }
+  function supportTicketTime(ts) { if (!ts) return ""; var d = new Date(ts); return isNaN(d) ? "" : d.toLocaleString("en-GB", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }); }
+  function supportTicketToastError(err) { toast((err && err.message) || "Support ticket action failed.", "error"); }
+
+  async function loadMySupportTickets() {
+    var u = session(); if (!u) return [];
+    supportTicketState.loading = true;
+    try {
+      var r = await supabaseClient.from("support_tickets").select("id,ticket_number,issue_type,subject,description,priority,status,created_at,updated_at,assigned_to").eq("user_id", u.id).order("created_at", { ascending: false });
+      if (r.error) throw r.error;
+      supportTicketState.tickets = r.data || [];
+      try { var n = await supabaseClient.rpc("support_unread_notification_count"); supportTicketState.unread = !n.error ? Number(n.data || 0) : 0; } catch (ignore) { supportTicketState.unread = 0; }
+      return supportTicketState.tickets;
+    } finally { supportTicketState.loading = false; }
+  }
+
+  function myTicketsHtml() {
+    var rows = supportTicketState.tickets || [];
+    return '<section class="section support-ticket-section" id="mySupportTickets">' +
+      '<div class="section-head"><div><h2>Support Tickets</h2><span>Get help from the IT team' + (supportTicketState.unread ? ' · ' + supportTicketState.unread + ' unread update' + (supportTicketState.unread === 1 ? '' : 's') : '') + '</span></div><button type="button" class="btn btn-primary btn-sm" id="createSupportTicketBtn">+ Create New Ticket</button></div>' +
+      '<p class="dateline">Submit technical, access, attendance or account issues and keep the entire support conversation in one place.</p>' +
+      (supportTicketState.loading ? '<div class="support-ticket-loading">Loading your tickets…</div>' : rows.length ? '<div class="support-ticket-list">' + rows.map(function (t) {
+        return '<button type="button" class="support-ticket-card" data-my-ticket="' + esc(t.id) + '">' +
+          '<div class="support-ticket-card-top"><strong>' + esc(supportTicketNumber(t)) + '</strong><span class="' + supportStatusClass(t.status) + '">' + esc(t.status) + '</span></div>' +
+          '<h3>' + esc(t.subject) + '</h3><div class="support-ticket-card-meta"><span>' + esc(t.issue_type) + '</span><span class="' + supportPriorityClass(t.priority) + '">' + esc(t.priority) + '</span><time>' + esc(supportTicketDate(t.updated_at || t.created_at)) + '</time></div>' +
+          '</button>';
+      }).join("") + '</div>' : '<div class="support-ticket-empty"><strong>No tickets yet.</strong><p>Create a ticket when you need help from IT. Your replies and status updates will appear here.</p></div>') +
+      '</section>';
+  }
+
+  function supportTicketFormHtml() {
+    return '<div class="support-ticket-modal"><p class="eyebrow">Support / Help</p><h2>Create New Ticket</h2><p class="dateline">Tell the IT team what is happening. You can attach a screenshot or document if it helps explain the issue.</p>' +
+      '<form id="supportTicketCreateForm" class="support-ticket-form" enctype="multipart/form-data">' +
+      '<div class="field"><label for="supportIssueType">Issue Type</label><select id="supportIssueType" name="issue_type"><option value="">Select issue type</option>' + SUPPORT_TICKET_TYPES.map(function(x){return '<option value="'+esc(x)+'">'+esc(x)+'</option>';}).join("") + '</select><span class="error"></span></div>' +
+      '<div class="field"><label for="supportSubject">Subject</label><input id="supportSubject" name="subject" maxlength="160" placeholder="Briefly describe the problem" /><span class="error"></span></div>' +
+      '<div class="field"><label for="supportDescription">Describe your issue</label><textarea id="supportDescription" name="description" rows="7" maxlength="8000" placeholder="Explain what happened, what you expected and any error message you saw."></textarea><span class="error"></span></div>' +
+      '<div class="field"><label for="supportPriority">Priority</label><select id="supportPriority" name="priority">' + SUPPORT_PRIORITIES.map(function(x){return '<option value="'+esc(x)+'"'+(x==="Medium"?' selected':'')+'>'+esc(x)+'</option>';}).join("") + '</select><span class="error"></span></div>' +
+      '<div class="field"><label for="supportAttachment">Attachment <span class="support-optional">(optional)</span></label><input id="supportAttachment" name="attachment" type="file" accept="image/*,.pdf,.txt,.doc,.docx,.xls,.xlsx,.csv" /><small class="support-file-hint">Maximum 10MB.</small><span class="error"></span></div>' +
+      '<div class="form-foot"><button class="btn btn-primary btn-block" type="submit">Submit Ticket</button></div></form></div>';
+  }
+
+  function showSupportTicketCreate() {
+    showMessageModalMain(supportTicketFormHtml(), "Create support ticket");
+    var form = el("supportTicketCreateForm");
+    if (!form) return;
+    form.addEventListener("submit", async function(e) {
+      e.preventDefault();
+      var u = session(); if (!u) return;
+      var type = el("supportIssueType").value, subject = (el("supportSubject").value || "").trim(), description = (el("supportDescription").value || "").trim(), priority = el("supportPriority").value;
+      var file = el("supportAttachment").files && el("supportAttachment").files[0];
+      if (!type || !subject || !description || !priority) { toast("Complete the required ticket fields.", "error"); return; }
+      if (file && file.size > SUPPORT_ATTACHMENT_MAX) { toast("Attachment must be 10MB or smaller.", "error"); return; }
+      var btn = form.querySelector('button[type="submit"]'); setBtnLoading(btn, true);
+      try {
+        var ticketRes = await supabaseClient.from("support_tickets").insert({ user_id: u.id, issue_type: type, subject: subject, description: description, priority: priority }).select("id,ticket_number").single();
+        if (ticketRes.error) throw ticketRes.error;
+        if (file && ticketRes.data) {
+          var safe = String(file.name || "attachment").replace(/[^a-zA-Z0-9._-]+/g, "_").slice(-120);
+          var path = ticketRes.data.id + "/" + Date.now() + "-" + safe;
+          var up = await supabaseClient.storage.from(SUPPORT_ATTACHMENT_BUCKET).upload(path, file, { upsert: false, contentType: file.type || "application/octet-stream" });
+          if (!up.error) {
+            var ar = await supabaseClient.from("support_ticket_attachments").insert({ ticket_id: ticketRes.data.id, uploaded_by: u.id, file_name: file.name, file_path: path, content_type: file.type || null, file_size: file.size });
+            if (ar.error) console.warn("Ticket attachment metadata:", ar.error);
+          } else { toast("Ticket created, but the attachment could not be uploaded.", "error"); }
+        }
+        closeMainMessageModal();
+        await loadMySupportTickets();
+        render();
+        toast("Ticket " + supportTicketNumber(ticketRes.data) + " created successfully.");
+      } catch (err) { supportTicketToastError(err); } finally { setBtnLoading(btn, false); }
+    });
+  }
+
+  async function openMySupportTicket(ticketId) {
+    var u = session(); if (!u) return;
+    try {
+      var t = (supportTicketState.tickets || []).find(function(x){return String(x.id)===String(ticketId);});
+      if (!t) { await loadMySupportTickets(); t = (supportTicketState.tickets || []).find(function(x){return String(x.id)===String(ticketId);}); }
+      if (!t) throw new Error("Ticket not found.");
+      try { await supabaseClient.from("support_ticket_notifications").update({ read_at: new Date().toISOString() }).eq("ticket_id", t.id).eq("user_id", u.id).is("read_at", null); } catch (ignore) {}
+      var msgs = await supabaseClient.from("support_ticket_messages").select("id,sender_id,body,is_internal,created_at").eq("ticket_id", t.id).eq("is_internal", false).order("created_at", { ascending: true });
+      if (msgs.error) throw msgs.error;
+      var attachments = await supabaseClient.from("support_ticket_attachments").select("id,file_name,file_path,content_type,file_size,created_at").eq("ticket_id", t.id).order("created_at", { ascending: true });
+      var html = '<div class="support-ticket-modal"><div class="support-ticket-detail-head"><div><p class="eyebrow">' + esc(supportTicketNumber(t)) + '</p><h2>' + esc(t.subject) + '</h2></div><div><span class="' + supportStatusClass(t.status) + '">' + esc(t.status) + '</span></div></div>' +
+        '<div class="support-ticket-detail-meta"><span>' + esc(t.issue_type) + '</span><span class="' + supportPriorityClass(t.priority) + '">' + esc(t.priority) + '</span><span>Submitted ' + esc(supportTicketDate(t.created_at)) + '</span></div>' +
+        '<div class="support-ticket-description"><strong>Issue</strong><p>' + esc(t.description).replace(/\n/g,"<br>") + '</p></div>' +
+        '<div class="support-ticket-thread">' + ((msgs.data || []).length ? (msgs.data || []).map(function(m){return '<div class="support-ticket-message ' + (String(m.sender_id)===String(u.id)?'mine':'theirs') + '"><p>'+esc(m.body).replace(/\n/g,"<br>")+'</p><span>'+esc(supportTicketTime(m.created_at))+'</span></div>';}).join("") : '<p class="support-ticket-empty">No replies yet. IT will respond here.</p>') + '</div>' +
+        ((attachments.data || []).length ? '<div class="support-ticket-attachments"><strong>Attachments</strong><div>' + (attachments.data || []).map(function(a){return '<a href="#" data-ticket-download="'+esc(a.file_path)+'">'+esc(a.file_name)+'</a>';}).join("") + '</div></div>' : '') +
+        '<form id="supportTicketReplyForm" class="support-ticket-reply"><label for="supportTicketReply">Reply to IT</label><textarea id="supportTicketReply" rows="4" maxlength="8000" placeholder="Add more information or reply to the IT team…"></textarea><button class="btn btn-primary" type="submit">Send Reply</button></form>' +
+        '</div>';
+      showMessageModalMain(html, supportTicketNumber(t));
+      var reply = el("supportTicketReplyForm");
+      if (reply) reply.addEventListener("submit", async function(e){e.preventDefault();var body=(el("supportTicketReply").value||"").trim();if(!body)return;var b=reply.querySelector('button[type="submit"]');setBtnLoading(b,true);try{var r=await supabaseClient.from("support_ticket_messages").insert({ticket_id:t.id,sender_id:u.id,body:body,is_internal:false});if(r.error)throw r.error;closeMainMessageModal();await openMySupportTicket(t.id);await loadMySupportTickets();}catch(err){supportTicketToastError(err);}finally{setBtnLoading(b,false);}});
+      Array.prototype.forEach.call(document.querySelectorAll("[data-ticket-download]"), function(a){a.addEventListener("click",async function(e){e.preventDefault();try{var r=await supabaseClient.storage.from(SUPPORT_ATTACHMENT_BUCKET).createSignedUrl(a.getAttribute("data-ticket-download"), 300);if(r.error)throw r.error;window.open(r.data.signedUrl,"_blank","noopener");}catch(err){supportTicketToastError(err);}});});
+    } catch (err) { supportTicketToastError(err); }
+  }
+
+  function showMessageModalMain(html, title) {
+    var m = el("modal"); if (!m) return;
+    el("modalKicker").hidden = true; el("modalTitle").textContent = title || "Support"; el("modalBody").innerHTML = html;
+    el("modalConfirm").hidden = true; el("modalCancel").textContent = "Close"; m.classList.add("message-modal"); m.hidden = false;
+  }
+  function closeMainMessageModal() {
+    var m = el("modal"); if (!m) return;
+    m.hidden = true; m.classList.remove("message-modal"); el("modalKicker").hidden = false; el("modalConfirm").hidden = false; el("modalCancel").textContent = "Cancel";
+  }
+
+  function bindMySupportTickets(skipLoad) {
+    var root = el("mySupportTickets"); if (!root) return;
+    var create = el("createSupportTicketBtn"); if (create) create.addEventListener("click", showSupportTicketCreate);
+    Array.prototype.forEach.call(root.querySelectorAll("[data-my-ticket]"), function(b){b.addEventListener("click", function(){openMySupportTicket(b.getAttribute("data-my-ticket"));});});
+    if (skipLoad) return;
+    loadMySupportTickets().then(function(){
+      if (location.hash === "#/settings") { var host = el("mySupportTickets"); if (host) { host.outerHTML = myTicketsHtml(); bindMySupportTickets(true); } }
+    }).catch(function(err){ console.warn("Support tickets:", err); });
+  }
+
+
   /* ------------------------- settings ------------------------- */
   function readonlyField(name, label, value, full) {
     return '<div class="field field-locked' + (full ? " full" : "") + '"><label for="r-' + name + '">' + label + "</label>" +
@@ -1564,6 +1699,8 @@
       '<button class="btn btn-dark" type="submit"><span>Update password</span></button>' +
       "</div></form></section>" +
 
+      myTicketsHtml() +
+
       "</div>" +
 
       '<aside><div class="panel"><div class="panel-head">' + ICON.userCard + 'Account Record</div><div class="panel-body">' +
@@ -1581,6 +1718,7 @@
   function bindSettings() {
     var u = session();
     if (!u) return;
+    bindMySupportTickets();
 
     /* ---- profile picture ---- */
     var input = el("avatarInput"), pick = el("avatarPick"), save = el("avatarSave"),
@@ -1879,10 +2017,34 @@
     var parts = await supabaseClient.from("message_participants").select("conversation_id,user_id").in("conversation_id", ids);
     if (parts.error) throw parts.error;
 
+    var participantIds = [];
+    (parts.data || []).forEach(function (x) {
+      if (String(x.user_id) !== String(u.id) && participantIds.indexOf(x.user_id) === -1) participantIds.push(x.user_id);
+    });
+    var peopleById = {};
+    if (participantIds.length) {
+      var peopleRes = await supabaseClient.rpc("get_message_people", { p_user_ids: participantIds });
+      if (!peopleRes.error) (peopleRes.data || []).forEach(function (person) {
+        peopleById[String(person.id)] = { id: person.id, fullName: person.full_name || "Staff member", avatarUrl: person.avatar_url || "", role: person.role || "staff", department: person.department || "" };
+      });
+      var missingIds = participantIds.filter(function (id) { return !peopleById[String(id)]; });
+      if (missingIds.length) {
+        var profileRes = await supabaseClient.from("profiles").select("id,full_name,avatar_url,role,department").in("id", missingIds);
+        if (!profileRes.error) (profileRes.data || []).forEach(function (person) {
+          peopleById[String(person.id)] = { id: person.id, fullName: person.full_name || "Staff member", avatarUrl: person.avatar_url || "", role: person.role || "staff", department: person.department || "" };
+        });
+      }
+      Object.keys(peopleById).forEach(function (id) {
+        var existing = db.users.find(function (x) { return String(x.id) === String(id); });
+        if (!existing) db.users.push(peopleById[id]);
+        else { existing.fullName = peopleById[id].fullName || existing.fullName; existing.avatarUrl = peopleById[id].avatarUrl || existing.avatarUrl || ""; }
+      });
+    }
+
     var result = await Promise.all((c.data || []).map(async function (conv) {
       var members = (parts.data || []).filter(function (x) { return x.conversation_id === conv.id; });
       var other = members.find(function (x) { return x.user_id !== u.id; });
-      var person = conv.kind === "broadcast" ? { fullName: "Company", avatarUrl: "", id: null } : (other ? messagePerson(other.user_id) : { fullName: "Staff member", avatarUrl: "", id: null });
+      var person = conv.kind === "broadcast" ? { fullName: "Company", avatarUrl: "", id: null } : (other ? (peopleById[String(other.user_id)] || messagePerson(other.user_id)) : { fullName: "Staff member", avatarUrl: "", id: null });
       var lastRes = await supabaseClient.from("messages").select("id,sender_id,ciphertext,iv,created_at").eq("conversation_id", conv.id).order("created_at", { ascending: false }).limit(1);
       var lastRow = lastRes.data && lastRes.data[0];
       var clearedBefore = getClearedBefore(conv.id);
@@ -1912,7 +2074,14 @@
   function updateMessageBadge() {
     var a = document.querySelector('[data-message-nav]'); if (!a) return;
     var label = a.querySelector("[data-message-label]"); if (!label) return;
-    label.textContent = messageState.unread > 99 ? "Messages (99+)" : "Messages" + (messageState.unread ? " (" + messageState.unread + ")" : "");
+    var badge = label.querySelector("[data-message-badge]");
+    if (badge) {
+      var count = Number(messageState.unread || 0);
+      badge.textContent = count > 99 ? "99+" : String(count);
+      badge.hidden = count <= 0;
+    } else {
+      label.textContent = messageState.unread > 99 ? "Messages (99+)" : "Messages" + (messageState.unread ? " (" + messageState.unread + ")" : "");
+    }
     a.classList.toggle("has-unread", messageState.unread > 0);
   }
   function playMessageSound() {
