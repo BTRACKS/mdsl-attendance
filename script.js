@@ -1550,6 +1550,9 @@
   }
   function creatorCard(name, role, profile) {
     var avatarProfile = profile || { fullName: name, avatarUrl: "" };
+    if (normalizeCreatorName(name) === "oladapo salami") {
+      avatarProfile = Object.assign({}, avatarProfile, { avatarUrl: "oladapo-salami.jpg" });
+    }
     return '<div class="creator-card">' +
       avatarHtml(avatarProfile, "creator-avatar") +
       '<div><p class="creator-name">' + esc(name) + '</p>' +
