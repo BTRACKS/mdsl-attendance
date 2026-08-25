@@ -1500,11 +1500,11 @@
     var people = db.users || [];
     var wanted = (names || []).map(normalizeCreatorName);
     var cached = people.concat(Object.keys(aboutCreatorProfiles).map(function (key) { return aboutCreatorProfiles[key]; })).filter(Boolean);
+    var exact = cached.find(function (person) { return wanted.indexOf(normalizeCreatorName(person.fullName)) !== -1; });
+    if (exact) return exact;
     return cached.find(function (person) {
       var fullName = normalizeCreatorName(person.fullName);
-      return wanted.some(function (name) {
-        return fullName === name || fullName.indexOf(name) !== -1 || name.indexOf(fullName) !== -1;
-      });
+      return wanted.some(function (name) { return fullName.indexOf(name) !== -1 || name.indexOf(fullName) !== -1; });
     }) || null;
   }
   async function loadAboutCreatorProfiles() {
@@ -1929,8 +1929,11 @@
   var messageState = {
     conversations: [], activeConversation: null, unlockedPrivateKey: null,
     ownPublicKey: null, pinSessionExpiresAt: 0, unread: 0, sound: localStorage.getItem("md_message_sound") !== "off",
-    realtime: null, initialized: false, loading: false
+    realtime: null, initialized: false, loading: false, editedIds: {}
   };
+  var MESSAGE_ATTACHMENT_PREFIX = "MDMSG1:";
+  var MESSAGE_ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024;
+  var MESSAGE_EDIT_WINDOW_MS = 20 * 60 * 1000;
   function messageCacheKey(kind, id) {
     var u = session();
     return "md_msg_cache_" + kind + "_" + (u ? u.id : "") + (id ? "_" + id : "");
@@ -2148,6 +2151,32 @@
     }
     return { ciphertext: b64(cipher), iv: b64(iv), envelopes: envelopes };
   }
+  function parseMessageContent(text) {
+    var value = String(text == null ? "" : text);
+    if (value.indexOf(MESSAGE_ATTACHMENT_PREFIX) !== 0) return { text: value, attachment: null };
+    try {
+      var payload = JSON.parse(value.slice(MESSAGE_ATTACHMENT_PREFIX.length));
+      if (!payload || payload.v !== 1 || !payload.attachment || !payload.attachment.dataUrl) return { text: value, attachment: null };
+      return { text: String(payload.text || ""), attachment: payload.attachment };
+    } catch (e) { return { text: value, attachment: null }; }
+  }
+  function buildMessageContent(text, attachment) {
+    if (!attachment) return String(text || "");
+    return MESSAGE_ATTACHMENT_PREFIX + JSON.stringify({ v: 1, text: String(text || ""), attachment: attachment });
+  }
+  function messageContentHtml(content) {
+    var parsed = parseMessageContent(content), html = '';
+    if (parsed.text) html += '<div class="message-text">' + esc(parsed.text).replace(/\n/g,'<br>') + '</div>';
+    if (parsed.attachment) {
+      var a = parsed.attachment, name = esc(a.name || "Attachment"), type = String(a.type || "");
+      if (type.indexOf("image/") === 0) {
+        html += '<div class="message-attachment"><img class="message-attachment-image" src="' + esc(a.dataUrl) + '" alt="' + name + '" loading="lazy" /><a class="message-attachment-link" href="' + esc(a.dataUrl) + '" download="' + name + '">' + name + '</a></div>';
+      } else {
+        html += '<div class="message-attachment message-attachment-file"><span class="message-attachment-icon">PDF</span><div><strong>' + name + '</strong><a class="message-attachment-link" href="' + esc(a.dataUrl) + '" target="_blank" rel="noopener">Open PDF</a></div></div>';
+      }
+    }
+    return html || '<span class="message-text">&nbsp;</span>';
+  }
   async function decryptMessage(row, envelope) {
     if (!messageState.unlockedPrivateKey || !envelope) return "";
     try {
@@ -2156,6 +2185,16 @@
       var plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64(row.iv) }, aes, unb64(row.ciphertext));
       return new TextDecoder().decode(plain);
     } catch (e) { return "[Unable to decrypt this message]"; }
+  }
+  function messagePreview(content) {
+    var parsed = parseMessageContent(content);
+    if (parsed.text) return parsed.text;
+    if (parsed.attachment) return "Attachment: " + (parsed.attachment.name || "file");
+    return "Encrypted message";
+  }
+  function messageCanEdit(row, userId) {
+    if (!row || row.sender_id !== userId || !row.created_at) return false;
+    return Date.now() - new Date(row.created_at).getTime() <= MESSAGE_EDIT_WINDOW_MS;
   }
   function messageAvatar(u, cls) { return avatarHtml(u, cls || "avatar-sm"); }
   function messagePerson(id) { return db.users.find(function (u) { return String(u.id) === String(id); }) || { id: id, fullName: "Staff member", avatarUrl: "" }; }
@@ -2208,7 +2247,7 @@
       var lastText = "Encrypted message";
       if (!lastRes.error && lastRow && messageState.unlockedPrivateKey) {
         var env = await supabaseClient.from("message_key_envelopes").select("encrypted_key").eq("message_id", lastRow.id).eq("user_id", u.id).maybeSingle();
-        if (!env.error && env.data) lastText = await decryptMessage(lastRow, env.data);
+        if (!env.error && env.data) lastText = messagePreview(await decryptMessage(lastRow, env.data));
       }
       var unreadRows = await supabaseClient.from("messages").select("id,sender_id").eq("conversation_id", conv.id).neq("sender_id", u.id);
       var unreadCount = 0;
@@ -2269,6 +2308,13 @@
         if ("Notification" in window && Notification.permission === "granted") {
           new Notification("New Message", { body: "You have a new secure message.", icon: "favicon.png" });
         }
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages" }, async function (payload) {
+        if (!session()) return;
+        if (location.hash === "#/messages" && messageState.activeConversation === payload.new.conversation_id) {
+          await loadMessagesForConversation(payload.new.conversation_id);
+          refreshConversationList();
+        }
       }).subscribe();
   }
   async function stopMessagingRealtime() { if (messageState.realtime) { await supabaseClient.removeChannel(messageState.realtime); messageState.realtime = null; } }
@@ -2315,7 +2361,7 @@
     return '<div class="chat-header">' + messageAvatar(p, "avatar-sm") + '<div class="chat-identity"><h2>' + esc(p.fullName) + '</h2><span>End-to-end encrypted</span></div>' +
       '<button type="button" class="chat-back" id="chatBack">Back</button>' +
       '<div class="chat-menu-wrap"><button type="button" class="chat-menu-btn" id="chatMenuBtn" aria-haspopup="true" aria-expanded="false" aria-label="Conversation options">&#8942;</button>' +
-      '<div class="chat-menu" id="chatMenu" hidden><button type="button" class="chat-menu-item" id="clearChatBtn">Clear chat</button></div></div></div><div class="message-stream" id="messageStream"><div class="message-loading">Loading secure messages...</div></div><form class="message-composer" id="messageComposer"><textarea id="messageInput" rows="1" maxlength="4000" placeholder="Type a message..." autocomplete="off"></textarea><button class="btn btn-primary" type="submit">Send</button></form>';
+      '<div class="chat-menu" id="chatMenu" hidden><button type="button" class="chat-menu-item" id="clearChatBtn">Clear chat</button></div></div></div><div class="message-stream" id="messageStream"><div class="message-loading">Loading secure messages...</div></div><form class="message-composer" id="messageComposer"><label class="message-attach-btn" id="messageAttachmentLabel" for="messageAttachment" title="Attach PDF or image" aria-label="Attach PDF or image">&#128206;<span class="message-attach-name"></span><input id="messageAttachment" type="file" accept="application/pdf,image/*" hidden /></label><textarea id="messageInput" rows="1" maxlength="4000" placeholder="Type a message..." autocomplete="off"></textarea><button class="btn btn-primary" type="submit">Send</button></form>';
   }
   /* Clear Chat is a per-device, per-user "hide history before now" cutoff (kept in
      localStorage). It never deletes or touches rows in the database, so the other
@@ -2330,10 +2376,20 @@
       var html = '';
       for (var i = 0; i < rows.length; i++) {
         var row = rows[i], text = await decryptMessage(row, em[row.id]), mine = row.sender_id === u.id;
-        html += '<div class="message-row ' + (mine ? 'mine' : 'theirs') + '"><div class="message-bubble">' + esc(text).replace(/\n/g,'<br>') + '<span class="message-meta">' + esc(messageTime(row.created_at)) + '</span></div></div>';
+        var edit = messageCanEdit(row, u.id) ? '<button type="button" class="message-edit-btn" data-edit-message="' + esc(row.id) + '" aria-label="Edit message">Edit</button>' : '';
+        html += '<div class="message-row ' + (mine ? 'mine' : 'theirs') + '" data-message-id="' + esc(row.id) + '" data-created-at="' + esc(row.created_at) + '"><div class="message-bubble">' + messageContentHtml(text) + edit + '<span class="message-meta">' + esc(messageTime(row.created_at)) + '</span></div></div>';
         if (markRead && !mine) await supabaseClient.rpc("mark_message_read", { p_message_id: row.id });
       }
-      var stream = el("messageStream"); if (stream) { stream.innerHTML = html || '<div class="chat-empty chat-empty-small"><p>No messages yet. Say hello.</p></div>'; stream.scrollTop = stream.scrollHeight; }
+      var stream = el("messageStream"); if (stream) {
+        stream.innerHTML = html || '<div class="chat-empty chat-empty-small"><p>No messages yet. Say hello.</p></div>';
+        stream.scrollTop = stream.scrollHeight;
+        Array.prototype.forEach.call(stream.querySelectorAll("[data-edit-message]"), function(btn){
+          var row = btn.closest("[data-message-id]"), created = row && new Date(row.getAttribute("data-created-at")).getTime();
+          var remaining = created ? (created + MESSAGE_EDIT_WINDOW_MS - Date.now()) : 0;
+          if (remaining > 0) setTimeout(function(){ if (btn.isConnected) btn.remove(); }, remaining);
+          else btn.remove();
+        });
+      }
     };
 
     var cached = readMessageCache("conversation", conversationId);
@@ -2364,6 +2420,69 @@
     var r = await supabaseClient.rpc("send_encrypted_message", { p_conversation_id: conversationId, p_ciphertext: pack.ciphertext, p_iv: pack.iv, p_envelopes: pack.envelopes });
     if (r.error) throw r.error;
   }
+  async function updateEncryptedMessage(messageId, content) {
+    var u = session();
+    if (!u) throw new Error("You must be signed in.");
+    var existing = await supabaseClient.from("messages").select("id,conversation_id,sender_id,created_at").eq("id", messageId).eq("sender_id", u.id).maybeSingle();
+    if (existing.error) throw existing.error;
+    if (!existing.data) throw new Error("Message not found or you are not allowed to edit it.");
+    if (!messageCanEdit(existing.data, u.id)) throw new Error("Messages can only be edited within 20 minutes of sending.");
+    var p = await supabaseClient.from("message_participants").select("user_id").eq("conversation_id", existing.data.conversation_id);
+    if (p.error) throw p.error;
+    var ids = (p.data || []).map(function(x){return x.user_id;});
+    if (ids.indexOf(u.id) === -1) ids.push(u.id);
+    var pack = await encryptForRecipients(content, ids);
+    var cutoff = new Date(Date.now() - MESSAGE_EDIT_WINDOW_MS).toISOString();
+    var upd = await supabaseClient.from("messages").update({ ciphertext: pack.ciphertext, iv: pack.iv }).eq("id", messageId).eq("sender_id", u.id).gte("created_at", cutoff);
+    if (upd.error) throw upd.error;
+    var envRows = pack.envelopes.map(function(x){ return { message_id: messageId, user_id: x.user_id, encrypted_key: x.encrypted_key }; });
+    var envUp = await supabaseClient.from("message_key_envelopes").upsert(envRows, { onConflict: "message_id,user_id" });
+    if (envUp.error) throw envUp.error;
+  }
+  function readAttachment(file) {
+    return new Promise(function(resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function(){ resolve(reader.result); };
+      reader.onerror = function(){ reject(new Error("The attachment could not be read.")); };
+      reader.readAsDataURL(file);
+    });
+  }
+  async function buildAttachmentContent(text, file) {
+    if (!file) return String(text || "");
+    if (!(file.type === "application/pdf" || String(file.type || "").indexOf("image/") === 0)) throw new Error("Only PDF files and images can be attached.");
+    if (file.size > MESSAGE_ATTACHMENT_MAX_BYTES) throw new Error("Attachments must be 5MB or smaller.");
+    var dataUrl = await readAttachment(file);
+    return buildMessageContent(text, { name: file.name, type: file.type || "application/octet-stream", size: file.size, dataUrl: dataUrl });
+  }
+  function openEditMessage(row) {
+    var u = session();
+    if (!messageCanEdit(row, u && u.id)) { toast("Messages can only be edited within 20 minutes of sending.", "error"); return; }
+    var em = {};
+    var cached = readMessageCache("conversation", row.conversation_id);
+    if (cached && Array.isArray(cached.envelopes)) cached.envelopes.forEach(function(x){em[x.message_id]=x;});
+    decryptMessage(row, em[row.id]).then(function(content){
+      var parsed = parseMessageContent(content);
+      var body = '<div class="message-picker"><p class="eyebrow">Edit message</p><h2>Edit your message</h2>' +
+        '<textarea id="editMessageInput" rows="5" maxlength="4000" placeholder="Edit your message...">' + esc(parsed.text) + '</textarea>' +
+        '<p class="message-lock-note">You can edit this message until 20 minutes after it was sent.</p>' +
+        '<button type="button" class="btn btn-primary btn-block" id="saveEditMessage">Save changes</button></div>';
+      showMessageModal(body);
+      el("saveEditMessage").addEventListener("click", async function(){
+        var btn=this, text=(el("editMessageInput").value||"");
+        if (!text.trim() && !parsed.attachment) { toast("Write a message first.","error"); return; }
+        setBtnLoading(btn,true);
+        try {
+          await updateEncryptedMessage(row.id, buildMessageContent(text, parsed.attachment));
+          closeMessageModal();
+          messageState.editedIds[row.id]=true;
+          await loadMessagesForConversation(row.conversation_id);
+          await refreshConversationList();
+          toast("Message updated.");
+        } catch(e) { toast(e.message || "Message could not be edited.","error"); }
+        finally { setBtnLoading(btn,false); }
+      });
+    }).catch(function(){ toast("Message could not be opened for editing.","error"); });
+  }
   /* --- Optimistic send: render the bubble immediately (we already hold the plaintext
      before it's ever encrypted), then encrypt + save in the background. Each bubble
      gets its own temp id, so a slow/late network response only ever updates its own
@@ -2373,7 +2492,7 @@
     var empty = stream.querySelector(".chat-empty-small"); if (empty) empty.remove();
     var row = document.createElement("div");
     row.className = "message-row mine pending"; row.id = tempId; row.setAttribute("data-text", text);
-    row.innerHTML = '<div class="message-bubble">' + esc(text).replace(/\n/g,'<br>') + '<span class="message-meta">Sending&hellip;</span></div>';
+    row.innerHTML = '<div class="message-bubble">' + messageContentHtml(text) + '<span class="message-meta">Sending&hellip;</span></div>';
     stream.appendChild(row); stream.scrollTop = stream.scrollHeight;
   }
   function markOptimisticMessageSent(tempId) {
@@ -2477,20 +2596,45 @@
     Array.prototype.forEach.call(document.querySelectorAll("#newMessageBtn,#emptyNewMessage"),function(n){n.addEventListener("click",showStaffPicker);});var bc=el("broadcastBtn");if(bc)bc.addEventListener("click",showBroadcast);
     bindConversationList();
     var search=el("messageSearch");if(search)search.addEventListener("input",function(){var t=search.value.toLowerCase();Array.prototype.forEach.call(document.querySelectorAll(".conversation-item"),function(b){b.hidden=(b.textContent||"").toLowerCase().indexOf(t)===-1;});});
-    var composer=el("messageComposer");if(composer)composer.addEventListener("submit",function(e){
+    var composer=el("messageComposer");
+    var attachmentInput=el("messageAttachment");
+    var pendingAttachment=null;
+    if(attachmentInput) attachmentInput.addEventListener("change",async function(){
+      var file=attachmentInput.files&&attachmentInput.files[0];
+      pendingAttachment=null;
+      if(!file)return;
+      if(!(file.type === "application/pdf" || String(file.type||"").indexOf("image/")===0)){ attachmentInput.value=""; toast("Only PDF files and images can be attached.","error"); return; }
+      if(file.size>MESSAGE_ATTACHMENT_MAX_BYTES){ attachmentInput.value=""; toast("Attachments must be 5MB or smaller.","error"); return; }
+      pendingAttachment=file;
+      var label=el("messageAttachmentLabel"), nameEl=label&&label.querySelector(".message-attach-name");
+      if(nameEl) nameEl.textContent=file.name;
+    });
+    if(composer)composer.addEventListener("submit",async function(e){
       e.preventDefault();
-      var input=el("messageInput"),text=(input.value||"").trim();
-      if(!text)return;
+      var input=el("messageInput"),text=(input.value||"").trim(),file=pendingAttachment;
+      if(!text && !file)return;
       var convId=messageState.activeConversation;
-      input.value="";
-      var tempId="pending-"+Date.now()+"-"+Math.random().toString(36).slice(2);
-      appendOptimisticMessage(text,tempId);
-      sendMessage(convId,text).then(function(){
-        markOptimisticMessageSent(tempId);
-        refreshConversationList();
-      }).catch(function(err){
-        markOptimisticMessageFailed(tempId);
-        toast(err.message||"Message could not be sent.","error");
+      var btn=composer.querySelector('button[type="submit"]');
+      setBtnLoading(btn,true);
+      try {
+        var content=await buildAttachmentContent(text,file);
+        input.value=""; pendingAttachment=null; if(attachmentInput) attachmentInput.value=""; var label=el("messageAttachmentLabel"), nameEl=label&&label.querySelector(".message-attach-name"); if(nameEl) nameEl.textContent="";
+        var tempId="pending-"+Date.now()+"-"+Math.random().toString(36).slice(2);
+        appendOptimisticMessage(content,tempId);
+        sendMessage(convId,content).then(function(){ markOptimisticMessageSent(tempId); refreshConversationList(); }).catch(function(err){ markOptimisticMessageFailed(tempId); toast(err.message||"Message could not be sent.","error"); });
+      } catch(err) { toast(err.message||"Attachment could not be sent.","error"); }
+      finally { setBtnLoading(btn,false); }
+    });
+    var input=el("messageInput");
+    if(input) input.addEventListener("keydown",function(e){ if(e.key === "Enter" && !e.shiftKey){ e.preventDefault(); if(composer) composer.requestSubmit ? composer.requestSubmit() : composer.dispatchEvent(new Event("submit",{cancelable:true,bubbles:true})); } });
+    Array.prototype.forEach.call(document.querySelectorAll("[data-edit-message]"),function(btn){
+      btn.addEventListener("click",async function(e){
+        e.stopPropagation();
+        var row=btn.closest("[data-message-id]"), id=btn.getAttribute("data-edit-message");
+        if(!row)return;
+        var cached=readMessageCache("conversation",messageState.activeConversation), message=(cached&&cached.rows||[]).find(function(x){return String(x.id)===String(id);});
+        if(!message){ try { var r=await supabaseClient.from("messages").select("id,conversation_id,sender_id,ciphertext,iv,created_at").eq("id",id).maybeSingle(); message=r.data; } catch(e){} }
+        if(message) openEditMessage(message);
       });
     });
     var back=el("chatBack");if(back)back.addEventListener("click",function(){messageState.activeConversation=null;renderMessagesKeepState();});

@@ -1074,3 +1074,25 @@ body.maintenance-page{background:var(--gradient-hero);min-height:100vh}
   .support-ticket-message{max-width:94%}
 }
 .modal.message-modal{max-width:760px}
+
+/* ---------- Secure chat attachments + message editing ---------- */
+.message-attach-btn{width:44px;height:44px;flex:0 0 44px;border:1px solid var(--rule-strong);border-radius:12px;background:var(--paper-2);color:var(--ink-3);display:flex;align-items:center;justify-content:center;gap:5px;cursor:pointer;font-size:19px;overflow:hidden;transition:background var(--t),color var(--t),border-color var(--t)}
+.message-attach-btn:hover{background:var(--paper);color:var(--navy);border-color:var(--navy)}
+.message-attach-name{max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;font-weight:700}
+.message-attachment{margin-top:7px;display:grid;gap:6px}
+.message-attachment-image{display:block;max-width:min(280px,100%);max-height:260px;border-radius:10px;border:1px solid var(--rule);object-fit:cover;background:var(--paper-2)}
+.message-attachment-file{display:flex;align-items:center;gap:10px;padding:9px 10px;border:1px solid var(--rule);border-radius:10px;background:var(--paper-2)}
+.message-attachment-icon{width:34px;height:34px;border-radius:8px;display:grid;place-items:center;background:var(--amber-soft);color:var(--navy);font-size:9px;font-weight:800;flex:0 0 auto}
+.message-attachment-file>div{min-width:0;display:grid;gap:3px}
+.message-attachment-file strong{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px}
+.message-attachment-link{font-size:11px;color:var(--navy);font-weight:700;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.message-attachment-link:hover{text-decoration:underline}
+.message-edit-btn{display:block;margin:7px 0 0 auto;padding:3px 7px;border:0;border-radius:7px;background:transparent;color:var(--navy);font-size:10px;font-weight:800;cursor:pointer}
+.message-edit-btn:hover{background:rgba(18,58,107,.08)}
+@media(max-width:520px){
+  .message-composer{gap:7px;padding:9px}
+  .message-attach-btn{width:42px;height:42px;flex-basis:42px}
+  .message-composer .btn{height:42px;padding:0 14px}
+  .message-attachment-image{max-width:220px;max-height:220px}
+  .message-attachment-file strong{max-width:150px}
+}
