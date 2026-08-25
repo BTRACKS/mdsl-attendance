@@ -2368,15 +2368,74 @@
     await loadMessagingData();
     renderMessagesKeepState();
   }
+  function messageConversationCacheKey() {
+    var u = session();
+    return "md_msg_conversations_v1_" + (u ? u.id : "");
+  }
+  function readMessageConversationCache() {
+    try {
+      var raw = sessionStorage.getItem(messageConversationCacheKey());
+      if (!raw) return null;
+      var cached = JSON.parse(raw);
+      return cached && Array.isArray(cached.conversations) ? cached.conversations : null;
+    } catch (e) { return null; }
+  }
+  function writeMessageConversationCache(conversations) {
+    try {
+      sessionStorage.setItem(messageConversationCacheKey(), JSON.stringify({ conversations: conversations, cachedAt: Date.now() }));
+    } catch (e) {}
+  }
+  function messageActiveConversationKey() {
+    var u = session();
+    return "md_msg_active_v1_" + (u ? u.id : "");
+  }
+  function readMessageActiveConversation() {
+    try { return sessionStorage.getItem(messageActiveConversationKey()) || null; } catch (e) { return null; }
+  }
+  function writeMessageActiveConversation(id) {
+    try {
+      if (id) sessionStorage.setItem(messageActiveConversationKey(), id);
+      else sessionStorage.removeItem(messageActiveConversationKey());
+    } catch (e) {}
+  }
   async function loadMessagingData() {
-    messageState.conversations = await fetchConversationList();
+    var fresh = await fetchConversationList();
+    messageState.conversations = fresh;
+    writeMessageConversationCache(fresh);
     await refreshMessageUnread();
+    return fresh;
   }
   function renderMessagesKeepState() { var v=el("view"); if(!v) return; v.innerHTML=messagesView(); var shell=v.querySelector(".messenger-shell"); if(shell && messageState.activeConversation) shell.classList.add("chat-open"); bindMessaging(); }
   async function showStaffPicker() {
-    var staff = db.users.filter(function(u){return u.id !== session().id;});
-    var body = '<div class="message-picker"><p class="eyebrow">New Message</p><h2>Choose a colleague</h2><input id="staffPickerSearch" type="search" placeholder="Search staff..." autocomplete="off" /><div id="staffPickerList">' + staff.map(function(u){return '<button type="button" class="staff-picker-item" data-staff="'+esc(u.id)+'">'+messageAvatar(u,"avatar-sm")+'<span><strong>'+esc(u.fullName)+'</strong><small>'+esc(u.department||"")+'</small></span></button>';}).join('') + '</div></div>';
+    var me = session();
+    if (!me) return;
+    var staff = (db.users || []).filter(function(u){return String(u.id) !== String(me.id);});
+
+    /* Open the picker immediately. Do not wait for any database request. */
+    var body = '<div class="message-picker"><p class="eyebrow">New Message</p><h2>Choose a colleague</h2>' +
+      '<input id="staffPickerSearch" type="search" placeholder="Search staff..." autocomplete="off" />' +
+      '<div id="staffPickerList">' +
+      (staff.length ? staff.map(function(u){return '<button type="button" class="staff-picker-item" data-staff="'+esc(u.id)+'">'+messageAvatar(u,"avatar-sm")+'<span><strong>'+esc(u.fullName)+'</strong><small>'+esc(u.department||"")+'</small></span></button>';}).join('') : '<p class="message-lock-note" id="staffPickerLoading">Loading staff…</p>') +
+      '</div></div>';
     showMessageModal(body);
+
+    /* If the profile list was not ready when the user clicked, load it after
+       the picker is already visible. This keeps New Message responsive. */
+    if (!staff.length) {
+      try {
+        var r = await supabaseClient.from("profiles").select("id,full_name,avatar_url,department,role").neq("id", me.id).order("full_name", { ascending: true });
+        if (!r.error && r.data) {
+          staff = r.data.map(function(u){ return { id:u.id, fullName:u.full_name || "Staff member", avatarUrl:u.avatar_url || "", department:u.department || "", role:u.role || "staff" }; });
+          var list = el("staffPickerList");
+          if (list) list.innerHTML = staff.length ? staff.map(function(u){return '<button type="button" class="staff-picker-item" data-staff="'+esc(u.id)+'">'+messageAvatar(u,"avatar-sm")+'<span><strong>'+esc(u.fullName)+'</strong><small>'+esc(u.department||"")+'</small></span></button>';}).join('') : '<p class="message-lock-note">No colleagues are available.</p>';
+        } else {
+          var fail = el("staffPickerLoading"); if (fail) fail.textContent = "Could not load staff. Please try again.";
+        }
+      } catch (e) {
+        var err = el("staffPickerLoading"); if (err) err.textContent = "Could not load staff. Please try again.";
+      }
+    }
+
     var q=el("staffPickerSearch"); if(q) q.addEventListener("input",function(){var term=q.value.toLowerCase();Array.prototype.forEach.call(document.querySelectorAll(".staff-picker-item"),function(b){b.hidden=(b.textContent||"").toLowerCase().indexOf(term)===-1;});});
     Array.prototype.forEach.call(document.querySelectorAll(".staff-picker-item"),function(b){b.addEventListener("click",async function(){closeMessageModal();try{await openDirectConversation(b.getAttribute("data-staff"));}catch(e){toast(e.message||"Could not open conversation.","error");}});});
   }
@@ -2416,7 +2475,7 @@
     el("sendBroadcastBtn").addEventListener("click",async function(){var text=(el("broadcastInput").value||"").trim();if(!text){toast("Write a message first.","error");return;}var b=setBtnLoading;setBtnLoading(this,true);try{var keyRes=await supabaseClient.from("user_public_keys").select("user_id").in("user_id",staff.map(function(u){return u.id;}));if(keyRes.error)throw keyRes.error;var ready={};(keyRes.data||[]).forEach(function(x){ready[x.user_id]=true;});var ids=staff.filter(function(u){return ready[u.id];}).map(function(u){return u.id;});if(!ids.length)throw new Error("No staff member has activated secure messaging yet.");var me=session();if(me&&ids.indexOf(me.id)===-1)ids.push(me.id);var pack=await encryptForRecipients(text,ids);var r=await supabaseClient.rpc("send_broadcast_message",{p_ciphertext:pack.ciphertext,p_iv:pack.iv,p_envelopes:pack.envelopes});if(r.error)throw r.error;closeMessageModal();toast("Broadcast sent securely to " + ids.length + " staff member" + (ids.length===1?".":"s."));await loadMessagingData();renderMessagesKeepState();}catch(e){toast(e.message||"Broadcast could not be sent.","error");}finally{setBtnLoading(this,false);}});
   }
   function bindConversationList() {
-    Array.prototype.forEach.call(document.querySelectorAll("[data-conversation]"),function(b){b.addEventListener("click",function(){messageState.activeConversation=b.getAttribute("data-conversation");renderMessagesKeepState();loadMessagesForConversation(messageState.activeConversation);});});
+    Array.prototype.forEach.call(document.querySelectorAll("[data-conversation]"),function(b){b.addEventListener("click",function(){messageState.activeConversation=b.getAttribute("data-conversation");writeMessageActiveConversation(messageState.activeConversation);renderMessagesKeepState();loadMessagesForConversation(messageState.activeConversation);});});
   }
   async function refreshConversationList() {
     await loadMessagingData();
@@ -2430,7 +2489,9 @@
       return;}
     var soundBtn=el("messageSoundBtn");if(soundBtn)soundBtn.addEventListener("click",function(){messageState.sound=!messageState.sound;localStorage.setItem("md_message_sound",messageState.sound?"on":"off");renderMessagesKeepState();});
     var pinBtn=el("changePinBtn");if(pinBtn)pinBtn.addEventListener("click",showChangePin);
-    var n=el("newMessageBtn")||el("emptyNewMessage");if(n)n.addEventListener("click",showStaffPicker);var bc=el("broadcastBtn");if(bc)bc.addEventListener("click",showBroadcast);
+    var newMessageButtons = [el("newMessageBtn"), el("emptyNewMessage")];
+    newMessageButtons.forEach(function(btn){ if(btn) btn.addEventListener("click",showStaffPicker); });
+    var bc=el("broadcastBtn");if(bc)bc.addEventListener("click",showBroadcast);
     bindConversationList();
     var search=el("messageSearch");if(search)search.addEventListener("input",function(){var t=search.value.toLowerCase();Array.prototype.forEach.call(document.querySelectorAll(".conversation-item"),function(b){b.hidden=(b.textContent||"").toLowerCase().indexOf(t)===-1;});});
     var composer=el("messageComposer");if(composer)composer.addEventListener("submit",function(e){
@@ -2449,7 +2510,7 @@
         toast(err.message||"Message could not be sent.","error");
       });
     });
-    var back=el("chatBack");if(back)back.addEventListener("click",function(){messageState.activeConversation=null;renderMessagesKeepState();});
+    var back=el("chatBack");if(back)back.addEventListener("click",function(){messageState.activeConversation=null;writeMessageActiveConversation(null);renderMessagesKeepState();});
     function closeChatMenu(){var menu=el("chatMenu"),btn=el("chatMenuBtn");if(menu)menu.hidden=true;if(btn)btn.setAttribute("aria-expanded","false");}
     var menuBtn=el("chatMenuBtn");
     if(menuBtn){
@@ -2498,6 +2559,10 @@
       messageState.hasKey=!!k.hasPrivate && !!k.publicKey;
       messageState.ownPublicKey=k.publicKey||null;
       if (messageState.hasKey) await restoreMessagingUnlock();
+      var cachedConversations = readMessageConversationCache();
+      if (cachedConversations) messageState.conversations = cachedConversations;
+      var cachedActive = readMessageActiveConversation();
+      if (cachedActive) messageState.activeConversation = cachedActive;
       startMessagingActivityTracking();
       await startMessagingRealtime();
       await refreshMessageUnread();
