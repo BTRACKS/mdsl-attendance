@@ -926,14 +926,14 @@ body.maintenance-page{background:var(--gradient-hero);min-height:100vh}
 [data-message-nav].has-unread{font-weight:800}
 /* Centered on the nav item's own box (not a fixed pixel offset) so it lands correctly
    whether the row is a short desktop pill or a tall mobile menu row. */
-[data-message-nav].has-unread::after{content:"";width:7px;height:7px;border-radius:50%;background:var(--danger);position:absolute;right:9px;top:50%;transform:translateY(-50%);border:2px solid var(--paper-2)}
+[data-message-nav].has-unread::after{content:"";width:7px;height:7px;border-radius:50%;background:var(--danger);position:absolute;right:5px;top:50%;transform:translateY(-50%);border:2px solid var(--paper-2)}
 
 /* Fills the space below the page header instead of guessing a fixed vh offset, so the
    composer/Send button always lands inside the visible area on any screen size. */
 .messaging-page{max-width:1240px;display:flex;flex-direction:column;min-height:0;height:calc(100vh - var(--header-h,64px));height:calc(100dvh - var(--header-h,64px))}
 .message-page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex:0 0 auto}
 .message-head-actions{display:flex;gap:10px;flex-wrap:wrap}
-.messenger-shell{display:grid;grid-template-columns:340px minmax(0,1fr);flex:1 1 auto;min-height:0;max-height:720px;background:var(--paper);border:1px solid var(--rule);border-radius:var(--radius-lg);box-shadow:var(--shadow);overflow:hidden}
+.messenger-shell{display:grid;grid-template-columns:340px minmax(0,1fr);flex:1 1 auto;min-height:460px;max-height:720px;background:var(--paper);border:1px solid var(--rule);border-radius:var(--radius-lg);box-shadow:var(--shadow);overflow:hidden}
 .conversation-pane{border-right:1px solid var(--rule);background:var(--paper)}
 .conversation-search{padding:16px;border-bottom:1px solid var(--rule);background:var(--paper-2)}
 .conversation-search input,.message-picker input,.message-picker textarea,.message-composer textarea{width:100%;border:1px solid var(--rule-strong);background:var(--paper);border-radius:12px;outline:0;transition:border-color var(--t),box-shadow var(--t);font-size:14px}
@@ -1013,7 +1013,7 @@ body.maintenance-page{background:var(--gradient-hero);min-height:100vh}
   .message-page-head{align-items:flex-start;flex-direction:column}
   .message-head-actions{width:100%}
   .message-head-actions .btn{flex:1}
-  .messenger-shell{flex:1 1 auto;min-height:0;max-height:none;display:block;position:relative}
+  .messenger-shell{flex:1 1 auto;min-height:420px;max-height:none;display:block;position:relative}
   .conversation-pane{height:100%;border-right:0}
   .chat-pane{display:none;height:100%}
   .messenger-shell.chat-open .conversation-pane{display:none}
