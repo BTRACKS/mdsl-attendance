@@ -2229,6 +2229,9 @@
     initAttendance();
     initSystem();
     initSettings();
+    // Start the ticket count immediately so the Support Tickets badge is populated
+    // during the initial portal load rather than waiting for a later refresh.
+    loadSupportTicketBadge();
     initSupportTickets();
     loadDashboard(false);
 
@@ -2278,7 +2281,19 @@
 
   async function loadSupportTicketBadge(){
     var badge=$("supportTicketNavBadge"); if(!badge)return;
-    try{var r=await sb.rpc("support_unread_notification_count");if(!r.error&&Number(r.data)>0){badge.hidden=false;badge.textContent=Number(r.data)>99?"99+":String(r.data);}else badge.hidden=true;}catch(e){badge.hidden=true;}
+    try{
+      var r=await sb.from("support_tickets").select("id",{count:"exact",head:true});
+      if(!r.error && Number(r.count||0)>0){
+        var count=Number(r.count||0);
+        badge.hidden=false;
+        badge.textContent=count>99?"99+":String(count);
+      }else{
+        badge.hidden=true;
+      }
+    }catch(e){
+      // Keep the badge stable if the count request temporarily fails; the ticket list
+      // will update it again after loading.
+    }
   }
 
   function supportTicketCreateHtml(){
@@ -2374,6 +2389,21 @@
 
   function initSupportTickets(){
     var root=$("tab-tickets");if(!root||root.getAttribute('data-ready')==='1')return;root.setAttribute('data-ready','1');
+    if(!document.getElementById("support-ticket-spacing-fix")){
+      var style=document.createElement("style");
+      style.id="support-ticket-spacing-fix";
+      style.textContent=""+
+        "#tab-tickets .section-head-actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}"+
+        "#tab-tickets .ticket-admin-meta{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:16px 0 20px;}"+
+        "#tab-tickets .ticket-admin-controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:end;margin-top:20px;}"+
+        "#tab-tickets .ticket-admin-controls .btn{margin-top:4px;}"+
+        "#tab-tickets .ticket-admin-reply{margin-top:20px;padding-top:18px;border-top:1px solid var(--rule);}"+
+        "#tab-tickets .ticket-admin-reply .field + .field{margin-top:14px;}"+
+        "#tab-tickets .ticket-admin-reply .check{display:flex;align-items:center;gap:10px;}"+
+        "#tab-tickets .ticket-admin-reply button[type=submit]{margin-top:10px;}"+
+        "@media(max-width:760px){#tab-tickets .section-head-actions{width:100%;gap:12px;}#tab-tickets .section-head-actions .btn{flex:1 1 140px;}#tab-tickets .ticket-admin-meta{gap:10px;margin:14px 0 18px;}#tab-tickets .ticket-admin-controls{grid-template-columns:1fr;gap:12px;}#tab-tickets .ticket-admin-reply{margin-top:16px;padding-top:16px;}}";
+      document.head.appendChild(style);
+    }
     var refresh=$("supportTicketsRefresh");if(refresh)refresh.addEventListener('click',function(){loadSupportTickets();});
     var newBtn=$("supportTicketNewBtn");if(newBtn)newBtn.addEventListener('click',function(){showSupportModal(supportTicketCreateHtml());var f=$("supportAdminCreateForm");f.addEventListener('submit',async function(e){e.preventDefault();var type=$("supportAdminType").value,subject=$("supportAdminSubject").value.trim(),description=$("supportAdminDescription").value.trim(),priority=$("supportAdminPriority").value;if(!type||!subject||!description){toast('Complete the required fields.','bad');return;}var b=f.querySelector('button[type=submit]');setBtnLoading(b,true);try{var r=await sb.from('support_tickets').insert({user_id:ME.user.id,issue_type:type,subject:subject,description:description,priority:priority});if(r.error)throw r.error;closeSupportModal();await loadSupportTickets();toast('Support ticket created.','good');}catch(e){toast(e.message||'Could not create ticket.','bad');}finally{setBtnLoading(b,false);}});});
     loadSupportTickets();
