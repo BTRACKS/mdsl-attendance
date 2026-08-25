@@ -1800,6 +1800,20 @@
     if (pubRes.error || !pubRes.data) throw new Error("Your public encryption key is missing.");
     messageState.ownPublicKey = pubRes.data.public_key;
   }
+  async function changeMessagingSecret(oldSecret, newSecret) {
+    var u = session();
+    var privRes = await supabaseClient.from("user_private_keys").select("encrypted_private_key,iv,salt").eq("user_id", u.id).maybeSingle();
+    if (privRes.error) throw privRes.error;
+    if (!privRes.data) throw new Error("No encryption key has been created for this account yet.");
+    var oldWrap = await deriveWrapKey(oldSecret, unb64(privRes.data.salt));
+    var raw = await crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64(privRes.data.iv) }, oldWrap, unb64(privRes.data.encrypted_private_key));
+    var newSalt = crypto.getRandomValues(new Uint8Array(16)), newIv = crypto.getRandomValues(new Uint8Array(12));
+    var newWrap = await deriveWrapKey(newSecret, newSalt);
+    var reEncrypted = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv: newIv }, newWrap, raw));
+    var upd = await supabaseClient.from("user_private_keys").update({ encrypted_private_key: b64(reEncrypted), iv: b64(newIv), salt: b64(newSalt) }).eq("user_id", u.id);
+    if (upd.error) throw upd.error;
+    messageState.unlockedPrivateKey = await crypto.subtle.importKey("pkcs8", raw, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["decrypt"]);
+  }
   async function getOwnKeyState() {
     var u = session();
     var pub = await supabaseClient.from("user_public_keys").select("public_key").eq("user_id", u.id).maybeSingle();
@@ -1916,21 +1930,22 @@
 
   function messagingSetupView(mode) {
     var create = mode === "create";
+    var pinAttrs = create ? ' inputmode="numeric" pattern="[0-9]*" minlength="6" maxlength="6" data-pin-input="1"' : '';
     return '<div class="message-lock"><div class="message-lock-card">' +
       '<div class="message-lock-icon">' + ICON.lock + '</div>' +
       '<p class="eyebrow">Secure Messaging</p><h2>' + (create ? "Set up secure messaging" : "Unlock your messages") + '</h2>' +
-      '<p>' + (create ? "Create a private 6-digit PIN. It protects your messaging private key and is never sent to the database." : "Enter the PIN you created for secure messaging on this account.") + '</p>' +
+      '<p>' + (create ? "Create a private 6-digit PIN. It protects your messaging private key and is never sent to the database." : "Enter your PIN (or your old recovery passphrase, if you set one before PINs were added) to unlock secure messaging.") + '</p>' +
       '<form id="messageKeyForm" class="message-key-form">' +
-      '<div class="field password-field"><label for="messageRecovery">Recovery PIN</label>' +
-      '<div class="pw-wrap"><input id="messageRecovery" name="recovery" type="password" inputmode="numeric" pattern="[0-9]*" minlength="6" maxlength="6" autocomplete="new-password" placeholder="6-digit PIN" />' +
+      '<div class="field password-field"><label for="messageRecovery">' + (create ? "Recovery PIN" : "PIN or passphrase") + '</label>' +
+      '<div class="pw-wrap"><input id="messageRecovery" name="recovery" type="password" autocomplete="' + (create ? "new-password" : "current-password") + '" placeholder="' + (create ? "6-digit PIN" : "Enter your PIN or passphrase") + '"' + pinAttrs + ' />' +
       '<button type="button" class="pw-toggle" aria-label="Show PIN" aria-pressed="false">' + ICON.eye + "</button></div>" +
       '<span class="error"></span></div>' +
       (create ? '<div class="field password-field"><label for="messageRecoveryConfirm">Confirm PIN</label>' +
-        '<div class="pw-wrap"><input id="messageRecoveryConfirm" name="confirm" type="password" inputmode="numeric" pattern="[0-9]*" minlength="6" maxlength="6" autocomplete="new-password" placeholder="Repeat your PIN" />' +
+        '<div class="pw-wrap"><input id="messageRecoveryConfirm" name="confirm" type="password" autocomplete="new-password" placeholder="Repeat your PIN"' + pinAttrs + ' />' +
         '<button type="button" class="pw-toggle" aria-label="Show PIN" aria-pressed="false">' + ICON.eye + "</button></div>" +
         '<span class="error"></span></div>' : "") +
       '<button class="btn btn-primary btn-block" type="submit">' + (create ? "Create encryption keys" : "Unlock messages") + '</button></form>' +
-      '<p class="message-lock-note">Your PIN cannot be recovered by the administrator. Keep it somewhere safe.</p></div></div>';
+      (!create ? '<p class="message-lock-note">If you originally set a passphrase, it still works here — unlocking with it, then using <b>Change PIN</b> in Messages, switches you over to a PIN.</p>' : '<p class="message-lock-note">Your PIN cannot be recovered by the administrator. Keep it somewhere safe.</p>') + '</div></div>';
   }
 
   function messagesView() {
@@ -1939,7 +1954,7 @@
     var convs = messageState.conversations || [];
     var active = convs.find(function (c) { return c.id === messageState.activeConversation; });
     return '<div class="page messaging-page"><div class="page-head message-page-head"><div><p class="eyebrow">Internal Communication</p><h1>Messages</h1><p class="dateline">Private, encrypted communication inside the staff portal.</p></div>' +
-      '<div class="message-head-actions"><button class="btn btn-ghost" id="messageSoundBtn">' + (messageState.sound ? 'Sound on' : 'Sound off') + '</button><button class="btn btn-primary" id="newMessageBtn">+ New Message</button>' + (session().role === "admin" ? '<button class="btn btn-ghost" id="broadcastBtn">Broadcast</button>' : '') + '</div></div>' +
+      '<div class="message-head-actions"><button class="btn btn-ghost" id="messageSoundBtn">' + (messageState.sound ? 'Sound on' : 'Sound off') + '</button><button class="btn btn-ghost" id="changePinBtn">Change PIN</button><button class="btn btn-primary" id="newMessageBtn">+ New Message</button>' + (session().role === "admin" ? '<button class="btn btn-ghost" id="broadcastBtn">Broadcast</button>' : '') + '</div></div>' +
       '<section class="messenger-shell"><aside class="conversation-pane"><div class="conversation-search"><input id="messageSearch" type="search" placeholder="Search conversations or staff..." autocomplete="off" /></div><div id="conversationList">' + conversationListHtml(convs) + '</div></aside>' +
       '<section class="chat-pane">' + (active ? chatHtml(active) : '<div class="chat-empty"><div class="chat-empty-icon">' + ICON.users + '</div><h2>Select a conversation</h2><p>Choose a staff member or start a new message.</p><button class="btn btn-primary" id="emptyNewMessage">New Message</button></div>') + '</section></section></div>';
   }
@@ -2002,6 +2017,33 @@
   }
   function showMessageModal(html) { var m=el("modal"); m.classList.add("message-modal"); el("modalTitle").textContent=""; el("modalBody").innerHTML=html; el("modalKicker").hidden=true; m.hidden=false; el("modalConfirm").hidden=true; el("modalCancel").textContent="Close"; }
   function closeMessageModal() { var m=el("modal"); m.hidden=true; el("modalKicker").hidden=false; el("modalConfirm").hidden=false; el("modalCancel").textContent="Cancel"; }
+  function showChangePin() {
+    var body = '<div class="message-picker"><p class="eyebrow">Secure Messaging</p><h2>Change your PIN</h2>' +
+      '<p class="dateline">Enter your current PIN (or your old recovery passphrase, if you set one before PINs were added), then choose a new 6-digit PIN.</p>' +
+      '<form id="changePinForm" class="message-key-form">' +
+      '<div class="field password-field"><label for="oldSecret">Current PIN or passphrase</label><div class="pw-wrap"><input id="oldSecret" type="password" autocomplete="current-password" placeholder="Current PIN or passphrase" /><button type="button" class="pw-toggle" aria-label="Show" aria-pressed="false">' + ICON.eye + '</button></div><span class="error"></span></div>' +
+      '<div class="field password-field"><label for="newPin">New 6-digit PIN</label><div class="pw-wrap"><input id="newPin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" data-pin-input="1" placeholder="New 6-digit PIN" /><button type="button" class="pw-toggle" aria-label="Show" aria-pressed="false">' + ICON.eye + '</button></div><span class="error"></span></div>' +
+      '<div class="field password-field"><label for="newPinConfirm">Confirm new PIN</label><div class="pw-wrap"><input id="newPinConfirm" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" data-pin-input="1" placeholder="Repeat new PIN" /><button type="button" class="pw-toggle" aria-label="Show" aria-pressed="false">' + ICON.eye + '</button></div><span class="error"></span></div>' +
+      '<button class="btn btn-primary btn-block" type="submit">Save new PIN</button></form></div>';
+    showMessageModal(body);
+    Array.prototype.forEach.call(document.querySelectorAll("#changePinForm .pw-toggle"),function(btn){btn.addEventListener("click",function(){var input=btn.previousElementSibling;var showing=input.type==="text";input.type=showing?"password":"text";btn.innerHTML=showing?ICON.eye:ICON.eyeOff;});});
+    Array.prototype.forEach.call(document.querySelectorAll("#changePinForm [data-pin-input]"),function(inp){inp.addEventListener("input",function(){inp.value=inp.value.replace(/\D/g,"").slice(0,6);});});
+    el("changePinForm").addEventListener("submit", async function(e){
+      e.preventDefault();
+      var oldSecret=(el("oldSecret").value||""), newPin=(el("newPin").value||""), confirmPin=(el("newPinConfirm").value||"");
+      if (!oldSecret) { toast("Enter your current PIN or passphrase.","error"); return; }
+      if (!/^\d{6}$/.test(newPin)) { toast("New PIN must be 6 digits.","error"); return; }
+      if (newPin !== confirmPin) { toast("New PINs do not match.","error"); return; }
+      var btn=this.querySelector("button[type=submit]"); setBtnLoading(btn,true);
+      try {
+        await changeMessagingSecret(oldSecret, newPin);
+        closeMessageModal();
+        toast("Your PIN has been updated.");
+      } catch (err) {
+        toast("Incorrect current PIN/passphrase, or the update failed.","error");
+      } finally { setBtnLoading(btn,false); }
+    });
+  }
   async function showBroadcast() {
     var staff = db.users.filter(function(u){return u.role !== "admin";});
     var body='<div class="message-picker"><p class="eyebrow">Administrator</p><h2>Broadcast to staff</h2><p class="dateline">One encrypted message will be delivered to all active staff accounts.</p><textarea id="broadcastInput" rows="6" maxlength="4000" placeholder="Write your company-wide message..."></textarea><button type="button" class="btn btn-primary btn-block" id="sendBroadcastBtn">Send to Everyone</button><small class="message-lock-note">Recipients without secure messaging keys will be skipped until they activate secure messaging.</small></div>';
@@ -2018,10 +2060,11 @@
   }
   function bindMessaging() {
     var form=el("messageKeyForm");
-    if(form){form.addEventListener("submit",async function(e){e.preventDefault();var r=el("messageRecovery"),c=el("messageRecoveryConfirm"),v=(r.value||"");if(!/^\d{6}$/.test(v)){toast("Use a 6-digit PIN.","error");return;}if(c&&v!==c.value){toast("PINs do not match.","error");return;}var btn=form.querySelector("button[type=submit]");setBtnLoading(btn,true);try{if(!messageState.hasKey){await generateMessagingKeys(v);}else{await unlockMessagingKeys(v);}await loadMessagingData();renderMessagesKeepState();toast("Secure messaging is ready.");}catch(err){toast(messageState.hasKey?"Incorrect PIN or damaged key.":(err.message||"Could not create secure keys."),"error");}finally{setBtnLoading(btn,false);}});
-      Array.prototype.forEach.call(form.querySelectorAll('input[minlength="6"]'),function(inp){inp.addEventListener("input",function(){inp.value=inp.value.replace(/\D/g,"").slice(0,6);});});
+    if(form){form.addEventListener("submit",async function(e){e.preventDefault();var r=el("messageRecovery"),c=el("messageRecoveryConfirm"),v=(r.value||"");var creating=!messageState.hasKey;if(creating){if(!/^\d{6}$/.test(v)){toast("Use a 6-digit PIN.","error");return;}if(c&&v!==c.value){toast("PINs do not match.","error");return;}}else{if(!v){toast("Enter your PIN or passphrase.","error");return;}}var btn=form.querySelector("button[type=submit]");setBtnLoading(btn,true);try{if(creating){await generateMessagingKeys(v);}else{await unlockMessagingKeys(v);}await loadMessagingData();renderMessagesKeepState();toast("Secure messaging is ready.");}catch(err){toast(creating?(err.message||"Could not create secure keys."):"Incorrect PIN/passphrase or damaged key.","error");}finally{setBtnLoading(btn,false);}});
+      Array.prototype.forEach.call(form.querySelectorAll('[data-pin-input]'),function(inp){inp.addEventListener("input",function(){inp.value=inp.value.replace(/\D/g,"").slice(0,6);});});
       return;}
     var soundBtn=el("messageSoundBtn");if(soundBtn)soundBtn.addEventListener("click",function(){messageState.sound=!messageState.sound;localStorage.setItem("md_message_sound",messageState.sound?"on":"off");renderMessagesKeepState();});
+    var pinBtn=el("changePinBtn");if(pinBtn)pinBtn.addEventListener("click",showChangePin);
     var n=el("newMessageBtn")||el("emptyNewMessage");if(n)n.addEventListener("click",showStaffPicker);var bc=el("broadcastBtn");if(bc)bc.addEventListener("click",showBroadcast);
     bindConversationList();
     var search=el("messageSearch");if(search)search.addEventListener("input",function(){var t=search.value.toLowerCase();Array.prototype.forEach.call(document.querySelectorAll(".conversation-item"),function(b){b.hidden=(b.textContent||"").toLowerCase().indexOf(t)===-1;});});
