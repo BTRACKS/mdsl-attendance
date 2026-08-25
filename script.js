@@ -1954,12 +1954,11 @@
   var messageState = {
     conversations: [], activeConversation: null, unlockedPrivateKey: null,
     ownPublicKey: null, pinSessionExpiresAt: 0, unread: 0, sound: localStorage.getItem("md_message_sound") !== "off",
-    realtime: null, initialized: false, loading: false, editedIds: {}
+    realtime: null, initialized: false, loading: false
   };
   var MESSAGE_ATTACHMENT_PREFIX = "MDMSG1:";
   var MESSAGE_ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024;
   var MESSAGE_ATTACHMENT_TOTAL_MAX_BYTES = 10 * 1024 * 1024;
-  var MESSAGE_EDIT_WINDOW_MS = 20 * 60 * 1000;
   function messageCacheKey(kind, id) {
     var u = session();
     return "md_msg_cache_" + kind + "_" + (u ? u.id : "") + (id ? "_" + id : "");
@@ -2230,10 +2229,6 @@
       : parsed.attachments.length + " attachments";
     return "Encrypted message";
   }
-  function messageCanEdit(row, userId) {
-    if (!row || row.sender_id !== userId || !row.created_at) return false;
-    return Date.now() - new Date(row.created_at).getTime() <= MESSAGE_EDIT_WINDOW_MS;
-  }
   function messageAvatar(u, cls) { return avatarHtml(u, cls || "avatar-sm"); }
   function messagePerson(id) { return db.users.find(function (u) { return String(u.id) === String(id); }) || { id: id, fullName: "Staff member", avatarUrl: "" }; }
   function messageTime(ts) { if (!ts) return ""; var d = new Date(ts); return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }); }
@@ -2414,34 +2409,12 @@
       var html = '';
       for (var i = 0; i < rows.length; i++) {
         var row = rows[i], text = await decryptMessage(row, em[row.id]), mine = row.sender_id === u.id;
-        var edit = messageCanEdit(row, u.id) ? '<button type="button" class="message-edit-btn" data-edit-message="' + esc(row.id) + '" aria-label="Edit message">Edit</button>' : '';
-        html += '<div class="message-row ' + (mine ? 'mine' : 'theirs') + '" data-message-id="' + esc(row.id) + '" data-created-at="' + esc(row.created_at) + '"><div class="message-bubble">' + messageContentHtml(text) + edit + '<span class="message-meta">' + esc(messageTime(row.created_at)) + '</span></div></div>';
+        html += '<div class="message-row ' + (mine ? 'mine' : 'theirs') + '" data-message-id="' + esc(row.id) + '" data-created-at="' + esc(row.created_at) + '"><div class="message-bubble">' + messageContentHtml(text) + '<span class="message-meta">' + esc(messageTime(row.created_at)) + '</span></div></div>';
         if (markRead && !mine) await supabaseClient.rpc("mark_message_read", { p_message_id: row.id });
       }
       var stream = el("messageStream"); if (stream) {
         stream.innerHTML = html || '<div class="chat-empty chat-empty-small"><p>No messages yet. Say hello.</p></div>';
         stream.scrollTop = stream.scrollHeight;
-        /* Bind Edit after each message render because the message bubbles are
-           rebuilt dynamically. This keeps the existing 20-minute/security
-           checks intact while ensuring the button is actually clickable. */
-        Array.prototype.forEach.call(stream.querySelectorAll("[data-edit-message]"), function(btn){
-          if (btn.getAttribute("data-edit-bound") === "1") return;
-          btn.setAttribute("data-edit-bound", "1");
-          btn.addEventListener("click", async function(e){
-            e.preventDefault();
-            e.stopPropagation();
-            var currentUser = session(), id = btn.getAttribute("data-edit-message");
-            if (!currentUser || !id) return;
-            var r = await supabaseClient.from("messages").select("id,conversation_id,sender_id,ciphertext,iv,created_at").eq("id",id).eq("sender_id",currentUser.id).maybeSingle();
-            if (r.error) { toast(r.error.message || "Message could not be opened for editing.", "error"); return; }
-            if (!r.data) { toast("Message not found or you are not allowed to edit it.", "error"); return; }
-            openEditMessage(r.data);
-          });
-          var row = btn.closest("[data-message-id]"), created = row && new Date(row.getAttribute("data-created-at")).getTime();
-          var remaining = created ? (created + MESSAGE_EDIT_WINDOW_MS - Date.now()) : 0;
-          if (remaining > 0) setTimeout(function(){ if (btn.isConnected) btn.remove(); }, remaining);
-          else btn.remove();
-        });
       }
     };
 
@@ -2473,26 +2446,6 @@
     var r = await supabaseClient.rpc("send_encrypted_message", { p_conversation_id: conversationId, p_ciphertext: pack.ciphertext, p_iv: pack.iv, p_envelopes: pack.envelopes });
     if (r.error) throw r.error;
   }
-  async function updateEncryptedMessage(messageId, content) {
-    var u = session();
-    if (!u) throw new Error("You must be signed in.");
-    var existing = await supabaseClient.from("messages").select("id,conversation_id,sender_id,created_at").eq("id", messageId).eq("sender_id", u.id).maybeSingle();
-    if (existing.error) throw existing.error;
-    if (!existing.data) throw new Error("Message not found or you are not allowed to edit it.");
-    if (!messageCanEdit(existing.data, u.id)) throw new Error("Messages can only be edited within 20 minutes of sending.");
-    var p = await supabaseClient.from("message_participants").select("user_id").eq("conversation_id", existing.data.conversation_id);
-    if (p.error) throw p.error;
-    var ids = (p.data || []).map(function(x){return x.user_id;});
-    if (ids.indexOf(u.id) === -1) ids.push(u.id);
-    var pack = await encryptForRecipients(content, ids);
-    var envUp = await supabaseClient.rpc("update_encrypted_message", {
-      p_message_id: messageId,
-      p_ciphertext: pack.ciphertext,
-      p_iv: pack.iv,
-      p_envelopes: pack.envelopes
-    });
-    if (envUp.error) throw envUp.error;
-  }
   function readAttachment(file) {
     return new Promise(function(resolve, reject) {
       var reader = new FileReader();
@@ -2515,35 +2468,6 @@
       attachments.push({ name: file.name, type: file.type || "application/octet-stream", size: file.size, dataUrl: await readAttachment(file) });
     }
     return buildMessageContent(text, attachments);
-  }
-  function openEditMessage(row) {
-    var u = session();
-    if (!messageCanEdit(row, u && u.id)) { toast("Messages can only be edited within 20 minutes of sending.", "error"); return; }
-    var em = {};
-    var cached = readMessageCache("conversation", row.conversation_id);
-    if (cached && Array.isArray(cached.envelopes)) cached.envelopes.forEach(function(x){em[x.message_id]=x;});
-    decryptMessage(row, em[row.id]).then(function(content){
-      var parsed = parseMessageContent(content);
-      var body = '<div class="message-picker"><p class="eyebrow">Edit message</p><h2>Edit your message</h2>' +
-        '<textarea id="editMessageInput" rows="5" maxlength="4000" placeholder="Edit your message...">' + esc(parsed.text) + '</textarea>' +
-        '<p class="message-lock-note">You can edit this message until 20 minutes after it was sent.</p>' +
-        '<button type="button" class="btn btn-primary btn-block" id="saveEditMessage">Save changes</button></div>';
-      showMessageModal(body);
-      el("saveEditMessage").addEventListener("click", async function(){
-        var btn=this, text=(el("editMessageInput").value||"");
-        if (!text.trim() && !parsed.attachment) { toast("Write a message first.","error"); return; }
-        setBtnLoading(btn,true);
-        try {
-          await updateEncryptedMessage(row.id, buildMessageContent(text, parsed.attachments));
-          closeMessageModal();
-          messageState.editedIds[row.id]=true;
-          await loadMessagesForConversation(row.conversation_id);
-          await refreshConversationList();
-          toast("Message updated.");
-        } catch(e) { toast(e.message || "Message could not be edited.","error"); }
-        finally { setBtnLoading(btn,false); }
-      });
-    }).catch(function(){ toast("Message could not be opened for editing.","error"); });
   }
   /* --- Optimistic send: render the bubble immediately (we already hold the plaintext
      before it's ever encrypted), then encrypt + save in the background. Each bubble
@@ -2728,16 +2652,6 @@
     });
     var input=el("messageInput");
     if(input) input.addEventListener("keydown",function(e){ if(e.key === "Enter" && !e.shiftKey){ e.preventDefault(); if(composer) composer.requestSubmit ? composer.requestSubmit() : composer.dispatchEvent(new Event("submit",{cancelable:true,bubbles:true})); } });
-    Array.prototype.forEach.call(document.querySelectorAll("[data-edit-message]"),function(btn){
-      btn.addEventListener("click",async function(e){
-        e.stopPropagation();
-        var row=btn.closest("[data-message-id]"), id=btn.getAttribute("data-edit-message");
-        if(!row)return;
-        var cached=readMessageCache("conversation",messageState.activeConversation), message=(cached&&cached.rows||[]).find(function(x){return String(x.id)===String(id);});
-        if(!message){ try { var r=await supabaseClient.from("messages").select("id,conversation_id,sender_id,ciphertext,iv,created_at").eq("id",id).maybeSingle(); message=r.data; } catch(e){} }
-        if(message) openEditMessage(message);
-      });
-    });
     var back=el("chatBack");if(back)back.addEventListener("click",function(){messageState.activeConversation=null;renderMessagesKeepState();});
     function closeChatMenu(){var menu=el("chatMenu"),btn=el("chatMenuBtn");if(menu)menu.hidden=true;if(btn)btn.setAttribute("aria-expanded","false");}
     var menuBtn=el("chatMenuBtn");

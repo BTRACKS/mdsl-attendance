@@ -1087,8 +1087,6 @@ body.maintenance-page{background:var(--gradient-hero);min-height:100vh}
 .message-attachment-file strong{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px}
 .message-attachment-link{font-size:11px;color:var(--navy);font-weight:700;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .message-attachment-link:hover{text-decoration:underline}
-.message-edit-btn{display:block;margin:7px 0 0 auto;padding:3px 7px;border:0;border-radius:7px;background:transparent;color:var(--navy);font-size:10px;font-weight:800;cursor:pointer}
-.message-edit-btn:hover{background:rgba(18,58,107,.08)}
 @media(max-width:520px){
   .message-composer{gap:7px;padding:9px}
   .message-attach-btn{width:42px;height:42px;flex-basis:42px}
