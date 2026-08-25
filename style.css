@@ -876,3 +876,26 @@ body.maintenance-page{background:var(--gradient-hero);min-height:100vh}
 .week-day.is-today{border-color:var(--navy);box-shadow:0 0 0 2px rgba(18,58,107,.12)}
 .week-day-name{font-weight:700;font-size:14px;color:var(--ink)}
 .week-day-date{font-size:12.5px;color:var(--ink-4)}
+
+/* ---------- Collapsible information cards (site-wide) ---------- */
+.collapsible-content{overflow:hidden;transition:max-height .35s cubic-bezier(.2,.7,.3,1),opacity .25s ease}
+.collapsible-content.collapsed{opacity:0;pointer-events:none;max-height:0}
+.section-head.collapsible-head{cursor:pointer;user-select:none;margin-bottom:18px;transition:margin var(--t)}
+.section-head.collapsible-head.is-collapsed{margin-bottom:0}
+.section-head.collapsible-head:hover h2{color:var(--navy)}
+.section-head.collapsible-head:focus-visible{outline:2px solid var(--navy);outline-offset:6px;border-radius:10px}
+.collapse-toggle-labelled{
+  display:inline-flex;align-items:center;gap:8px;width:auto;height:auto;
+  padding:8px 14px;border-radius:var(--radius-pill);
+  font-size:12.5px;font-weight:700;letter-spacing:.01em;white-space:nowrap
+}
+.collapse-toggle-labelled .collapse-label{line-height:1}
+.collapse-toggle-labelled svg{transition:transform .28s cubic-bezier(.2,.7,.3,1)}
+@media (max-width:560px){
+  .collapse-toggle-labelled{padding:7px 11px;font-size:12px}
+  .section-head.collapsible-head .section-head-actions{width:100%;justify-content:space-between}
+}
+@media (prefers-reduced-motion:reduce){
+  .collapsible-content{transition:none}
+  .collapse-toggle-labelled svg{transition:none}
+}

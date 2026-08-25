@@ -1984,3 +1984,178 @@
   setInterval(function () { if (session()) renderChrome(); }, 30000);
   init();
 })();
+
+/* =========================================================================
+   COLLAPSIBLE INFORMATION CARDS
+   Site-wide rule: any card/section that holds a lot of information, records,
+   rows or history stays visible but keeps its detail collapsed until the user
+   expands it. Applied automatically to every render, so future sections that
+   match the pattern inherit the behaviour with no extra work.
+   ========================================================================= */
+(function () {
+  "use strict";
+
+  var CHEVRON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
+
+  /* Headings that indicate an information-heavy section. */
+  var HEAVY = /(histor|record|register|notification|activit|report|log|staff list|all staff|list|archive|audit|entries|submissions)/i;
+
+  /* Sections that must never collapse (short, action-first cards). */
+  var SKIP = /(today's attendance|activate leave|password|profile|attendance status|purpose|problem it solves|what it does|currently on leave)/i;
+
+  /* Remembered open/closed state, keyed by heading text, so re-renders keep
+     whatever the user chose. Default for every heavy section is collapsed. */
+  var state = {};
+
+  function headingOf(section) {
+    var h = section.querySelector(".section-head h2, .section-head h3, .panel-head > span, .panel-head");
+    return h ? (h.textContent || "").trim() : "";
+  }
+
+  function isHeavy(section, title) {
+    if (!title) return false;
+    if (SKIP.test(title)) return false;
+    if (HEAVY.test(title)) return true;
+    /* Fallback: a lot of rows/cards, even if the title is not obviously "history". */
+    var rows = section.querySelectorAll("tbody tr, .history-row, .panel, .leave-history-mini > div").length;
+    return rows >= 6;
+  }
+
+  function measure(content) {
+    return content.scrollHeight;
+  }
+
+  function open(content, btn) {
+    content.classList.remove("collapsed");
+    content.style.opacity = "1";
+    content.style.maxHeight = measure(content) + "px";
+    content.addEventListener("transitionend", function h(e) {
+      if (e.propertyName === "max-height") {
+        content.style.maxHeight = "";
+        content.removeEventListener("transitionend", h);
+      }
+    });
+    sync(btn, false);
+  }
+
+  function close(content, btn, instant) {
+    if (instant) {
+      content.classList.add("collapsed");
+      content.style.maxHeight = "0px";
+      content.style.opacity = "0";
+    } else {
+      content.style.maxHeight = measure(content) + "px";
+      void content.offsetHeight; /* reflow so the animation has a start value */
+      content.classList.add("collapsed");
+      content.style.maxHeight = "0px";
+      content.style.opacity = "0";
+    }
+    sync(btn, true);
+  }
+
+  function sync(btn, collapsed) {
+    if (!btn) return;
+    btn.classList.toggle("collapsed", collapsed);
+    btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    var label = btn.querySelector(".collapse-label");
+    var name = btn.getAttribute("data-title") || "details";
+    if (label) label.textContent = (collapsed ? "View " : "Hide ") + name;
+    btn.setAttribute("aria-label", (collapsed ? "Expand " : "Collapse ") + name);
+    var head = btn.closest(".section-head, .panel-head");
+    if (head) head.classList.toggle("is-collapsed", collapsed);
+  }
+
+  var uid = 0;
+
+  function enhance(section) {
+    if (section.hasAttribute("data-collapsible")) return;
+    /* Leave hand-built collapsibles alone. */
+    if (section.querySelector(".collapse-toggle")) { section.setAttribute("data-collapsible", "native"); return; }
+
+    var head = section.querySelector(".section-head");
+    if (!head) return;
+    var title = headingOf(section);
+    if (!isHeavy(section, title)) return;
+
+    section.setAttribute("data-collapsible", "auto");
+
+    /* Wrap everything after the header into the collapsible body. */
+    var content = document.createElement("div");
+    content.className = "collapsible-content";
+    content.id = "collapsible-" + (++uid);
+    var node = head.nextSibling;
+    while (node) {
+      var next = node.nextSibling;
+      content.appendChild(node);
+      node = next;
+    }
+    section.appendChild(content);
+
+    var actions = head.querySelector(".section-head-actions");
+    if (!actions) {
+      actions = document.createElement("div");
+      actions.className = "section-head-actions";
+      /* Move any existing meta text (e.g. "Last 10 records") into the actions row. */
+      Array.prototype.forEach.call(head.querySelectorAll(":scope > span"), function (s) { actions.appendChild(s); });
+      head.appendChild(actions);
+    }
+
+    var short = title.replace(/\s*—.*$/, "").trim() || "details";
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "collapse-toggle collapse-toggle-labelled";
+    btn.setAttribute("aria-controls", content.id);
+    btn.setAttribute("data-title", short);
+    btn.innerHTML = '<span class="collapse-label"></span>' + CHEVRON;
+    actions.appendChild(btn);
+
+    var key = short.toLowerCase();
+    var collapsed = state[key] === undefined ? true : state[key];
+
+    head.classList.add("collapsible-head");
+    head.setAttribute("role", "button");
+    head.setAttribute("tabindex", "0");
+
+    function toggle() {
+      collapsed = !collapsed;
+      state[key] = collapsed;
+      if (collapsed) close(content, btn); else open(content, btn);
+    }
+
+    head.addEventListener("click", function (e) {
+      /* Don't hijack clicks on real controls inside the header. */
+      if (e.target.closest("a, input, select, textarea")) return;
+      if (e.target.closest("button") && !e.target.closest(".collapse-toggle")) return;
+      toggle();
+    });
+    head.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); }
+    });
+
+    if (collapsed) close(content, btn, true); else sync(btn, false);
+  }
+
+  function enhanceAll() {
+    Array.prototype.forEach.call(
+      document.querySelectorAll("#view .section, #view .card-collapsible"),
+      enhance
+    );
+  }
+
+  var pending = null;
+  function schedule() {
+    if (pending) return;
+    pending = window.requestAnimationFrame(function () { pending = null; enhanceAll(); });
+  }
+
+  function start() {
+    enhanceAll();
+    var view = document.getElementById("view");
+    if (view && window.MutationObserver) {
+      new MutationObserver(schedule).observe(view, { childList: true, subtree: true });
+    }
+  }
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
+  else start();
+})();
