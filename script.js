@@ -387,7 +387,7 @@
       links = [["#/login", "Sign in"], ["#/signup", "Register"]];
     } else {
       links = u.role === "admin"
-        ? [["#/admin", "Overview"], ["#/admin/attendance", "Attendance Management"], ["#/admin/hse", "HSE Attendance"], ["#/admin/sql", "SQL Editor"], ["#/dashboard", "My Dashboard"], ["#/messages", "Messages"], ["#/settings", "Settings"]]
+        ? [["#/admin", "Overview"], ["#/admin/attendance", "Attendance Management"], ["#/admin/hse", "HSE Attendance"], ["#/dashboard", "My Dashboard"], ["#/messages", "Messages"], ["#/settings", "Settings"]]
         : [["#/dashboard", "Dashboard"], ["#/history", "Attendance History"], ["#/leave", "Leave"], ["#/messages", "Messages"], ["#/settings", "Settings"]];
 
     }
@@ -2208,7 +2208,7 @@
         if (type.indexOf("image/") === 0) {
           return '<div class="message-attachment"><img class="message-attachment-image" src="' + esc(a.dataUrl) + '" alt="' + name + '" loading="lazy" /><div class="message-attachment-info"><a class="message-attachment-link" href="' + esc(a.dataUrl) + '" download="' + name + '">' + name + '</a><small>' + esc(size) + '</small></div></div>';
         }
-        return '<div class="message-attachment message-attachment-file"><span class="message-attachment-icon">PDF</span><div><strong>' + name + '</strong><small>' + esc(size) + '</small><a class="message-attachment-link" href="' + esc(a.dataUrl) + '" target="_blank" rel="noopener">Open PDF</a></div></div>';
+        return '<div class="message-attachment message-attachment-file"><span class="message-attachment-icon">PDF</span><div><strong>' + name + '</strong><small>' + esc(size) + '</small><a class="message-attachment-link" href="' + esc(a.dataUrl) + '" download="' + name + '">Download PDF</a></div></div>';
       }).join('') + '</div>';
     }
     return html || '<span class="message-text">&nbsp;</span>';
@@ -2783,11 +2783,10 @@
       renderChrome(); bindAuth(); __restoreScroll(); return;
     }
 
-    if (hash === "#/admin" || hash === "#/admin/attendance" || hash === "#/admin/hse" || hash === "#/admin/sql") {
+    if (hash === "#/admin" || hash === "#/admin/attendance" || hash === "#/admin/hse") {
       if (u.role !== "admin") { location.hash = "#/dashboard"; return; }
       view.innerHTML = hash === "#/admin" ? adminOverview()
         : hash === "#/admin/hse" ? hseAdminView()
-        : hash === "#/admin/sql" ? adminSqlEditorView()
         : adminManagement();
     } else if (hash === "#/history") {
       view.innerHTML = historyView(u);
@@ -2809,73 +2808,6 @@
     renderChrome(); bindApp(); __restoreScroll();
   }
 
-  var sqlEditorState = { query: "select now();", saved: [] };
-  function sqlEscapeHtml(value) { return esc(String(value || "")); }
-  function highlightSql(value) {
-    var html = sqlEscapeHtml(value);
-    html = html.replace(/(--[^\n]*|\/\*[\s\S]*?\*\/)/g, '<span class="sql-comment">$1</span>');
-    html = html.replace(/('(?:''|[^'])*')/g, '<span class="sql-string">$1</span>');
-    html = html.replace(/\b(SELECT|FROM|WHERE|INSERT|INTO|VALUES|UPDATE|SET|DELETE|CREATE|ALTER|DROP|TABLE|VIEW|INDEX|FUNCTION|RETURNING|JOIN|LEFT|RIGHT|INNER|OUTER|ON|AS|AND|OR|NOT|NULL|IS|IN|LIKE|ILIKE|ORDER|BY|GROUP|HAVING|LIMIT|OFFSET|DISTINCT|UNION|ALL|COUNT|SUM|AVG|MIN|MAX|ASC|DESC|TRUE|FALSE|WITH|GRANT|REVOKE|DO|BEGIN|END)\b/gi, '<span class="sql-keyword">$1</span>');
-    return html || " ";
-  }
-  function updateSqlEditorPresentation(){
-    var input=el("sqlEditorInput"), highlight=el("sqlHighlight"), nums=el("sqlLineNumbers");
-    if(!input)return;
-    if(highlight)highlight.innerHTML=highlightSql(input.value)+"\n";
-    if(nums){var count=(input.value.match(/\n/g)||[]).length+1;nums.innerHTML=Array.from({length:count},function(_,i){return '<span>'+(i+1)+'</span>';}).join("");}
-  }
-  function saveSqlQueries(){try{localStorage.setItem("md_admin_sql_queries",JSON.stringify(sqlEditorState.saved));}catch(e){}}
-  function loadSqlQueries(){try{var raw=localStorage.getItem("md_admin_sql_queries");var parsed=raw?JSON.parse(raw):[];sqlEditorState.saved=Array.isArray(parsed)?parsed:[];}catch(e){sqlEditorState.saved=[];}}
-  function adminSqlEditorView(){
-    loadSqlQueries();
-    var options=sqlEditorState.saved.map(function(q,i){return '<option value="'+i+'">'+esc(q.name)+'</option>';}).join("");
-    return '<div class="page admin-sql-page"><div class="page-head"><p class="eyebrow">Administration · Developer</p><h1>SQL Editor</h1><p class="dateline">Run administrator-approved SQL against the existing Supabase database. Queries execute only when you press Run.</p></div>' +
-      '<section class="section sql-editor-card"><div class="sql-toolbar"><div class="sql-toolbar-left"><label for="sqlSavedQuery">Saved queries</label><select id="sqlSavedQuery"><option value="">Open saved query...</option>'+options+'</select><button class="btn btn-ghost btn-sm" id="sqlSaveBtn" type="button">Save</button><button class="btn btn-ghost btn-sm" id="sqlDeleteBtn" type="button">Delete</button></div><div class="sql-toolbar-right"><button class="btn btn-primary" id="sqlRunBtn" type="button">Run / Execute</button></div></div>' +
-      '<div class="sql-editor-wrap"><div class="sql-line-numbers" id="sqlLineNumbers" aria-hidden="true"></div><div class="sql-code-wrap"><pre id="sqlHighlight" aria-hidden="true"></pre><textarea id="sqlEditorInput" spellcheck="false" autocomplete="off" autocapitalize="off">'+esc(sqlEditorState.query)+'</textarea></div></div>' +
-      '<div class="sql-status" id="sqlStatus" role="status">Ready.</div></section>' +
-      '<section class="section sql-results-card"><div class="section-head"><h2>Query Results</h2><span id="sqlResultMeta">No query executed yet</span></div><div id="sqlResults"><div class="sql-empty">Run a query to see results here.</div></div></section>' +
-      '</div>';
-  }
-  async function executeAdminSql(query){
-    var clean=String(query||"").trim();
-    if(!clean)throw new Error("Enter a SQL query first.");
-    var res=await supabaseClient.rpc("execute_admin_sql",{p_sql:clean});
-    if(res.error)throw res.error;
-    return res.data;
-  }
-  function renderSqlResults(data){
-    var box=el("sqlResults"),meta=el("sqlResultMeta"); if(!box)return;
-    if(data && data.error){box.innerHTML='<div class="sql-error">'+esc(data.error)+'</div>';return;}
-    var rows=Array.isArray(data)?data:(data&&Array.isArray(data.rows)?data.rows:null);
-    if(rows){
-      if(!rows.length){box.innerHTML='<div class="sql-empty">Query completed successfully. No rows returned.</div>';if(meta)meta.textContent="0 rows";return;}
-      var keys=[];rows.forEach(function(r){Object.keys(r||{}).forEach(function(k){if(keys.indexOf(k)===-1)keys.push(k);});});
-      box.innerHTML='<div class="table-wrap sql-result-table"><table><thead><tr>'+keys.map(function(k){return '<th>'+esc(k)+'</th>';}).join('')+'</tr></thead><tbody>'+rows.map(function(r){return '<tr>'+keys.map(function(k){var v=r&&r[k];return '<td>'+esc(v===null?"NULL":typeof v==="object"?JSON.stringify(v):String(v))+'</td>';}).join('')+'</tr>';}).join('')+'</tbody></table></div>';
-      if(meta)meta.textContent=rows.length+" row"+(rows.length===1?"":"s");
-      return;
-    }
-    box.innerHTML='<pre class="sql-result-json">'+esc(typeof data==="string"?data:JSON.stringify(data,null,2))+'</pre>';
-    if(meta)meta.textContent="Completed";
-  }
-  function bindAdminSql(){
-    var input=el("sqlEditorInput"); if(!input)return;
-    loadSqlQueries(); updateSqlEditorPresentation();
-    input.addEventListener("input",updateSqlEditorPresentation);
-    input.addEventListener("scroll",function(){var h=el("sqlHighlight"),n=el("sqlLineNumbers");if(h)h.scrollTop=input.scrollTop;if(n)n.scrollTop=input.scrollTop;});
-    input.addEventListener("keydown",function(e){
-      if(e.key==="Tab"){e.preventDefault();var a=input.selectionStart,b=input.selectionEnd;input.setRangeText("  ",a,b,"end");updateSqlEditorPresentation();}
-      if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="enter"){e.preventDefault();var b=el("sqlRunBtn");if(b)b.click();}
-    });
-    var run=el("sqlRunBtn"); if(run)run.addEventListener("click",async function(){
-      var status=el("sqlStatus");setBtnLoading(run,true);if(status){status.className="sql-status loading";status.textContent="Running query…";}
-      try{var data=await executeAdminSql(input.value);renderSqlResults(data);if(status){status.className="sql-status success";status.textContent="Query executed successfully.";}}
-      catch(e){var box=el("sqlResults"),meta=el("sqlResultMeta");if(box)box.innerHTML='<div class="sql-error">'+esc(e.message||"SQL execution failed.")+'</div>';if(meta)meta.textContent="Execution failed";if(status){status.className="sql-status error";status.textContent=e.message||"SQL execution failed.";}}
-      finally{setBtnLoading(run,false);}
-    });
-    var saved=el("sqlSavedQuery");if(saved)saved.addEventListener("change",function(){var i=Number(saved.value);if(!isFinite(i)||!sqlEditorState.saved[i])return;sqlEditorState.query=sqlEditorState.saved[i].sql||"";input.value=sqlEditorState.query;updateSqlEditorPresentation();});
-    var save=el("sqlSaveBtn");if(save)save.addEventListener("click",function(){var name=prompt("Name this SQL query:","New query");if(!name)return;sqlEditorState.saved.push({name:name.trim(),sql:input.value});saveSqlQueries();render();location.hash="#/admin/sql";});
-    var del=el("sqlDeleteBtn");if(del)del.addEventListener("click",function(){var savedEl=el("sqlSavedQuery"),i=Number(savedEl&&savedEl.value);if(!isFinite(i)||!sqlEditorState.saved[i]){toast("Choose a saved query first.","error");return;}sqlEditorState.saved.splice(i,1);saveSqlQueries();render();location.hash="#/admin/sql";toast("Saved query deleted.");});
-  }
   function bindApp() {
     Array.prototype.forEach.call(document.querySelectorAll("[data-att]"), function (b) {
       b.addEventListener("click", function () { submitAttendance(b.getAttribute("data-att")); });
@@ -2901,7 +2833,6 @@
     if (historyToggle) historyToggle.addEventListener("click", toggleHistoryContent);
     bindExport();
     bindHse();
-    bindAdminSql();
   }
 
   function bindLeave() {
