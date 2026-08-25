@@ -2494,7 +2494,27 @@
     var bc=el("broadcastBtn");if(bc)bc.addEventListener("click",showBroadcast);
     bindConversationList();
     var search=el("messageSearch");if(search)search.addEventListener("input",function(){var t=search.value.toLowerCase();Array.prototype.forEach.call(document.querySelectorAll(".conversation-item"),function(b){b.hidden=(b.textContent||"").toLowerCase().indexOf(t)===-1;});});
-    var composer=el("messageComposer");if(composer)composer.addEventListener("submit",function(e){
+    var composer=el("messageComposer");
+    if(composer){
+      /* Message composer: keep the existing UI intact, but make the input feel
+         consistent and let Enter send while Shift+Enter keeps a new line. */
+      if(!document.getElementById("messageComposerTuning")){
+        var tuning=document.createElement("style");
+        tuning.id="messageComposerTuning";
+        tuning.textContent='.message-composer{gap:12px;padding:12px 14px}.message-composer textarea,.message-composer .btn{font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif}.message-composer textarea{padding:11px 14px}.message-composer .btn{margin-left:0}';
+        document.head.appendChild(tuning);
+      }
+      var input=el("messageInput");
+      if(input){
+        input.addEventListener("keydown",function(e){
+          if(e.key==="Enter"&&!e.shiftKey&&!e.isComposing){
+            e.preventDefault();
+            if(composer.requestSubmit) composer.requestSubmit();
+            else composer.dispatchEvent(new Event("submit",{bubbles:true,cancelable:true}));
+          }
+        });
+      }
+      composer.addEventListener("submit",function(e){
       e.preventDefault();
       var input=el("messageInput"),text=(input.value||"").trim();
       if(!text)return;
@@ -2509,7 +2529,8 @@
         markOptimisticMessageFailed(tempId);
         toast(err.message||"Message could not be sent.","error");
       });
-    });
+      });
+    }
     var back=el("chatBack");if(back)back.addEventListener("click",function(){messageState.activeConversation=null;writeMessageActiveConversation(null);renderMessagesKeepState();});
     function closeChatMenu(){var menu=el("chatMenu"),btn=el("chatMenuBtn");if(menu)menu.hidden=true;if(btn)btn.setAttribute("aria-expanded","false");}
     var menuBtn=el("chatMenuBtn");
