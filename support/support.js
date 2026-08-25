@@ -2269,8 +2269,44 @@
       ((files.data||[]).length?'<div class="ticket-admin-files"><strong>Attachments</strong><div>'+files.data.map(function(f){return '<button type="button" class="link-muted" data-ticket-file="'+esc(f.file_path)+'">'+esc(f.file_name)+'</button>';}).join('')+'</div></div>':'')+
       '<form id="ticketAdminReplyForm" class="ticket-admin-reply"><div class="field"><label>Reply to user</label><textarea id="ticketAdminReply" rows="4" maxlength="8000" placeholder="Write a response…"></textarea></div><div class="field"><label class="check"><input id="ticketAdminInternal" type="checkbox" /> Internal note (user will not see this)</label></div><button class="btn btn-primary" type="submit">Send</button></form></div>';
     showSupportModal(body);
-    $("ticketAdminSave").addEventListener("click",async function(){var b=this;setBtnLoading(b,true);try{var r=await sb.from('support_tickets').update({status:$("ticketAdminStatus").value,priority:$("ticketAdminPriority").value,assigned_to:$("ticketAdminAssignee").value||null}).eq('id',t.id);if(r.error)throw r.error;closeSupportModal();await loadSupportTickets();toast('Ticket updated.','good');}catch(e){toast(e.message||'Could not update ticket.','bad');}finally{setBtnLoading(b,false);}});
-    $("ticketAdminReplyForm").addEventListener("submit",async function(e){e.preventDefault();var text=($("ticketAdminReply").value||'').trim();if(!text)return;var b=this.querySelector('button[type=submit]');setBtnLoading(b,true);try{var r=await sb.from('support_ticket_messages').insert({ticket_id:t.id,sender_id:ME.user.id,body:text,is_internal:$("ticketAdminInternal").checked});if(r.error)throw r.error;closeSupportModal();await loadSupportTickets();openSupportTicketAdmin(t.id);toast('Reply sent.','good');}catch(e){toast(e.message||'Could not send reply.','bad');}finally{setBtnLoading(b,false);}});
+    var saveBtn = $("ticketAdminSave");
+    if (saveBtn) saveBtn.addEventListener("click", async function(){
+      var b=this;
+      var statusEl=$("ticketAdminStatus"), priorityEl=$("ticketAdminPriority"), assigneeEl=$("ticketAdminAssignee");
+      if (!statusEl || !priorityEl || !assigneeEl) { toast("Ticket controls could not be loaded. Please reopen the ticket.","bad"); return; }
+      setBtnLoading(b,true);
+      try {
+        var patch={status:statusEl.value,priority:priorityEl.value,assigned_to:assigneeEl.value||null};
+        var r=await sb.from("support_tickets").update(patch).eq("id",t.id);
+        if(r.error) throw r.error;
+        t.status=patch.status; t.priority=patch.priority; t.assigned_to=patch.assigned_to;
+        closeSupportModal();
+        await loadSupportTickets();
+        toast("Ticket updated.","good");
+      } catch(e) {
+        toast(e.message||"Could not update ticket. Check the Supabase support-ticket RLS policies.","bad");
+      } finally { setBtnLoading(b,false); }
+    });
+
+    var replyForm=$("ticketAdminReplyForm");
+    if (replyForm) replyForm.addEventListener("submit",async function(e){
+      e.preventDefault();
+      var replyEl=$("ticketAdminReply"), internalEl=$("ticketAdminInternal");
+      var text=(replyEl && replyEl.value||"").trim();
+      if(!text){toast("Write a reply before sending.","bad");return;}
+      var b=this.querySelector('button[type="submit"]');
+      setBtnLoading(b,true);
+      try {
+        var r=await sb.from("support_ticket_messages").insert({ticket_id:t.id,sender_id:ME.user.id,body:text,is_internal:!!(internalEl&&internalEl.checked)});
+        if(r.error) throw r.error;
+        closeSupportModal();
+        await loadSupportTickets();
+        await openSupportTicketAdmin(t.id);
+        toast("Reply sent.","good");
+      } catch(e) {
+        toast(e.message||"Could not send reply. Check the support-ticket message RLS/notification trigger.","bad");
+      } finally { setBtnLoading(b,false); }
+    });
     Array.prototype.forEach.call(document.querySelectorAll('[data-ticket-file]'),function(b){b.addEventListener('click',async function(){try{var r=await sb.storage.from(SUPPORT_TICKET_BUCKET).createSignedUrl(b.getAttribute('data-ticket-file'),300);if(r.error)throw r.error;window.open(r.data.signedUrl,'_blank','noopener');}catch(e){toast(e.message||'Attachment could not be opened.','bad');}});});
   }
 
