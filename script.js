@@ -1754,26 +1754,8 @@
   var messageState = {
     conversations: [], activeConversation: null, unlockedPrivateKey: null,
     ownPublicKey: null, unread: 0, sound: localStorage.getItem("md_message_sound") !== "off",
-    realtime: null, initialized: false, loading: false, directory: null
+    realtime: null, initialized: false, loading: false
   };
-  // Minimal-exposure staff directory for messaging. Regular staff cannot
-  // select(*) the profiles table for other users (RLS blocks it), so this
-  // calls a SECURITY DEFINER RPC (see staff_directory() migration) that
-  // returns only the columns needed to start a conversation: id, full_name,
-  // department, avatar_url, role. Cached for the session; pass force=true
-  // to refresh (e.g. after pull-to-refresh, if ever added).
-  async function fetchStaffDirectory(force) {
-    if (messageState.directory && !force) return messageState.directory;
-    var u = session();
-    var r = await supabaseClient.rpc("staff_directory");
-    if (r.error) { messageState.directory = messageState.directory || []; throw r.error; }
-    messageState.directory = (r.data || [])
-      .filter(function (p) { return !u || p.id !== u.id; })
-      .map(function (p) {
-        return { id: p.id, fullName: p.full_name || "Staff member", department: p.department || "", avatarUrl: p.avatar_url || "", role: p.role || "" };
-      });
-    return messageState.directory;
-  }
 
   function b64(bytes) {
     var bin = ""; for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
@@ -1851,12 +1833,7 @@
     } catch (e) { return "[Unable to decrypt this message]"; }
   }
   function messageAvatar(u, cls) { return avatarHtml(u, cls || "avatar-sm"); }
-  function messagePerson(id) {
-    var found = db.users.find(function (u) { return String(u.id) === String(id); });
-    if (found) return found;
-    var dir = (messageState.directory || []).find(function (u) { return String(u.id) === String(id); });
-    return dir || { id: id, fullName: "Staff member", avatarUrl: "" };
-  }
+  function messagePerson(id) { return db.users.find(function (u) { return String(u.id) === String(id); }) || { id: id, fullName: "Staff member", avatarUrl: "" }; }
   function messageTime(ts) { if (!ts) return ""; var d = new Date(ts); return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }); }
   function messageDate(ts) { var d = new Date(ts); var today = new Date(); if (d.toDateString() === today.toDateString()) return messageTime(ts); return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" }); }
 
@@ -1996,6 +1973,7 @@
     var p = await supabaseClient.from("message_participants").select("user_id").eq("conversation_id", conversationId);
     if (p.error) throw p.error;
     var ids = (p.data || []).map(function(x){return x.user_id;});
+    if (ids.indexOf(u.id) === -1) ids.push(u.id); /* always wrap a copy for the sender too, so their own sent bubble can be decrypted */
     var pack = await encryptForRecipients(text, ids);
     var r = await supabaseClient.rpc("send_encrypted_message", { p_conversation_id: conversationId, p_ciphertext: pack.ciphertext, p_iv: pack.iv, p_envelopes: pack.envelopes });
     if (r.error) throw r.error;
@@ -2008,47 +1986,16 @@
     renderMessagesKeepState();
   }
   async function loadMessagingData() {
-    if (!messageState.directory) { try { await fetchStaffDirectory(); } catch (e) { console.warn("Staff directory:", e); } }
     messageState.conversations = await fetchConversationList();
     await refreshMessageUnread();
   }
   function renderMessagesKeepState() { var v=el("view"); if(!v) return; v.innerHTML=messagesView(); var shell=v.querySelector(".messenger-shell"); if(shell && messageState.activeConversation) shell.classList.add("chat-open"); bindMessaging(); }
-  function staffPickerItemHtml(u) {
-    return '<button type="button" class="staff-picker-item" data-staff="' + esc(u.id) + '">' + messageAvatar(u, "avatar-sm") + '<span><strong>' + esc(u.fullName) + '</strong><small>' + esc(u.department || "") + '</small></span></button>';
-  }
-  function bindStaffPickerItems() {
-    var q = el("staffPickerSearch");
-    if (q) q.addEventListener("input", function () {
-      var term = q.value.toLowerCase();
-      Array.prototype.forEach.call(document.querySelectorAll(".staff-picker-item"), function (b) { b.hidden = (b.textContent || "").toLowerCase().indexOf(term) === -1; });
-    });
-    Array.prototype.forEach.call(document.querySelectorAll(".staff-picker-item"), function (b) {
-      b.addEventListener("click", async function () {
-        closeMessageModal();
-        try { await openDirectConversation(b.getAttribute("data-staff")); }
-        catch (e) { toast(e.message || "Could not open conversation.", "error"); }
-      });
-    });
-  }
   async function showStaffPicker() {
-    // Every authenticated staff member (not just admins) can open this picker.
-    // Staff come from the minimal-exposure staff_directory() RPC rather than
-    // db.users, since regular staff can't select(*) other profiles under RLS.
-    var body = '<div class="message-picker"><p class="eyebrow">New Message</p><h2>Choose a colleague</h2><input id="staffPickerSearch" type="search" placeholder="Search staff..." autocomplete="off" /><div id="staffPickerList"><div class="message-loading">Loading staff...</div></div></div>';
+    var staff = db.users.filter(function(u){return u.id !== session().id;});
+    var body = '<div class="message-picker"><p class="eyebrow">New Message</p><h2>Choose a colleague</h2><input id="staffPickerSearch" type="search" placeholder="Search staff..." autocomplete="off" /><div id="staffPickerList">' + staff.map(function(u){return '<button type="button" class="staff-picker-item" data-staff="'+esc(u.id)+'">'+messageAvatar(u,"avatar-sm")+'<span><strong>'+esc(u.fullName)+'</strong><small>'+esc(u.department||"")+'</small></span></button>';}).join('') + '</div></div>';
     showMessageModal(body);
-    try {
-      var staff = await fetchStaffDirectory();
-      var list = el("staffPickerList");
-      if (!list) return;
-      list.innerHTML = staff.length
-        ? staff.map(staffPickerItemHtml).join('')
-        : '<div class="message-empty-list"><p>No other staff members found.</p></div>';
-      bindStaffPickerItems();
-    } catch (e) {
-      var list2 = el("staffPickerList");
-      if (list2) list2.innerHTML = '<div class="message-empty-list"><p>Could not load the staff directory.</p></div>';
-      toast(e.message || "Could not load the staff directory.", "error");
-    }
+    var q=el("staffPickerSearch"); if(q) q.addEventListener("input",function(){var term=q.value.toLowerCase();Array.prototype.forEach.call(document.querySelectorAll(".staff-picker-item"),function(b){b.hidden=(b.textContent||"").toLowerCase().indexOf(term)===-1;});});
+    Array.prototype.forEach.call(document.querySelectorAll(".staff-picker-item"),function(b){b.addEventListener("click",async function(){closeMessageModal();try{await openDirectConversation(b.getAttribute("data-staff"));}catch(e){toast(e.message||"Could not open conversation.","error");}});});
   }
   function showMessageModal(html) { var m=el("modal"); m.classList.add("message-modal"); el("modalTitle").textContent=""; el("modalBody").innerHTML=html; el("modalKicker").hidden=true; m.hidden=false; el("modalConfirm").hidden=true; el("modalCancel").textContent="Close"; }
   function closeMessageModal() { var m=el("modal"); m.hidden=true; el("modalKicker").hidden=false; el("modalConfirm").hidden=false; el("modalCancel").textContent="Cancel"; }
@@ -2056,7 +2003,7 @@
     var staff = db.users.filter(function(u){return u.role !== "admin";});
     var body='<div class="message-picker"><p class="eyebrow">Administrator</p><h2>Broadcast to staff</h2><p class="dateline">One encrypted message will be delivered to all active staff accounts.</p><textarea id="broadcastInput" rows="6" maxlength="4000" placeholder="Write your company-wide message..."></textarea><button type="button" class="btn btn-primary btn-block" id="sendBroadcastBtn">Send to Everyone</button><small class="message-lock-note">Recipients without secure messaging keys will be skipped until they activate secure messaging.</small></div>';
     showMessageModal(body);
-    el("sendBroadcastBtn").addEventListener("click",async function(){var text=(el("broadcastInput").value||"").trim();if(!text){toast("Write a message first.","error");return;}var b=setBtnLoading;setBtnLoading(this,true);try{var keyRes=await supabaseClient.from("user_public_keys").select("user_id").in("user_id",staff.map(function(u){return u.id;}));if(keyRes.error)throw keyRes.error;var ready={};(keyRes.data||[]).forEach(function(x){ready[x.user_id]=true;});var ids=staff.filter(function(u){return ready[u.id];}).map(function(u){return u.id;});if(!ids.length)throw new Error("No staff member has activated secure messaging yet.");var pack=await encryptForRecipients(text,ids);var r=await supabaseClient.rpc("send_broadcast_message",{p_ciphertext:pack.ciphertext,p_iv:pack.iv,p_envelopes:pack.envelopes});if(r.error)throw r.error;closeMessageModal();toast("Broadcast sent securely to " + ids.length + " staff member" + (ids.length===1?".":"s."));await loadMessagingData();renderMessagesKeepState();}catch(e){toast(e.message||"Broadcast could not be sent.","error");}finally{setBtnLoading(this,false);}});
+    el("sendBroadcastBtn").addEventListener("click",async function(){var text=(el("broadcastInput").value||"").trim();if(!text){toast("Write a message first.","error");return;}var b=setBtnLoading;setBtnLoading(this,true);try{var keyRes=await supabaseClient.from("user_public_keys").select("user_id").in("user_id",staff.map(function(u){return u.id;}));if(keyRes.error)throw keyRes.error;var ready={};(keyRes.data||[]).forEach(function(x){ready[x.user_id]=true;});var ids=staff.filter(function(u){return ready[u.id];}).map(function(u){return u.id;});if(!ids.length)throw new Error("No staff member has activated secure messaging yet.");var me=session();if(me&&ids.indexOf(me.id)===-1)ids.push(me.id);var pack=await encryptForRecipients(text,ids);var r=await supabaseClient.rpc("send_broadcast_message",{p_ciphertext:pack.ciphertext,p_iv:pack.iv,p_envelopes:pack.envelopes});if(r.error)throw r.error;closeMessageModal();toast("Broadcast sent securely to " + ids.length + " staff member" + (ids.length===1?".":"s."));await loadMessagingData();renderMessagesKeepState();}catch(e){toast(e.message||"Broadcast could not be sent.","error");}finally{setBtnLoading(this,false);}});
   }
   function bindMessaging() {
     var form=el("messageKeyForm");
@@ -2071,7 +2018,7 @@
   }
   async function initMessaging() {
     if (!session()) { await stopMessagingRealtime(); return; }
-    try { var k=await getOwnKeyState(); messageState.hasKey=!!k.hasPrivate && !!k.publicKey; messageState.ownPublicKey=k.publicKey||null; fetchStaffDirectory().catch(function(e){console.warn("Staff directory:",e);}); await startMessagingRealtime(); await refreshMessageUnread(); } catch(e) { console.warn("Messaging init:",e); }
+    try { var k=await getOwnKeyState(); messageState.hasKey=!!k.hasPrivate && !!k.publicKey; messageState.ownPublicKey=k.publicKey||null; await startMessagingRealtime(); await refreshMessageUnread(); } catch(e) { console.warn("Messaging init:",e); }
     if ("Notification" in window && Notification.permission === "default") { /* request only after the user opens Messages */ }
   }
 
