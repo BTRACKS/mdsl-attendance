@@ -627,6 +627,15 @@
   }
   function row(k, v) { return "<div><dt>" + esc(k) + "</dt><dd>" + esc(v) + "</dd></div>"; }
 
+  /* Compact person row: profile picture + name only (no staff code). */
+  function staffRow(u) {
+    return '<div class="person-row">' + avatarHtml(u, "avatar-sm") +
+      '<span class="person-name">' + esc(u.fullName) + "</span></div>";
+  }
+  function staffList(list) {
+    return '<div class="person-list">' + list.map(staffRow).join("") + "</div>";
+  }
+
   function monthSummary(u) {
     var now = new Date(), prefix = now.getFullYear() + "-" + pad(now.getMonth() + 1);
     var recs = db.attendance.filter(function (a) { return a.userId === u.id && a.date.indexOf(prefix) === 0; });
@@ -910,7 +919,9 @@
     var today = db.attendance.filter(function (a) { return a.date === key; });
     var morning = today.filter(function (a) { return a.morning; });
     var evening = today.filter(function (a) { return a.evening; });
-    var missing = staff.filter(function (u) { return !record(u.id, key); });
+    var dayState = dayStatus(now);
+    /* On weekends and public holidays attendance is locked, so no one counts as missing. */
+    var missing = dayState.open ? staff.filter(function (u) { return !record(u.id, key); }) : [];
 
     var activity = db.attendance.slice().sort(function (a, b) {
       return (Math.max((b.evening && b.evening.at) || 0, (b.morning && b.morning.at) || 0)) -
@@ -921,7 +932,9 @@
       '<div class="stats">' +
       stat("Total Staff", staff.length, "", ICON.users) + stat("Staff Present", morning.length, "ok", ICON.check) +
       stat("Morning Submitted", morning.length, "ok", ICON.sunrise) + stat("Evening Submitted", evening.length, "accent", ICON.sunset) +
-      stat("Missing Attendance", missing.length, missing.length ? "danger" : "", ICON.alert) + "</div>" +
+      (dayState.open
+        ? stat("Missing Attendance", missing.length, missing.length ? "danger" : "", ICON.alert)
+        : stat("Missing Attendance", "—", "", ICON.alert)) + "</div>" +
       weekStatusPanel(now) +
       '<div class="layout"><div><section class="section"><div class="section-head"><h2>Today\'s Register</h2><span>' + longDate(now) + " · " + esc(dayStatus(now).reason) + "</span></div>" +
       (dayStatus(now).open ? "" : '<div class="day-lock compact ' + dayStatus(now).kind + '">' +
@@ -939,8 +952,12 @@
           " time · " + esc(prettyDate(a.date)) + "</p></div>";
       }).join("") : '<p class="empty">No activity recorded.</p>') + "</div></div></div>" +
       '<div class="panel" style="margin-top:20px"><div class="panel-head">' + ICON.alert + 'Missing Today</div><div class="panel-body">' +
-      (missing.length ? '<dl class="dl">' + missing.map(function (u) { return row(u.fullName, u.staffId); }).join("") + "</dl>"
-        : '<p class="dateline">All staff have submitted attendance.</p>') +
+      (!dayState.open
+        ? '<p class="dateline">' + esc(dayState.kind === "weekend"
+            ? "Weekend — attendance is not required today, so no staff are marked missing."
+            : "Public holiday (" + dayState.reason + ") — attendance is not required today, so no staff are marked missing.") + "</p>"
+        : (missing.length ? staffList(missing)
+          : '<p class="dateline">All staff have submitted attendance.</p>')) +
       "</div></div></aside></div></div>";
   }
 
@@ -1318,7 +1335,7 @@
       '<button class="btn btn-dark btn-block" type="submit">Save settings</button>' +
       "</form></div></div>" +
       '<div class="panel" style="margin-top:20px"><div class="panel-head">' + ICON.alert + "Not Checked In</div><div class=\"panel-body\">" +
-      (missing.length ? '<dl class="dl">' + missing.map(function (u) { return row(u.fullName, u.staffId); }).join("") + "</dl>"
+      (missing.length ? staffList(missing)
         : '<p class="dateline">All staff checked in for this session.</p>') +
       "</div></div></aside></div></div>";
   }
