@@ -2251,6 +2251,64 @@
   function messageTime(ts) { if (!ts) return ""; var d = new Date(ts); return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }); }
   function messageDate(ts) { var d = new Date(ts); var today = new Date(); if (d.toDateString() === today.toDateString()) return messageTime(ts); return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" }); }
 
+  async function fetchMessageStaffDirectory() {
+    var u = session();
+    if (!u) return [];
+    var staff = [];
+    var seen = {};
+    function addPeople(rows) {
+      (rows || []).forEach(function (person) {
+        if (!person || !person.id || String(person.id) === String(u.id) || seen[String(person.id)]) return;
+        seen[String(person.id)] = true;
+        staff.push({
+          id: person.id,
+          fullName: person.full_name || person.fullName || "Staff member",
+          avatarUrl: person.avatar_url || person.avatarUrl || "",
+          role: person.role || "staff",
+          department: person.department || ""
+        });
+      });
+    }
+
+    /* Prefer the server-side staff directory RPC so messaging is not limited by
+       the normal profiles RLS policy. The function returns only users in the
+       application's staff/profile system. */
+    try {
+      var directoryRes = await supabaseClient.rpc("get_message_staff");
+      if (!directoryRes.error) addPeople(directoryRes.data);
+    } catch (e) {}
+
+    /* Preserve the existing profile/RPC paths as fallbacks. */
+    if (!staff.length) {
+      var profileRes = await supabaseClient.from("profiles")
+        .select("id,full_name,avatar_url,role,department")
+        .neq("id", u.id);
+      if (!profileRes.error) addPeople(profileRes.data);
+    }
+    if (!staff.length) {
+      var ids = (db.users || []).filter(function (x) { return x && x.id && String(x.id) !== String(u.id); }).map(function (x) { return x.id; });
+      if (ids.length) {
+        var peopleRes = await supabaseClient.rpc("get_message_people", { p_user_ids: ids });
+        if (!peopleRes.error) addPeople(peopleRes.data);
+      }
+    }
+
+    staff.forEach(function (person) {
+      var existing = db.users.find(function (x) { return String(x.id) === String(person.id); });
+      if (!existing) db.users.push(mapProfile({
+        id: person.id, full_name: person.fullName, avatar_url: person.avatarUrl,
+        role: person.role, department: person.department
+      }));
+      else {
+        existing.fullName = person.fullName || existing.fullName;
+        existing.avatarUrl = person.avatarUrl || existing.avatarUrl || "";
+        existing.role = person.role || existing.role;
+        existing.department = person.department || existing.department || "";
+      }
+    });
+    return staff;
+  }
+
   async function fetchConversationList() {
     var u = session(); if (!u) return [];
     var p = await supabaseClient.from("message_participants").select("conversation_id,user_id,joined_at").eq("user_id", u.id);
@@ -2306,8 +2364,15 @@
         var readMap = {}; (receiptRows.data || []).forEach(function(x){ if(x.read_at) readMap[x.message_id]=true; });
         unreadCount = unreadRows.data.filter(function(x){return !readMap[x.id];}).length;
       }
-      return { id: conv.id, kind: conv.kind, person: person, last: lastRow, preview: lastRow ? lastText : "No messages yet", unread: unreadCount };
+      return { id: conv.id, kind: conv.kind, created_at: conv.created_at, person: person, last: lastRow, preview: lastRow ? lastText : "No messages yet", unread: unreadCount };
     }));
+    /* Conversation order is based on latest activity, not conversation creation.
+       A conversation without messages falls back to its creation time. */
+    result.sort(function (a, b) {
+      var at = new Date((a.last && a.last.created_at) || a.created_at || 0).getTime();
+      var bt = new Date((b.last && b.last.created_at) || b.created_at || 0).getTime();
+      return bt - at;
+    });
     writeMessageCache("conversations", null, { conversations: result });
     return result;
   }
@@ -2610,20 +2675,15 @@
   }
   async function loadMessagingData() {
     loadCachedMessagingState();
+    await fetchMessageStaffDirectory();
     var fresh = await fetchConversationList();
     messageState.conversations = fresh;
     await refreshMessageUnread();
   }
   function renderMessagesKeepState() { var v=el("view"); if(!v) return; v.innerHTML=messagesView(); var shell=v.querySelector(".messenger-shell"); if(shell && messageState.activeConversation) shell.classList.add("chat-open"); bindMessaging(); }
   async function showStaffPicker() {
-    var staff = db.users.filter(function(u){return u.id !== session().id;});
-    if (!staff.length) {
-      var res = await supabaseClient.from("profiles").select("*");
-      if (!res.error) {
-        staff = (res.data || []).map(mapProfile).filter(function(u){return u.id !== session().id;});
-        if (staff.length) db.users = (db.users || []).concat(staff.filter(function(x){ return !db.users.some(function(y){return y.id === x.id;}); }));
-      }
-    }
+    var staff = await fetchMessageStaffDirectory();
+    if (!staff.length) staff = db.users.filter(function(u){return u.id !== session().id;});
     var body = '<div class="message-picker"><p class="eyebrow">New Message</p><h2>Choose a colleague</h2><input id="staffPickerSearch" type="search" placeholder="Search staff..." autocomplete="off" /><div id="staffPickerList">' + staff.map(function(u){return '<button type="button" class="staff-picker-item" data-staff="'+esc(u.id)+'">'+messageAvatar(u,"avatar-sm")+'<span><strong>'+esc(u.fullName)+'</strong><small>'+esc(u.department||"")+'</small></span></button>';}).join('') + '</div></div>';
     showMessageModal(body);
     var q=el("staffPickerSearch"); if(q) q.addEventListener("input",function(){var term=q.value.toLowerCase();Array.prototype.forEach.call(document.querySelectorAll(".staff-picker-item"),function(b){b.hidden=(b.textContent||"").toLowerCase().indexOf(term)===-1;});});
