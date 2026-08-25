@@ -102,12 +102,16 @@
        2. public.support_roles        — dedicated role table (admin/it_support/staff)
        3. public.profiles.role        — legacy attendance role, admin only
      Never trust anything held in the browser. */
+  function withTimeout(promise, ms, label) {
+    return Promise.race([promise, new Promise(function(_, reject){ setTimeout(function(){ reject(new Error(label || "Request timed out.")); }, ms); })]);
+  }
+
   async function resolveAccess(user) {
     var result = { role: null, allowed: false, source: "none", error: null };
 
     // 1. Preferred: a single security-definer function.
     try {
-      var rpc = await sb.rpc("portal_role");
+      var rpc = await withTimeout(sb.rpc("portal_role"), 5000, "Portal role check timed out.");
       if (!rpc.error && rpc.data) {
         result.role = String(rpc.data);
         result.source = "portal_role() RPC";
@@ -118,8 +122,10 @@
 
     // 2. Dedicated roles table (user_roles, falling back to legacy support_roles).
     try {
-      var rolesRes = await sb.from("user_roles").select("role").eq("user_id", user.id);
-      if (rolesRes.error) rolesRes = await sb.from("support_roles").select("role").eq("user_id", user.id);
+      var rolesRes = await withTimeout(sb.from("user_roles").select("role").eq("user_id", user.id), 5000, "Role lookup timed out.");
+      if (rolesRes.error || !rolesRes.data || !rolesRes.data.length) {
+        rolesRes = await withTimeout(sb.from("support_roles").select("role").eq("user_id", user.id), 5000, "Support role lookup timed out.");
+      }
       if (!rolesRes.error && rolesRes.data && rolesRes.data.length) {
         var roles = rolesRes.data.map(function (r) { return r.role; });
         result.role = roles.indexOf("admin") !== -1 ? "admin" : roles[0];
@@ -132,7 +138,7 @@
 
     // 3. Fallback to the existing attendance profile role (admins only).
     try {
-      var prof = await sb.from("profiles").select("role").eq("id", user.id).maybeSingle();
+      var prof = await withTimeout(sb.from("profiles").select("role").eq("id", user.id).maybeSingle(), 5000, "Profile role lookup timed out.");
       if (!prof.error && prof.data) {
         result.role = prof.data.role || "staff";
         result.source = "profiles.role (legacy)";
@@ -2371,7 +2377,15 @@
     }
 
     var user = session.user;
-    var access = await resolveAccess(user);
+    var access;
+    try {
+      access = await withTimeout(resolveAccess(user), 16000, "Access verification timed out. Please refresh and try again.");
+    } catch (e) {
+      loader(false);
+      message(e.message || "Access verification failed. Please refresh and try again.", "error");
+      only("loginView");
+      return;
+    }
     loader(false);
 
     if (!access.allowed) {
