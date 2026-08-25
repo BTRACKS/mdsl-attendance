@@ -86,7 +86,9 @@
     el.innerHTML = text;
   }
   function kv(target, rows) {
-    $(target).innerHTML = rows.map(function (r) {
+    var el = $(target);
+    if (!el) return;
+    el.innerHTML = rows.map(function (r) {
       return "<div><dt>" + esc(r[0]) + "</dt><dd>" + (r[2] ? r[1] : esc(r[1])) + "</dd></div>";
     }).join("");
   }
