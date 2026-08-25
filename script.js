@@ -1539,6 +1539,59 @@
   function supportTicketDate(ts) { if (!ts) return "—"; var d = new Date(ts); return isNaN(d) ? "—" : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }); }
   function supportTicketTime(ts) { if (!ts) return ""; var d = new Date(ts); return isNaN(d) ? "" : d.toLocaleString("en-GB", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }); }
   function supportTicketToastError(err) { toast((err && err.message) || "Support ticket action failed.", "error"); }
+  var supportTicketRealtimeChannel = null;
+  var supportTicketRealtimeTimer = null;
+  var supportTicketRealtimeBusy = false;
+
+  async function refreshMySupportTicketLive(ticketId) {
+    if (supportTicketRealtimeBusy) return;
+    supportTicketRealtimeBusy = true;
+    try {
+      await loadMySupportTickets();
+      if (ticketId && String(supportTicketState.activeId || "") === String(ticketId)) {
+        var reply = el("supportTicketReply");
+        /* Never replace an open ticket while the user is typing a reply. */
+        if (!reply || !reply.value.trim()) await openMySupportTicket(ticketId, true);
+      } else if (location.hash === "#/settings") {
+        var host = el("mySupportTickets");
+        if (host) { host.outerHTML = myTicketsHtml(); bindMySupportTickets(true); }
+      }
+    } catch (e) { console.warn("Support ticket live refresh:", e); }
+    finally { supportTicketRealtimeBusy = false; }
+  }
+
+  function startMySupportTicketRealtime() {
+    var u = session();
+    if (!u || supportTicketRealtimeChannel) return;
+    supportTicketRealtimeChannel = supabaseClient.channel("support-tickets-user-" + u.id)
+      .on("postgres_changes", { event: "*", schema: "public", table: "support_tickets", filter: "user_id=eq." + u.id }, function(payload) {
+        var id = payload.new && payload.new.id || payload.old && payload.old.id;
+        refreshMySupportTicketLive(id);
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "support_ticket_messages" }, function(payload) {
+        var id = payload.new && payload.new.ticket_id;
+        refreshMySupportTicketLive(id);
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "support_ticket_notifications", filter: "user_id=eq." + u.id }, function(payload) {
+        var id = payload.new && payload.new.ticket_id;
+        refreshMySupportTicketLive(id);
+      })
+      .subscribe();
+
+    /* Fallback sync keeps both sides current if Realtime is not enabled for one
+       of the support tables in Supabase. It is intentionally light-weight. */
+    supportTicketRealtimeTimer = setInterval(function() {
+      if (session()) refreshMySupportTicketLive(supportTicketState.activeId);
+    }, 5000);
+  }
+
+  function stopMySupportTicketRealtime() {
+    if (supportTicketRealtimeChannel) {
+      try { supabaseClient.removeChannel(supportTicketRealtimeChannel); } catch (e) {}
+      supportTicketRealtimeChannel = null;
+    }
+    if (supportTicketRealtimeTimer) { clearInterval(supportTicketRealtimeTimer); supportTicketRealtimeTimer = null; }
+  }
 
   async function loadMySupportTickets() {
     var u = session(); if (!u) return [];
@@ -1609,8 +1662,9 @@
     });
   }
 
-  async function openMySupportTicket(ticketId) {
+  async function openMySupportTicket(ticketId, liveRefresh) {
     var u = session(); if (!u) return;
+    supportTicketState.activeId = ticketId;
     try {
       var t = (supportTicketState.tickets || []).find(function(x){return String(x.id)===String(ticketId);});
       if (!t) { await loadMySupportTickets(); t = (supportTicketState.tickets || []).find(function(x){return String(x.id)===String(ticketId);}); }
@@ -1650,7 +1704,8 @@
     if (skipLoad) return;
     loadMySupportTickets().then(function(){
       if (location.hash === "#/settings") { var host = el("mySupportTickets"); if (host) { host.outerHTML = myTicketsHtml(); bindMySupportTickets(true); } }
-    }).catch(function(err){ console.warn("Support tickets:", err); });
+      startMySupportTicketRealtime();
+    }).catch(function(err){ console.warn("Support tickets:", err); startMySupportTicketRealtime(); });
   }
 
   /* ------------------------- settings ------------------------- */
