@@ -451,7 +451,7 @@ td .sub{font-size:12.5px;color:var(--ink-4)}
 
 /* ---------- Modal & toasts ---------- */
 .modal-backdrop{position:fixed;inset:0;background:rgba(16,24,40,.5);backdrop-filter:blur(3px);display:grid;place-items:center;z-index:80;padding:20px;animation:fade var(--t)}
-.modal{background:var(--paper);max-width:480px;width:100%;padding:32px;border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);animation:rise 220ms cubic-bezier(.2,.7,.3,1)}
+.modal{background:var(--paper);max-width:480px;width:100%;padding:32px;border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);animation:rise 220ms cubic-bezier(.2,.7,.3,1);max-height:calc(100vh - 40px);max-height:calc(100dvh - 40px);overflow-y:auto;-webkit-overflow-scrolling:touch}
 .modal h2{font-size:24px;margin-bottom:12px}
 .modal p{color:var(--ink-3);font-size:15px}
 .modal-question{margin-top:14px !important;color:var(--ink) !important;font-weight:600}
