@@ -924,9 +924,8 @@ body.maintenance-page{background:var(--gradient-hero);min-height:100vh}
 /* ========================= Internal Messaging ========================= */
 [data-message-nav]{position:relative}
 [data-message-nav].has-unread{font-weight:800}
-/* Centered on the nav item's own box (not a fixed pixel offset) so it lands correctly
-   whether the row is a short desktop pill or a tall mobile menu row. */
-[data-message-nav].has-unread::after{content:"";width:7px;height:7px;border-radius:50%;background:var(--danger);position:absolute;right:5px;top:50%;transform:translateY(-50%);border:2px solid var(--paper-2)}
+/* Match the Tech-Support notification badge: compact amber count pill on desktop and mobile. */
+[data-message-nav].has-unread::after{content:attr(data-message-unread);display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:var(--amber);color:var(--navy-deep);font-size:10px;font-weight:800;line-height:1;position:absolute;right:5px;top:50%;transform:translateY(-50%);box-sizing:border-box}
 
 /* Fills the space below the page header instead of guessing a fixed vh offset, so the
    composer/Send button always lands inside the visible area on any screen size. */

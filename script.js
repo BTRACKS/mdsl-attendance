@@ -2170,7 +2170,9 @@
   function updateMessageBadge() {
     var a = document.querySelector('[data-message-nav]'); if (!a) return;
     var label = a.querySelector("[data-message-label]"); if (!label) return;
-    label.textContent = messageState.unread > 99 ? "Messages (99+)" : "Messages" + (messageState.unread ? " (" + messageState.unread + ")" : "");
+    label.textContent = "Messages";
+    if (messageState.unread > 0) a.setAttribute("data-message-unread", messageState.unread > 99 ? "99+" : String(messageState.unread));
+    else a.removeAttribute("data-message-unread");
     a.classList.toggle("has-unread", messageState.unread > 0);
   }
   function playMessageSound() {
@@ -2231,7 +2233,7 @@
     if (locked) return messagingSetupView(messageState.hasKey ? "unlock" : "create");
     var convs = messageState.conversations || [];
     var active = convs.find(function (c) { return c.id === messageState.activeConversation; });
-    return '<div class="page messaging-page"><div class="page-head message-page-head"><div><p class="eyebrow">Internal Communication</p><h1>Messages</h1></div>' +
+    return '<div class="page messaging-page"><div class="page-head message-page-head"><div><p class="eyebrow">Internal Communication</p><h1>Messages</h1><p class="dateline">Private, encrypted communication inside the staff portal.</p></div>' +
       '<div class="message-head-actions"><button class="btn btn-ghost" id="messageSoundBtn">' + (messageState.sound ? 'Sound on' : 'Sound off') + '</button><button class="btn btn-ghost" id="changePinBtn">Change PIN</button><button class="btn btn-primary" id="newMessageBtn">+ New Message</button>' + (session().role === "admin" ? '<button class="btn btn-ghost" id="broadcastBtn">Broadcast</button>' : '') + '</div></div>' +
       '<section class="messenger-shell"><aside class="conversation-pane"><div class="conversation-search"><input id="messageSearch" type="search" placeholder="Search conversations or staff..." autocomplete="off" /></div><div id="conversationList">' + conversationListHtml(convs) + '</div></aside>' +
       '<section class="chat-pane">' + (active ? chatHtml(active) : '<div class="chat-empty"><div class="chat-empty-icon">' + ICON.users + '</div><h2>Select a conversation</h2><p>Choose a staff member or start a new message.</p><button class="btn btn-primary" id="emptyNewMessage">New Message</button></div>') + '</section></section></div>';
