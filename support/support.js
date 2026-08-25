@@ -57,6 +57,27 @@
     sp.className = "spinner";
     btn.appendChild(sp);
   }
+  /* Support-ticket actions use this loading helper. Keep the original button
+     markup so Save changes / Send can be restored cleanly after success or error. */
+  function setBtnLoading(btn, loading) {
+    if (!btn) return;
+    if (loading) {
+      if (btn.dataset.loadingHtml === undefined) btn.dataset.loadingHtml = btn.innerHTML;
+      btn.disabled = true;
+      btn.classList.add("is-loading");
+      var light = btn.classList.contains("btn-dark") ? " spinner-light" : "";
+      if (!btn.querySelector(".spinner")) {
+        btn.insertAdjacentHTML("beforeend", '<span class="spinner' + light + '" aria-hidden="true"></span>');
+      }
+    } else {
+      btn.disabled = false;
+      btn.classList.remove("is-loading");
+      if (btn.dataset.loadingHtml !== undefined) {
+        btn.innerHTML = btn.dataset.loadingHtml;
+        delete btn.dataset.loadingHtml;
+      }
+    }
+  }
   function message(text, kind) {
     var el = $("loginMsg");
     if (!text) { el.hidden = true; return; }
@@ -2126,8 +2147,8 @@
   function renderRecentAttendance(rows){var b=$("recentAttendance"),s=$("recentAttendanceState");if(!rows.length){b.innerHTML='';s.textContent='No attendance activity was found for today.';return;}s.textContent='';b.innerHTML=rows.slice(0,6).map(function(r){var id=attStaffId(r),u=(USERS.rows||[]).find(function(x){return String(x.id||x.user_id)===String(id);}),f=attFlags(r),l=f.in&&f.out?'Clock-in and clock-out recorded':f.in?'Clock-in recorded':f.out?'Clock-out recorded':'Attendance record';var d=dashboardAttendanceTime(r);var date=rowDate(r);var stamp=d?dashboardDateTime(d):dashboardDateOnly(date||localDateIso());return '<div class="activity-item"><div class="activity-main"><div class="activity-title"><strong>'+esc(u?displayName(u):'Staff member')+'</strong><span class="activity-separator">—</span><span class="activity-action">'+esc(l)+'</span></div></div><time class="activity-time" datetime="'+esc(d?d.toISOString():(date||localDateIso()))+'">'+esc(stamp)+'</time></div>';}).join('');}
   function renderRecentProfiles(){var b=$("recentProfiles"),s=$("recentProfilesState"),r=(USERS.rows||[]).slice().sort(function(a,b){return new Date(b.updated_at||b.created_at||0)-new Date(a.updated_at||a.created_at||0);}).slice(0,6);if(!r.length){b.innerHTML='';s.textContent='No profile or account updates are visible.';return;}s.textContent='';b.innerHTML=r.map(function(x){var w=x.updated_at||x.created_at,l=x.updated_at?'Profile updated':'Account created';var d=new Date(w);var stamp=!isNaN(d.getTime())?dashboardDateTime(d):String(w);return '<div class="activity-item"><div class="activity-main"><div class="activity-title"><strong>'+esc(displayName(x))+'</strong><span class="activity-separator">—</span><span class="activity-action">'+esc(l)+' · '+esc(roleLabel(roleOf(x)))+'</span></div></div><time class="activity-time" datetime="'+esc(!isNaN(d.getTime())?d.toISOString():"")+'">'+esc(stamp)+'</time></div>';}).join('');}
   async function loadDashboardAttendance(){await detectAttendance();if(ATT.error){$("dashboardAttendanceState").textContent='Attendance service is not available to this account.';return{ok:false};}var q=sb.from(ATT.table).select('*').limit(1000);if(ATT.dateKey)q=q.eq(ATT.dateKey,localDateIso()).order(ATT.dateKey,{ascending:false});var r=await q;if(r.error){$("dashboardAttendanceState").textContent="Today's attendance could not be loaded.";return{ok:false};}DASH.attendanceRows=r.data||[];var i=0,o=0,m=0;DASH.attendanceRows.forEach(function(x){var f=attFlags(x);if(f.in)i++;if(f.out)o++;if(f.in&&!f.out)m++;});$("attendanceSummary").innerHTML='<div><span>Clock-ins</span><strong>'+i+'</strong></div><div><span>Clock-outs</span><strong>'+o+'</strong></div><div><span>Missing clock-outs</span><strong>'+m+'</strong></div>';$("dashboardAttendanceState").textContent=DASH.attendanceRows.length?DASH.attendanceRows.length+' attendance record'+(DASH.attendanceRows.length===1?'':'s')+' found today.':'No attendance records found for today.';renderRecentAttendance(DASH.attendanceRows);return{ok:true};}
-  async function runDashboardChecks(){return await loadDashboardAttendance();}
-  async function loadDashboard(force){if(DASH.loading)return;DASH.loading=true;loader(true);try{if(force)await loadUsers(true);else if(!USERS.loaded)await loadUsers(false);renderDashboardStats();renderRecentProfiles();await runDashboardChecks();}catch(e){$("dashboardAttendanceState").textContent='Some dashboard information could not be loaded. Please retry.';}finally{DASH.loading=false;loader(false);}}
+  async function runDashboardChecks(){$("systemStatusList").innerHTML='<div class="service-row"><span>Authentication</span>'+dashStatus('Checking…','warn')+'</div><div class="service-row"><span>Supabase</span>'+dashStatus('Checking…','warn')+'</div><div class="service-row"><span>Database queries</span>'+dashStatus('Checking…','warn')+'</div>';var aok=!!(ME.user&&ME.allowed),sok=false,dok=false;try{var p=await sb.from('profiles').select('id').eq('id',ME.user.id).maybeSingle();sok=!p.error;dok=sok;}catch(e){}var a=await loadDashboardAttendance();dok=dok&&a.ok;$("systemStatusList").innerHTML='<div class="service-row"><span>Authentication</span>'+dashStatus(aok?'Connected':'Unavailable',aok?'ok':'bad')+'</div><div class="service-row"><span>Supabase</span>'+dashStatus(sok?'Connected':'Unavailable',sok?'ok':'bad')+'</div><div class="service-row"><span>Database queries</span>'+dashStatus(dok?'Available':'Partial / unavailable',dok?'ok':'warn')+'</div>';}
+  async function loadDashboard(force){if(DASH.loading)return;DASH.loading=true;loader(true);try{if(force)await loadUsers(true);else if(!USERS.loaded)await loadUsers(false);renderDashboardStats();renderRecentProfiles();}catch(e){$("dashboardAttendanceState").textContent='Some dashboard information could not be loaded. Please retry.';}finally{DASH.loading=false;loader(false);}}
   function removeDashboardQuickActions(){
     /* Remove ONLY the Quick Actions section. Leave all other dashboard markup and functionality unchanged. */
     var headings = document.querySelectorAll("#tab-overview h2, #tab-overview h3, #tab-overview .section-head");
@@ -2237,20 +2258,23 @@
   async function loadSupportTicketBadge(){
     var badge=$("supportTicketNavBadge"); if(!badge)return;
     try{
-      /* The Support Tickets badge is a persistent ticket-count indicator,
-         not an unread-notification counter. It must remain visible whenever
-         at least one support ticket is visible to the IT/support role. */
       var r=await sb.from("support_tickets").select("id",{count:"exact",head:true});
       if(r.error) throw r.error;
       var count=Number(r.count||0);
-      badge.hidden=count<=0;
-      if(count>0) badge.textContent=count>99?"99+":String(count);
+      if(count>0){
+        badge.hidden=false;
+        badge.textContent=count>99?"99+":String(count);
+        badge.setAttribute("aria-label",count+" support ticket"+(count===1?"":"s"));
+      }else{
+        badge.hidden=true;
+        badge.textContent="";
+        badge.removeAttribute("aria-label");
+      }
     }catch(e){
-      /* Do not tamper with an already displayed badge if the count request
-         temporarily fails. Fall back to the tickets already loaded in memory. */
-      var fallback=(SUPPORT_TICKETS.rows||[]).length;
-      badge.hidden=fallback<=0;
-      if(fallback>0) badge.textContent=fallback>99?"99+":String(fallback);
+      /* Keep the badge visible from the tickets already loaded if the count query fails. */
+      var fallback=Number((SUPPORT_TICKETS.rows||[]).length);
+      if(fallback>0){badge.hidden=false;badge.textContent=fallback>99?"99+":String(fallback);}
+      else badge.hidden=true;
     }
   }
 
@@ -2295,9 +2319,23 @@
         var r=await sb.from("support_tickets").update(patch).eq("id",t.id);
         if(r.error) throw r.error;
         t.status=patch.status; t.priority=patch.priority; t.assigned_to=patch.assigned_to;
-        closeSupportModal();
         await loadSupportTickets();
-        toast("Ticket updated.","good");
+        // Keep the ticket card/modal open after saving changes.
+        var statusBadge = document.querySelector("#supportTicketModalBody .ticket-admin-head > span");
+        if (statusBadge) {
+          statusBadge.className = supportTicketStatusClass(t.status);
+          statusBadge.textContent = t.status;
+        }
+        var meta = document.querySelector("#supportTicketModalBody .ticket-admin-meta");
+        if (meta) {
+          var metaSpans = meta.querySelectorAll("span");
+          if (metaSpans[1]) {
+            metaSpans[1].className = supportTicketPriorityClass(t.priority);
+            metaSpans[1].textContent = t.priority;
+          }
+          if (metaSpans[2]) metaSpans[2].textContent = "Assigned: " + (t.assigned_to ? supportTicketName(t.assigned_to) : "Unassigned");
+        }
+        toast("Ticket updated. The ticket remains open.","good");
       } catch(e) {
         toast(e.message||"Could not update ticket. Check the Supabase support-ticket RLS policies.","bad");
       } finally { setBtnLoading(b,false); }

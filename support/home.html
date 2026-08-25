@@ -113,7 +113,7 @@
           <button type="button" data-tab="attendance">Attendance</button>
           <button type="button" data-tab="system" id="navSystemBtn">System management</button>
           <button type="button" data-tab="settings" id="navSettingsBtn">Settings</button>
-          <button type="button" data-tab="checks">System checks</button>
+          <button type="button" data-tab="tickets">Support Tickets <span id="supportTicketNavBadge" hidden></span></button>
           <button type="button" class="nav-signout" id="navSignout">
             <span>Sign out</span>
           </button>
@@ -145,17 +145,16 @@
         </div>
         <div class="dashboard-grid">
           <div class="panel"><div class="panel-head">Today's attendance</div><div class="panel-body"><div class="mini-stats" id="attendanceSummary"><div><span>Clock-ins</span><strong>—</strong></div><div><span>Clock-outs</span><strong>—</strong></div><div><span>Missing clock-outs</span><strong>—</strong></div></div><p class="dashboard-state" id="dashboardAttendanceState">Loading today's attendance…</p></div></div>
-        </div>
-        <div class="dashboard-grid">
-          <div class="panel"><div class="panel-head">Recent attendance activity</div><div class="panel-body"><div class="activity-list" id="recentAttendance"></div><p class="dashboard-state" id="recentAttendanceState">Loading…</p></div></div>
-          <div class="panel"><div class="panel-head">Recent profile &amp; account updates</div><div class="panel-body"><div class="activity-list" id="recentProfiles"></div><p class="dashboard-state" id="recentProfilesState">Loading…</p></div></div>
-        </div>
-        <div class="panel dashboard-panel"><div class="panel-head">Quick actions</div><div class="panel-body quick-actions"><button class="btn btn-ghost btn-sm" data-goto="users" type="button">View Users</button><button class="btn btn-ghost btn-sm" data-goto="users" type="button">Search Staff</button><button class="btn btn-ghost btn-sm" data-goto="attendance" type="button">Attendance Management</button><button class="btn btn-ghost btn-sm" data-goto="users" type="button">Account Support</button><button class="btn btn-ghost btn-sm" data-goto="settings" type="button">System Settings</button></div></div>
-        <div class="grid-2 dashboard-account-panels"><div class="panel"><div class="panel-head">Authentication</div><div class="panel-body"><dl class="kv" id="kvAuth"></dl></div></div><div class="panel"><div class="panel-head">Your profile record</div><div class="panel-body"><dl class="kv" id="kvProfile"></dl></div></div></div>
       </section>
 
 
       <!-- Users & profiles -->
+      <section class="section" id="tab-tickets" hidden>
+        <div class="section-head"><div><h2>Support Tickets</h2><p class="overview-lede">Review, assign and resolve staff support requests.</p></div><div class="section-head-actions"><button class="btn btn-ghost btn-sm" id="supportTicketsRefresh" type="button">Refresh</button><button class="btn btn-primary btn-sm" id="supportTicketNewBtn" type="button">+ New Ticket</button></div></div>
+        <div id="supportTicketsState" class="users-state">Loading tickets…</div>
+        <div id="supportTicketsList"></div>
+      </section>
+
       <section class="section" id="tab-users" hidden>
         <div class="section-head">
           <h2>Users &amp; profiles</h2>
@@ -376,18 +375,6 @@
               <p class="edit-hint">Only settings explicitly registered as supported by the application are shown here. This page never exposes raw database tables, SQL, credentials or secrets.</p>
             </div>
           </div>
-        </div>
-      </section>
-
-      <!-- System checks -->
-      <section class="section" id="tab-checks" hidden>
-        <div class="section-head">
-          <h2>System checks</h2>
-          <span>Database &amp; access</span>
-        </div>
-        <div class="panel">
-          <div class="panel-head">Database access</div>
-          <div class="panel-body"><dl class="kv" id="kvDb"></dl></div>
         </div>
       </section>
 
