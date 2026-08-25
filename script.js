@@ -1550,15 +1550,27 @@
   }
   function creatorCard(name, role, profile) {
     var avatarProfile = profile || { fullName: name, avatarUrl: "" };
+    var socials = "";
     if (normalizeCreatorName(name) === "oladapo salami") {
       avatarProfile = Object.assign({}, avatarProfile, { avatarUrl: "oladapo-salami.jpg" });
+      socials = '<div class="creator-socials" aria-label="Oladapo Salami social profiles">' +
+        '<a class="creator-social" href="https://www.linkedin.com/in/oladapo-salami/" target="_blank" rel="noopener noreferrer" aria-label="Oladapo Salami on LinkedIn" title="LinkedIn">' +
+          '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6.94 8.5H3.56V20h3.38V8.5ZM5.25 3A2.02 2.02 0 1 0 5.25 7.04 2.02 2.02 0 0 0 5.25 3ZM20.44 13.41c0-3.47-1.85-5.09-4.32-5.09-1.99 0-2.88 1.1-3.38 1.88V8.5H9.36V20h3.38v-5.69c0-1.5.29-2.95 2.14-2.95 1.82 0 1.85 1.71 1.85 3.05V20h3.37l.34-6.59Z"/></svg>' +
+        '</a>' +
+        '<a class="creator-social" href="https://github.com/BTRACKS/" target="_blank" rel="noopener noreferrer" aria-label="Oladapo Salami on GitHub" title="GitHub">' +
+          '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2.2a9.8 9.8 0 0 0-3.1 19.1c.49.09.67-.21.67-.47v-1.67c-2.73.59-3.3-1.16-3.3-1.16-.45-1.13-1.1-1.43-1.1-1.43-.89-.61.07-.6.07-.6.98.07 1.5 1 1.5 1 .88 1.5 2.3 1.07 2.86.82.09-.64.34-1.07.62-1.32-2.18-.25-4.47-1.09-4.47-4.85 0-1.07.38-1.94 1-2.62-.1-.25-.43-1.25.1-2.6 0 0 .82-.26 2.69 1a9.4 9.4 0 0 1 4.9 0c1.87-1.26 2.69-1 2.69-1 .53 1.35.2 2.35.1 2.6.62.68 1 1.55 1 2.62 0 3.77-2.3 4.6-4.49 4.84.35.3.66.9.66 1.82v2.7c0 .26.18.57.68.47A9.8 9.8 0 0 0 12 2.2Z"/></svg>' +
+        '</a></div>';
     } else if (normalizeCreatorName(name) === "victor utoo") {
       avatarProfile = Object.assign({}, avatarProfile, { avatarUrl: "victor-utoo.png" });
+      socials = '<div class="creator-socials" aria-label="Victor Utoo social profiles">' +
+        '<a class="creator-social" href="https://www.linkedin.com/in/victorutoo/" target="_blank" rel="noopener noreferrer" aria-label="Victor Utoo on LinkedIn" title="LinkedIn">' +
+          '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6.94 8.5H3.56V20h3.38V8.5ZM5.25 3A2.02 2.02 0 1 0 5.25 7.04 2.02 2.02 0 0 0 5.25 3ZM20.44 13.41c0-3.47-1.85-5.09-4.32-5.09-1.99 0-2.88 1.1-3.38 1.88V8.5H9.36V20h3.38v-5.69c0-1.5.29-2.95 2.14-2.95 1.82 0 1.85 1.71 1.85 3.05V20h3.37l.34-6.59Z"/></svg>' +
+        '</a></div>';
     }
     return '<div class="creator-card">' +
       avatarHtml(avatarProfile, "creator-avatar") +
       '<div><p class="creator-name">' + esc(name) + '</p>' +
-      '<p class="creator-role">' + esc(role) + "</p></div></div>";
+      '<p class="creator-role">' + esc(role) + '</p>' + socials + '</div></div>';
   }
 
 
