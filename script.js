@@ -323,6 +323,11 @@
     setBtnLoading(btn, true);
     try {
       await stopMessagingRealtime();
+      var logoutUserId = currentUser && currentUser.id;
+      messageState.unlockedPrivateKey = null;
+      messageState.pinSessionExpiresAt = 0;
+      if (messagePinSessionTimer) { clearTimeout(messagePinSessionTimer); messagePinSessionTimer = null; }
+      if (logoutUserId) await clearMessagingPinSession(logoutUserId);
       authUser = null; currentUser = null;
       toast("You have been signed out.");
       go("#/login");
@@ -678,8 +683,7 @@
     var rows = leaveHistoryFor(u.id);
     var today = dateKey(new Date());
     var active = rows.find(function(l){ return l.status !== "cancelled" && l.startDate <= today && today <= l.endDate; });
-    return '<div class="page"><div class="page-head"><p class="eyebrow">Time Away</p><h1>Leave Management</h1>' +
-      '<p class="dateline">Activate your own leave period. Future leave will not affect attendance until its start date.</p></div>' +
+    return '<div class="page"><div class="page-head"><p class="eyebrow">Time Away</p><h1>Leave Management</h1></div>' +
       (active ? '<section class="section leave-active-card"><div class="section-head"><h2>You are currently on leave</h2><span>Leave</span></div>' +
         '<div class="leave-detail-grid"><div><span>Type</span><strong>' + esc(leaveTypeLabel(active.leaveType)) + '</strong></div><div><span>Start</span><strong>' + esc(prettyDate(active.startDate)) + '</strong></div><div><span>End</span><strong>' + esc(prettyDate(active.endDate)) + '</strong></div></div>' +
         (active.reason ? '<p class="dateline leave-reason">Reason: ' + esc(active.reason) + '</p>' : '') + '</section>' : '') +
@@ -718,8 +722,7 @@
   }
 
   function historyView(u) {
-    return '<div class="page"><div class="page-head"><p class="eyebrow">Records</p><h1>Attendance History</h1>' +
-      '<p class="dateline">Every resumption and closing time recorded under Staff ID ' + esc(u.staffId) + "</p></div>" +
+    return '<div class="page"><div class="page-head"><p class="eyebrow">Records</p><h1>Attendance History</h1></div>' +
       '<section class="section"><div class="section-head"><h2>All Records</h2><span>Most recent first</span></div>' +
       historyTable(u) + "</section></div>";
   }
@@ -1892,7 +1895,7 @@
   /* ========================= INTERNAL MESSAGING ========================= */
   var messageState = {
     conversations: [], activeConversation: null, unlockedPrivateKey: null,
-    ownPublicKey: null, unread: 0, sound: localStorage.getItem("md_message_sound") !== "off",
+    ownPublicKey: null, pinSessionExpiresAt: 0, unread: 0, sound: localStorage.getItem("md_message_sound") !== "off",
     realtime: null, initialized: false, loading: false
   };
   function messageCacheKey(kind, id) {
@@ -1926,6 +1929,123 @@
     return crypto.subtle.deriveKey({ name: "PBKDF2", salt: salt, iterations: 250000, hash: "SHA-256" }, base,
       { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
   }
+  /* ---------- Messaging PIN session cache ----------
+     Keeps only the already-unlocked CryptoKey in IndexedDB for 2 hours.
+     The raw PIN is never stored. The cached key is scoped to the signed-in user
+     and is removed when the session expires or the user signs out. */
+  var MESSAGE_PIN_SESSION_TTL = 2 * 60 * 60 * 1000;
+  var messagePinSessionTimer = null;
+  var messagePinSessionDbPromise = null;
+
+  function messagePinSessionDb() {
+    if (!window.indexedDB) return Promise.resolve(null);
+    if (messagePinSessionDbPromise) return messagePinSessionDbPromise;
+    messagePinSessionDbPromise = new Promise(function(resolve) {
+      try {
+        var req = window.indexedDB.open("md_message_pin_session", 1);
+        req.onupgradeneeded = function() {
+          if (!req.result.objectStoreNames.contains("sessions")) {
+            req.result.createObjectStore("sessions", { keyPath: "userId" });
+          }
+        };
+        req.onsuccess = function() { resolve(req.result); };
+        req.onerror = function() { resolve(null); };
+      } catch (e) { resolve(null); }
+    });
+    return messagePinSessionDbPromise;
+  }
+
+  async function cacheMessagingPinSession() {
+    var u = session(), key = messageState.unlockedPrivateKey;
+    if (!u || !key) return;
+    var dbi = await messagePinSessionDb();
+    if (!dbi) return;
+    var record = {
+      userId: String(u.id),
+      key: key,
+      publicKey: messageState.ownPublicKey || null,
+      expiresAt: Date.now() + MESSAGE_PIN_SESSION_TTL
+    };
+    try {
+      await new Promise(function(resolve, reject) {
+        var tx = dbi.transaction("sessions", "readwrite");
+        tx.objectStore("sessions").put(record);
+        tx.oncomplete = resolve;
+        tx.onerror = function() { reject(tx.error); };
+        tx.onabort = function() { reject(tx.error); };
+      });
+    } catch (e) {}
+  }
+
+  async function clearMessagingPinSession(userId) {
+    var id = userId || (session() && session().id);
+    if (!id) return;
+    var dbi = await messagePinSessionDb();
+    if (!dbi) return;
+    try {
+      await new Promise(function(resolve, reject) {
+        var tx = dbi.transaction("sessions", "readwrite");
+        tx.objectStore("sessions").delete(String(id));
+        tx.oncomplete = resolve;
+        tx.onerror = function() { reject(tx.error); };
+        tx.onabort = function() { reject(tx.error); };
+      });
+    } catch (e) {}
+  }
+
+  function scheduleMessagingPinSessionExpiry(expiresAt) {
+    if (messagePinSessionTimer) {
+      clearTimeout(messagePinSessionTimer);
+      messagePinSessionTimer = null;
+    }
+    var delay = Math.max(0, expiresAt - Date.now());
+    messagePinSessionTimer = setTimeout(function() {
+      messagePinSessionTimer = null;
+      var u = session();
+      messageState.unlockedPrivateKey = null;
+      messageState.pinSessionExpiresAt = 0;
+      if (u) clearMessagingPinSession(u.id);
+      if (location.hash === "#/messages") {
+        renderMessagesKeepState();
+      }
+    }, delay);
+  }
+
+  async function restoreMessagingPinSession(publicKey) {
+    var u = session();
+    if (!u) return false;
+    var dbi = await messagePinSessionDb();
+    if (!dbi) return false;
+    try {
+      var record = await new Promise(function(resolve, reject) {
+        var tx = dbi.transaction("sessions", "readonly");
+        var req = tx.objectStore("sessions").get(String(u.id));
+        req.onsuccess = function() { resolve(req.result || null); };
+        req.onerror = function() { reject(req.error); };
+      });
+      if (!record || !record.key || !record.expiresAt || record.expiresAt <= Date.now() ||
+          (publicKey && record.publicKey && record.publicKey !== publicKey)) {
+        if (record) clearMessagingPinSession(u.id);
+        return false;
+      }
+      messageState.unlockedPrivateKey = record.key;
+      messageState.ownPublicKey = publicKey || record.publicKey || null;
+      messageState.pinSessionExpiresAt = record.expiresAt;
+      scheduleMessagingPinSessionExpiry(record.expiresAt);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  async function renewMessagingPinSession() {
+    var u = session();
+    if (!u || !messageState.unlockedPrivateKey) return;
+    messageState.pinSessionExpiresAt = Date.now() + MESSAGE_PIN_SESSION_TTL;
+    scheduleMessagingPinSessionExpiry(messageState.pinSessionExpiresAt);
+    await cacheMessagingPinSession();
+  }
+
   async function generateMessagingKeys(passphrase) {
     if (!crypto || !crypto.subtle) throw new Error("This browser does not support the required Web Crypto API.");
     var pair = await crypto.subtle.generateKey({ name: "RSA-OAEP", modulusLength: 2048, publicExponent: new Uint8Array([1,0,1]), hash: "SHA-256" }, true, ["encrypt", "decrypt"]);
@@ -1941,6 +2061,7 @@
     if (b.error) throw b.error;
     messageState.ownPublicKey = pub;
     messageState.unlockedPrivateKey = pair.privateKey;
+    await renewMessagingPinSession();
   }
   async function unlockMessagingKeys(passphrase) {
     var u = session();
@@ -1953,6 +2074,7 @@
     var pubRes = await supabaseClient.from("user_public_keys").select("public_key").eq("user_id", u.id).maybeSingle();
     if (pubRes.error || !pubRes.data) throw new Error("Your public encryption key is missing.");
     messageState.ownPublicKey = pubRes.data.public_key;
+    await renewMessagingPinSession();
   }
   async function changeMessagingSecret(oldSecret, newSecret) {
     var u = session();
@@ -1967,6 +2089,7 @@
     var upd = await supabaseClient.from("user_private_keys").update({ encrypted_private_key: b64(reEncrypted), iv: b64(newIv), salt: b64(newSalt) }).eq("user_id", u.id);
     if (upd.error) throw upd.error;
     messageState.unlockedPrivateKey = await crypto.subtle.importKey("pkcs8", raw, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["decrypt"]);
+    await renewMessagingPinSession();
   }
   async function getOwnKeyState() {
     var u = session();
@@ -2142,7 +2265,7 @@
     if (locked) return messagingSetupView(messageState.hasKey ? "unlock" : "create");
     var convs = messageState.conversations || [];
     var active = convs.find(function (c) { return c.id === messageState.activeConversation; });
-    return '<div class="page messaging-page"><div class="page-head message-page-head"><div><p class="eyebrow">Internal Communication</p><h1>Messages</h1><p class="dateline">Private, encrypted communication inside the staff portal.</p></div>' +
+    return '<div class="page messaging-page"><div class="page-head message-page-head"><div><p class="eyebrow">Internal Communication</p><h1>Messages</h1></div>' +
       '<div class="message-head-actions"><button class="btn btn-ghost" id="messageSoundBtn">' + (messageState.sound ? 'Sound on' : 'Sound off') + '</button><button class="btn btn-ghost" id="changePinBtn">Change PIN</button><button class="btn btn-primary" id="newMessageBtn">+ New Message</button>' + (session().role === "admin" ? '<button class="btn btn-ghost" id="broadcastBtn">Broadcast</button>' : '') + '</div></div>' +
       '<section class="messenger-shell"><aside class="conversation-pane"><div class="conversation-search"><input id="messageSearch" type="search" placeholder="Search conversations or staff..." autocomplete="off" /></div><div id="conversationList">' + conversationListHtml(convs) + '</div></aside>' +
       '<section class="chat-pane">' + (active ? chatHtml(active) : '<div class="chat-empty"><div class="chat-empty-icon">' + ICON.users + '</div><h2>Select a conversation</h2><p>Choose a staff member or start a new message.</p><button class="btn btn-primary" id="emptyNewMessage">New Message</button></div>') + '</section></section></div>';
@@ -2377,7 +2500,16 @@
   async function initMessaging() {
     if (!session()) { await stopMessagingRealtime(); return; }
     loadCachedMessagingState();
-    try { var k=await getOwnKeyState(); messageState.hasKey=!!k.hasPrivate && !!k.publicKey; messageState.ownPublicKey=k.publicKey||null; await startMessagingRealtime(); refreshMessageUnread(); } catch(e) { console.warn("Messaging init:",e); }
+    try {
+      var k=await getOwnKeyState();
+      messageState.hasKey=!!k.hasPrivate && !!k.publicKey;
+      messageState.ownPublicKey=k.publicKey||null;
+      messageState.unlockedPrivateKey=null;
+      messageState.pinSessionExpiresAt=0;
+      if (messageState.hasKey) await restoreMessagingPinSession(k.publicKey);
+      await startMessagingRealtime();
+      refreshMessageUnread();
+    } catch(e) { console.warn("Messaging init:",e); }
     if ("Notification" in window && Notification.permission === "default") { /* request only after the user opens Messages */ }
   }
 
