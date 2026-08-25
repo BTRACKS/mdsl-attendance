@@ -561,9 +561,11 @@ td .sub{font-size:12.5px;color:var(--ink-4)}
   border-radius:16px;background:var(--paper-2);border:1px solid var(--rule);color:var(--navy)}
 .creator-ic svg{width:24px;height:24px}
 .creator-avatar{width:52px;height:52px;font-size:18px}
+.creator-info{min-width:0;flex:1}
+.creator-heading-row{display:flex;align-items:center;justify-content:space-between;gap:16px;min-width:0}
 .creator-name{font-size:19px;font-weight:800;letter-spacing:-.02em;color:var(--ink);margin-top:4px}
 .creator-role{font-size:14.5px;color:var(--ink-3);margin-top:2px}
-.creator-socials{display:flex;align-items:center;gap:8px;margin-top:10px}
+.creator-socials{display:flex;align-items:center;gap:8px;margin-top:0;flex:0 0 auto}
 .creator-social{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;flex:0 0 auto;border:1px solid var(--rule);border-radius:9px;background:var(--paper-2);color:var(--ink-3);transition:color var(--t),background var(--t),border-color var(--t),transform var(--t)}
 .creator-social svg{width:15px;height:15px;display:block}
 .creator-social:hover{color:var(--navy);background:var(--paper);border-color:var(--rule-strong);transform:translateY(-1px)}

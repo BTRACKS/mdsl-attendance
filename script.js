@@ -1569,8 +1569,8 @@
     }
     return '<div class="creator-card">' +
       avatarHtml(avatarProfile, "creator-avatar") +
-      '<div><p class="creator-name">' + esc(name) + '</p>' +
-      '<p class="creator-role">' + esc(role) + '</p>' + socials + '</div></div>';
+      '<div class="creator-info"><div class="creator-heading-row"><p class="creator-name">' + esc(name) + '</p>' + socials + '</div>' +
+      '<p class="creator-role">' + esc(role) + '</p></div></div>';
   }
 
 
