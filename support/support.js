@@ -1546,13 +1546,9 @@
 
   async function writeAccountStatus(row, active) {
     var id = rowId(row);
-    var res = await sb.rpc("admin_set_account_status", { p_user_id: id, p_active: active });
-    if (res.error && missingFunction(res.error)) {
-      var patch = {};
-      patch[colOf(row, STATUS_KEYS)] = accountStatusValue(row, active);
-      res = await sb.from("profiles").update(patch).eq("id", id);
-    }
-    return res;
+    /* Never fall back to a profile-only update: deactivation must also reach
+       Supabase Authentication so the credentials can no longer establish a session. */
+    return await sb.rpc("admin_set_account_status", { p_user_id: id, p_active: active });
   }
 
   /* ---------- confirmation screen for sensitive account actions ---------- */
@@ -2474,6 +2470,25 @@
     }
 
     var user = session.user;
+    var profileState = await sb.from("profiles")
+      .select("id,status,account_status,is_active,active")
+      .eq("id", user.id).maybeSingle();
+    if (!profileState.error && profileState.data) {
+      var p = profileState.data;
+      var v = p.is_active !== null && p.is_active !== undefined ? p.is_active :
+        (p.active !== null && p.active !== undefined ? p.active :
+        (p.account_status !== null && p.account_status !== undefined ? p.account_status : p.status));
+      var active = v == null || ["active","enabled","true","yes","1"].indexOf(String(v).toLowerCase()) !== -1;
+      if (!active) {
+        await sb.auth.signOut();
+        $("loginMsg").hidden = false;
+        $("loginMsg").className = "alert alert-error";
+        $("loginMsg").innerHTML = "<strong>Account Deactivated</strong><br>Your staff account has been deactivated and you cannot access the system at this time.<br>If you believe this was done by mistake, please contact the <strong>IT Support Department</strong> to rectify the issue.";
+        only("loginView");
+        loader(false);
+        return;
+      }
+    }
     var access;
     try {
       access = await withTimeout(resolveAccess(user), 16000, "Access verification timed out. Please refresh and try again.");

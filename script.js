@@ -98,6 +98,9 @@
       staffId: p.staff_id, email: p.email,
       employmentType: p.employment_type, department: p.department, position: p.position,
       role: p.role, createdAt: p.created_at,
+      status: p.status, accountStatus: p.account_status,
+      isActive: typeof p.is_active === "boolean" ? p.is_active : null,
+      active: typeof p.active === "boolean" ? p.active : null,
       phone: p.phone || "", avatarUrl: p.avatar_url || ""
     };
   }
@@ -166,6 +169,49 @@
     var sessionRes = await supabaseClient.auth.getSession();
     authUser = (sessionRes.data && sessionRes.data.session) ? sessionRes.data.session.user : null;
     currentUser = authUser ? (db.users.find(function (u) { return u.id === authUser.id; }) || null) : null;
+  }
+
+  /* Account status is enforced after Supabase Authentication succeeds.
+     The profile record is retained; the server-side auth ban is the actual
+     authentication gate, while this check provides the explicit UI message. */
+  function isAccountActive(u) {
+    if (!u) return false;
+    if (typeof u.isActive === "boolean") return u.isActive;
+    if (typeof u.active === "boolean") return u.active;
+    var v = u.accountStatus != null ? u.accountStatus : u.status;
+    if (v == null || String(v).trim() === "") return true;
+    return ["active", "enabled", "true", "yes", "1"].indexOf(String(v).toLowerCase()) !== -1;
+  }
+
+  function accountDeactivatedMessage() {
+    return "Account Deactivated<br><span>Your staff account has been deactivated and you cannot access the system at this time.</span><br><span>If you believe this was done by mistake, please contact the <strong>IT Support Department</strong> to rectify the issue.</span>";
+  }
+
+  async function enforceCurrentAccountStatus(showMessage) {
+    if (!authUser) return true;
+    var res = await supabaseClient.from("profiles").select("id,status,account_status,is_active,active").eq("id", authUser.id).maybeSingle();
+    if (res.error || !res.data) return true;
+    var active = isAccountActive({
+      isActive: res.data.is_active,
+      active: res.data.active,
+      accountStatus: res.data.account_status,
+      status: res.data.status
+    });
+    if (active) return true;
+    await supabaseClient.auth.signOut();
+    authUser = null;
+    currentUser = null;
+    if (showMessage) {
+      var loginMsg = document.getElementById("loginMsg");
+      if (loginMsg) {
+        loginMsg.hidden = false;
+        loginMsg.className = "alert alert-error";
+        loginMsg.innerHTML = accountDeactivatedMessage();
+      }
+    }
+    location.hash = "#/login";
+    render();
+    return false;
   }
 
   /* ------------------------- helpers ------------------------- */
@@ -3682,6 +3728,22 @@
         setBtnLoading(submitBtn, false);
         return;
       }
+      if (!isAccountActive(currentUser)) {
+        await supabaseClient.auth.signOut();
+        authUser = null;
+        currentUser = null;
+        toast("Account deactivated.", "error");
+        setBtnLoading(submitBtn, false);
+        location.hash = "#/login";
+        render();
+        var loginMsg = document.getElementById("loginMsg");
+        if (loginMsg) {
+          loginMsg.hidden = false;
+          loginMsg.className = "alert alert-error";
+          loginMsg.innerHTML = accountDeactivatedMessage();
+        }
+        return;
+      }
       await initMessaging();
       toast("Signed in as " + profileDisplayName(currentUser) + ".");
       location.hash = currentUser.role === "admin" ? "#/admin" : "#/dashboard";
@@ -3725,6 +3787,21 @@
         if (!profileRes.error && profileRes.data) {
           currentUser = mapProfile(profileRes.data);
           db.users = [currentUser];
+          authUser = authUser;
+          if (!isAccountActive(currentUser)) {
+            await supabaseClient.auth.signOut();
+            authUser = null;
+            currentUser = null;
+            location.hash = "#/login";
+            render();
+            var loginMsg = document.getElementById("loginMsg");
+            if (loginMsg) {
+              loginMsg.hidden = false;
+              loginMsg.className = "alert alert-error";
+              loginMsg.innerHTML = accountDeactivatedMessage();
+            }
+            return;
+          }
           await initMessaging();
           render();
           /* Attendance/HSE/profile refresh continues in the background and does not block Messages. */
@@ -3743,6 +3820,7 @@
       toast("Could not reach the database: " + dataError, "error");
     }
     await refreshSessionUser();
+    if (authUser && !(await enforceCurrentAccountStatus(false))) return;
     await initMessaging();
     render();
   }
@@ -3752,7 +3830,11 @@
   });
 
   if (PAGE === "app") window.addEventListener("hashchange", render);
-  setInterval(function () { if (session()) renderChrome(); }, 30000);
+  setInterval(async function () {
+    if (session()) {
+      if (await enforceCurrentAccountStatus(true)) renderChrome();
+    }
+  }, 30000);
   init();
 })();
 
