@@ -303,6 +303,8 @@
     var portal = $("portalView");
     if (!nav || !portal) return null;
 
+    /* Leave is a normal main navigation item and its panel lives with the
+       other portal sections, not at the bottom of portalView. */
     var btn = nav.querySelector('button[data-tab="leave"]');
     if (!btn) {
       btn = document.createElement("button");
@@ -318,9 +320,11 @@
     if (!panel) {
       panel = document.createElement("section");
       panel.id = "tab-leave";
-      panel.className = "support-leave-page";
+      panel.className = "section support-leave-page";
       panel.hidden = true;
-      portal.appendChild(panel);
+      var page = portal.querySelector("main.page");
+      if (page) page.appendChild(panel);
+      else portal.appendChild(panel);
     }
     return panel;
   }
@@ -339,13 +343,13 @@
     root.hidden = false;
 
     if (!LEAVES.loaded) {
-      root.innerHTML = '<div class="page"><div class="page-head"><p class="eyebrow">Time Away</p><h1>Leave</h1><p class="dateline">Loading staff leave information…</p></div></div>';
+      root.innerHTML = '<div class="page-head"><p class="eyebrow">Time Away</p><h1>Leave</h1><p class="dateline">Loading staff leave information…</p></div>';
       await loadLeaves();
     }
 
     if (LEAVES.error) {
-      root.innerHTML = '<div class="page"><div class="page-head"><p class="eyebrow">Time Away</p><h1>Leave</h1><p class="dateline">View-only leave information for Tech Support.</p></div>' +
-        '<section class="section leave-empty-state leave-error-state"><strong>Leave records could not be loaded</strong><p>' + esc(LEAVES.error) + '</p><button type="button" class="btn btn-secondary" id="leaveRetry">Retry</button></section></div>';
+      root.innerHTML = '<div class="page-head"><p class="eyebrow">Time Away</p><h1>Leave</h1><p class="dateline">View-only leave information for Tech Support.</p></div>' +
+        '<section class="leave-empty-state leave-error-state"><strong>Leave records could not be loaded</strong><p>' + esc(LEAVES.error) + '</p><button type="button" class="btn btn-secondary" id="leaveRetry">Retry</button></section>';
       var retry = $("leaveRetry");
       if (retry) retry.addEventListener("click", async function(){ LEAVES.loaded=false; await renderSupportLeave(); });
       return;
@@ -401,10 +405,10 @@
         }).join("") + '</tbody></table></div>';
     }
 
-    root.innerHTML = '<div class="page"><div class="page-head"><p class="eyebrow">Time Away</p><h1>Leave</h1><p class="dateline">View-only staff leave information. Tech Support cannot approve, reject, edit or cancel leave.</p></div>' +
+    root.innerHTML = '<div class="page-head"><p class="eyebrow">Time Away</p><h1>Leave</h1><p class="dateline">View-only staff leave information. Tech Support cannot approve, reject, edit or cancel leave.</p></div>' +
       '<section class="section"><div class="leave-summary-grid"><div><span>Currently on leave</span><strong>' + activeCount + '</strong></div><div><span>Scheduled</span><strong>' + scheduledCount + '</strong></div><div><span>Total records</span><strong>' + LEAVES.rows.length + '</strong></div></div>' +
       '<div class="leave-support-toolbar"><label class="search-field"><span>Search staff or leave</span><input id="leaveSupportSearch" type="search" placeholder="Search name, staff ID, department, leave type…" value="' + esc(q) + '"></label><span class="leave-view-note">View only</span></div>' +
-      body + '</section></div>';
+      body + '</section>';
 
     var search = $("leaveSupportSearch");
     if (search) search.addEventListener("input", function(){ renderSupportLeave(); });
