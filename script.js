@@ -1766,7 +1766,8 @@
 
       '<section class="section"><div class="section-head"><h2>Session Records</h2>' +
       '<div class="section-head-actions"><span>' + recs.length + " record" + (recs.length === 1 ? "" : "s") + "</span>" +
-      '<button class="btn btn-primary btn-sm" type="button" id="hseCsvBtn">' + ICON.download + "<span>Download CSV</span></button>" +
+      '<button class="btn btn-primary btn-sm" type="button" id="hsePdfBtn">' + ICON.download + "<span>Download PDF</span></button>" +
+       '<button class="btn btn-ghost btn-sm" type="button" id="hseCsvBtn">' + ICON.download + "<span>Download CSV</span></button>" +
       "</div></div>" +
       (s.topic ? '<p class="hse-topic">' + ICON.shield + "<span>Topic: " + esc(s.topic) + "</span></p>" : "") +
       hseTable(recs) + "</section>" +
@@ -1823,6 +1824,62 @@
     toast(rows.length + " HSE record" + (rows.length === 1 ? "" : "s") + " exported.");
   }
 
+  async function downloadHsePdf() {
+    var key = hseAdmin.date || currentHseDate();
+    var recs = hseRecordsFor(key);
+    if (!recs.length) { toast("No HSE records for the selected session.", "error"); return; }
+
+    var btn = el("hsePdfBtn");
+    if (btn) setBtnLoading(btn, true);
+    try {
+      /* Reuse the existing Attendance History PDF renderer, fonts, logo,
+         pagination, table styling and PDF byte generation. */
+      await ensurePdfFonts();
+      var logo = await loadPdfLogo();
+      var authorisedName = currentUser
+        ? ([currentUser.firstName, currentUser.lastName].filter(function (x) {
+            return String(x || "").trim();
+          }).join(" ").trim() || currentUser.fullName || "ADMINISTRATOR")
+        : (authUser && authUser.email ? authUser.email : "ADMINISTRATOR");
+      var generationDate = pdfFormatGenerationDate(new Date());
+
+      /* HSE PDF rows intentionally contain only Staff Name, Date and Status. */
+      var rows = recs.map(function (r) {
+        return {
+          name: r.name,
+          date: prettyDate(r.date),
+          status: r.status
+        };
+      });
+
+      var pageWidth = 1240, pageHeight = 1754, maxRows = 18, pages = [];
+      for (var start = 0; start < rows.length; start += maxRows) {
+        pages.push({ key: key, rows: rows.slice(start, start + maxRows) });
+      }
+
+      var total = pages.length;
+      var jpgs = pages.map(function (p, idx) {
+        return jpegDataUrlToBytes(
+          pdfPageCanvas(p.rows, idx + 1, total, logo, authorisedName, generationDate)
+            .toDataURL("image/jpeg", 0.90)
+        );
+      });
+      var pdf = pdfBytesFromJpegs(jpgs, pageWidth, pageHeight);
+      var blob = new Blob([pdf], { type: "application/pdf" });
+      var url = URL.createObjectURL(blob), link = document.createElement("a");
+      link.href = url;
+      link.download = "HSE_Attendance_" + key + ".pdf";
+      document.body.appendChild(link); link.click(); link.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
+      toast("HSE Attendance PDF generated successfully.");
+    } catch (e) {
+      console.error("HSE Attendance PDF generation:", e);
+      toast("The HSE attendance PDF could not be generated. Please try again.", "error");
+    } finally {
+      if (btn) setBtnLoading(btn, false);
+    }
+  }
+
   function bindHse() {
     var checkIn = el("hseCheckIn");
     if (checkIn) checkIn.addEventListener("click", function () { hseCheckIn(checkIn); });
@@ -1833,6 +1890,9 @@
         render();
       });
     });
+
+    var pdfBtn = el("hsePdfBtn");
+    if (pdfBtn) pdfBtn.addEventListener("click", downloadHsePdf);
 
     var csvBtn = el("hseCsvBtn");
     if (csvBtn) csvBtn.addEventListener("click", downloadHseCsv);
