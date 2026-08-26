@@ -985,29 +985,17 @@
     }).format(date));
   }
 
-  function pdfDrawDecorativeBorder(ctx, W, H, NAVY, AMBER) {
-    /* Modern, subtle branded frame: hairline outer rule + navy inner rule
-       with small amber corner accents. Print-safe and non-decorative. */
+  function pdfDrawDecorativeBorder(ctx, W, H) {
+    /* Modern, minimal black-and-white frame: hairline outer rule + strong
+       inner rule. Clean, print-safe and free of decorative colour. */
     ctx.save();
-    ctx.strokeStyle = "#dfe4ec";
+    ctx.strokeStyle = "#c8c8c8";
     ctx.lineWidth = 1;
     ctx.strokeRect(30.5, 30.5, W - 61, H - 61);
 
-    ctx.strokeStyle = NAVY;
+    ctx.strokeStyle = "#000000";
     ctx.lineWidth = 2;
     ctx.strokeRect(40, 40, W - 80, H - 80);
-
-    /* Amber corner accents */
-    ctx.strokeStyle = AMBER;
-    ctx.lineWidth = 4;
-    var a = 46, len = 54;
-    [[a, a, 1, 1], [W - a, a, -1, 1], [a, H - a, 1, -1], [W - a, H - a, -1, -1]].forEach(function (c) {
-      ctx.beginPath();
-      ctx.moveTo(c[0] + c[2] * len, c[1]);
-      ctx.lineTo(c[0], c[1]);
-      ctx.lineTo(c[0], c[1] + c[3] * len);
-      ctx.stroke();
-    });
     ctx.restore();
   }
 
@@ -1016,14 +1004,14 @@
     canvas.width = W; canvas.height = H;
     var ctx = canvas.getContext("2d");
     var margin = 92, right = W - margin, tableW = W - margin * 2;
-    var NAVY = "#123a6b", NAVY_DEEP = "#0d2a4d", AMBER = "#f5a623", INK = "#101828";
-    var INK_2 = "#344054", INK_3 = "#5b6577", INK_4 = "#8a93a5";
-    var RULE = "#e6e9f0", RULE_STRONG = "#d5dae4", ZEBRA = "#f7f8fb";
+    var BLACK = "#000000", INK = "#1a1a1a";
+    var INK_2 = "#333333", INK_3 = "#555555", INK_4 = "#777777";
+    var RULE = "#d0d0d0", RULE_STRONG = "#a0a0a0", ZEBRA = "#f5f5f5";
     var FONT = "Inter";
 
     ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, W, H);
     ctx.textBaseline = "top";
-    pdfDrawDecorativeBorder(ctx, W, H, NAVY, AMBER);
+    pdfDrawDecorativeBorder(ctx, W, H);
 
     /* ---------------- HEADER (generous, vertically balanced) ---------------- */
     var headerTop = 112, logoBox = 104;
@@ -1033,9 +1021,9 @@
       if (ratio > 1) lh = logoBox / ratio; else lw = logoBox * ratio;
       ctx.drawImage(logoImg, margin, headerTop + (logoBox - lh) / 2, lw, lh);
     } else {
-      ctx.strokeStyle = NAVY; ctx.lineWidth = 2;
+      ctx.strokeStyle = BLACK; ctx.lineWidth = 2;
       ctx.strokeRect(margin, headerTop, logoBox, logoBox);
-      ctx.fillStyle = NAVY; ctx.font = "700 24px " + FONT;
+      ctx.fillStyle = BLACK; ctx.font = "700 24px " + FONT;
       ctx.textAlign = "center"; ctx.fillText("MDSL", margin + logoBox / 2, headerTop + logoBox / 2 - 14);
       ctx.textAlign = "left";
     }
@@ -1043,11 +1031,9 @@
     ctx.textAlign = "right";
     ctx.fillStyle = INK_4; ctx.font = "600 12px " + FONT;
     ctx.fillText("DATE GENERATED", right, headerTop + 22);
-    ctx.fillStyle = NAVY_DEEP; ctx.font = "700 21px " + FONT;
+    ctx.fillStyle = BLACK; ctx.font = "700 21px " + FONT;
     ctx.fillText(pdfUpper(generationDate), right, headerTop + 46);
     ctx.textAlign = "left";
-    ctx.fillStyle = AMBER;
-    ctx.fillRect(right - 132, headerTop + 84, 132, 3);
 
     /* Header / body divider with clear breathing room */
     var dividerY = headerTop + logoBox + 56;
@@ -1058,7 +1044,7 @@
     var authY = dividerY + 62;
     ctx.fillStyle = INK_3; ctx.font = "600 12px " + FONT;
     ctx.fillText("NAME OF AUTHORISED", margin, authY);
-    ctx.fillStyle = NAVY_DEEP; ctx.font = "700 20px " + FONT;
+    ctx.fillStyle = BLACK; ctx.font = "700 20px " + FONT;
     ctx.fillText(pdfUpper(authorisedName || "ADMINISTRATOR"), margin, authY + 24);
 
     var signY = authY + 90;
@@ -1076,8 +1062,8 @@
     var headerH = 54, rowH = 46;
     var tableH = headerH + rows.length * rowH;
 
-    /* Header band in brand navy */
-    ctx.fillStyle = NAVY;
+    /* Header band in solid black */
+    ctx.fillStyle = BLACK;
     ctx.fillRect(tableX, tableY, tableW, headerH);
     ctx.fillStyle = "#ffffff"; ctx.font = "700 15px " + FONT;
     pdfCenteredText(ctx, "STAFF", tableX + col1 / 2, tableY + 18, col1 - 30, 17, 1);
@@ -1111,14 +1097,14 @@
     ctx.moveTo(tableX + col1 + col2 + 0.5, tableY + headerH); ctx.lineTo(tableX + col1 + col2 + 0.5, tableY + tableH);
     ctx.stroke();
 
-    /* ---------------- FOOTER — compact, centred, four sections ---------------- */
+    /* ---------------- FOOTER — black container, white text ---------------- */
     var footY = 1524, footH = 138, fw = tableW / 4;
-    ctx.fillStyle = "#fbfcfe";
+    ctx.fillStyle = BLACK;
     ctx.fillRect(tableX, footY, tableW, footH);
-    ctx.strokeStyle = RULE; ctx.lineWidth = 1;
+    ctx.strokeStyle = BLACK; ctx.lineWidth = 1;
     ctx.strokeRect(tableX + 0.5, footY + 0.5, tableW - 1, footH - 1);
-    ctx.fillStyle = NAVY; ctx.fillRect(tableX, footY, tableW, 3);
-    ctx.strokeStyle = RULE;
+    ctx.fillStyle = "#ffffff"; ctx.fillRect(tableX, footY, tableW, 2);
+    ctx.strokeStyle = "#333333";
     for (var c = 1; c < 4; c++) {
       ctx.beginPath(); ctx.moveTo(tableX + fw * c + 0.5, footY + 22); ctx.lineTo(tableX + fw * c + 0.5, footY + footH - 22); ctx.stroke();
     }
@@ -1130,9 +1116,9 @@
     ];
     foot.forEach(function (f, i) {
       var cx = tableX + i * fw + fw / 2;
-      ctx.fillStyle = NAVY_DEEP; ctx.font = "700 11px " + FONT;
+      ctx.fillStyle = "#ffffff"; ctx.font = "700 11px " + FONT;
       pdfCenteredText(ctx, f[0], cx, footY + 26, fw - 24, 13, 2);
-      ctx.fillStyle = INK_3; ctx.font = "500 10px " + FONT;
+      ctx.fillStyle = "#cccccc"; ctx.font = "500 10px " + FONT;
       f[1].forEach(function (line, idx) {
         pdfCenteredText(ctx, line, cx, footY + 60 + idx * 20, fw - 24, 12, 1);
       });
