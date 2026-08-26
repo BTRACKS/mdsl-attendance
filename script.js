@@ -869,9 +869,9 @@
 
   /* ------------------------- attendance PDF documentation ------------------------- */
   /*
-     The PDF uses the same attendance/profile data already loaded by the Admin
-     attendance page.  No attendance calculations or database records are changed.
-     Pages are drawn with the browser canvas and packed into a self-contained PDF.
+     PDF presentation/export only. Attendance rows are sourced from the same
+     db.users/db.attendance data already used by the Admin attendance page.
+     No attendance calculations, records, filters or permissions are changed.
   */
   function pdfStaffList() {
     var q = String(filters.q || "").toLowerCase();
@@ -906,10 +906,10 @@
       var a = record(u.id, key);
       var leave = leaveForDate(u.id, key);
       if (leave) {
-        return { name: profileDisplayName(u), resumption: "ON LEAVE", closing: "ON LEAVE" };
+        return { name: pdfNameOnly(u), resumption: "ON LEAVE", closing: "ON LEAVE" };
       }
       return {
-        name: profileDisplayName(u),
+        name: pdfNameOnly(u),
         resumption: a && a.morning && a.morning.time ? csvTime(a.morning.time) : "NOT RECORDED",
         closing: a && a.evening && a.evening.time ? csvTime(a.evening.time) : "NOT RECORDED"
       };
@@ -917,6 +917,12 @@
   }
 
   function pdfUpper(text) { return String(text == null ? "" : text).toUpperCase(); }
+
+  function pdfNameOnly(u) {
+    if (!u) return "STAFF MEMBER";
+    return [u.firstName, u.lastName].filter(function (x) { return String(x || "").trim(); }).join(" ").trim() || u.fullName || "STAFF MEMBER";
+  }
+
 
   function pdfWrapText(ctx, text, maxWidth) {
     var words = pdfUpper(text).split(/\s+/), lines = [], line = "";
@@ -929,7 +935,7 @@
     return lines.length ? lines : [""];
   }
 
-  function pdfDrawWrapped(ctx, text, x, y, maxWidth, lineHeight, maxLines) {
+  function pdfCenteredText(ctx, text, centerX, y, maxWidth, lineHeight, maxLines) {
     var lines = pdfWrapText(ctx, text, maxWidth);
     if (maxLines && lines.length > maxLines) {
       lines = lines.slice(0, maxLines);
@@ -937,75 +943,133 @@
       while (ctx.measureText(last + "…").width > maxWidth && last.length) last = last.slice(0, -1);
       lines[lines.length - 1] = last + "…";
     }
-    lines.forEach(function (line, i) { ctx.fillText(line, x, y + i * lineHeight); });
+    ctx.textAlign = "center";
+    lines.forEach(function (line, i) { ctx.fillText(line, centerX, y + i * (lineHeight || 16)); });
+    ctx.textAlign = "left";
     return lines.length;
   }
 
-  function pdfCenteredText(ctx, text, centerX, y, maxWidth) {
-    ctx.textAlign = "center";
-    pdfDrawWrapped(ctx, text, centerX, y, maxWidth, 17, 2);
-    ctx.textAlign = "left";
+  async function ensurePdfFonts() {
+    if (document.fonts && document.fonts.load) {
+      try {
+        await Promise.all([
+          document.fonts.load("400 16px Inter"),
+          document.fonts.load("500 16px Inter"),
+          document.fonts.load("600 16px Inter"),
+          document.fonts.load("700 16px Inter")
+        ]);
+      } catch (e) { /* The browser can still fall back to the packaged Inter family. */ }
+    }
   }
 
   function loadPdfLogo() {
     return new Promise(function (resolve) {
       var img = new Image();
+      var domLogo = document.querySelector(".brand-logo");
       img.onload = function () { resolve(img); };
-      img.onerror = function () { resolve(null); };
-      img.src = "logo-mark.png";
+      img.onerror = function () {
+        if (domLogo && domLogo.src && domLogo.src !== img.src) {
+          var retry = new Image();
+          retry.onload = function () { resolve(retry); };
+          retry.onerror = function () { resolve(null); };
+          retry.src = domLogo.src;
+        } else resolve(null);
+      };
+      img.src = (domLogo && domLogo.src) ? domLogo.src : "logo-mark.png";
     });
   }
 
-  function pdfPageCanvas(dateKeyValue, rows, pageIndex, pageTotal, logoImg, authorisedName) {
+  function pdfFormatGenerationDate(date) {
+    return pdfUpper(new Intl.DateTimeFormat("en-GB", {
+      weekday: "long", day: "2-digit", month: "long", year: "numeric"
+    }).format(date));
+  }
+
+  function pdfDrawDecorativeBorder(ctx, W, H, NAVY, AMBER) {
+    /* Light document border inspired by the supplied Service Report sample. */
+    ctx.save();
+    ctx.strokeStyle = "#b9c3d0";
+    ctx.lineWidth = 1.2;
+    ctx.setLineDash([2, 6]);
+    ctx.strokeRect(18, 18, W - 36, H - 36);
+    ctx.setLineDash([1, 5]);
+    ctx.strokeStyle = NAVY;
+    ctx.strokeRect(24, 24, W - 48, H - 48);
+    ctx.setLineDash([]);
+
+    /* Small repeated corner/edge details, kept subtle for printing. */
+    ctx.fillStyle = NAVY;
+    var step = 34;
+    for (var x = 34; x <= W - 34; x += step) {
+      ctx.beginPath(); ctx.arc(x, 24, 1.7, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x, H - 24, 1.7, 0, Math.PI * 2); ctx.fill();
+    }
+    for (var y = 34; y <= H - 34; y += step) {
+      ctx.beginPath(); ctx.arc(24, y, 1.7, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(W - 24, y, 1.7, 0, Math.PI * 2); ctx.fill();
+    }
+    [[24,24],[W-24,24],[24,H-24],[W-24,H-24]].forEach(function (p) {
+      ctx.fillStyle = AMBER;
+      ctx.beginPath(); ctx.arc(p[0], p[1], 3, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = NAVY;
+      ctx.beginPath(); ctx.arc(p[0], p[1], 1.25, 0, Math.PI * 2); ctx.fill();
+    });
+    ctx.restore();
+  }
+
+  function pdfPageCanvas(rows, pageIndex, pageTotal, logoImg, authorisedName, generationDate) {
     var W = 1240, H = 1754, canvas = document.createElement("canvas");
     canvas.width = W; canvas.height = H;
     var ctx = canvas.getContext("2d");
     var margin = 72, right = W - margin, tableW = W - margin * 2;
     var NAVY = "#123a6b", NAVY_DEEP = "#0d2a4d", AMBER = "#f5a623", INK = "#101828";
-    var INK_2 = "#344054", INK_4 = "#8a93a5", RULE = "#d5dae4", PAPER_3 = "#eef1f6";
+    var INK_2 = "#344054", INK_4 = "#667085", RULE = "#cfd6e1", PAPER_3 = "#eef1f6", FOOT = "#e8edf4";
+    var FONT = "Inter";
 
     ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, W, H);
     ctx.textBaseline = "top";
+    pdfDrawDecorativeBorder(ctx, W, H, NAVY, AMBER);
 
-    /* Outer frame and subtle brand accent, matching the existing portal palette. */
-    ctx.strokeStyle = RULE; ctx.lineWidth = 2;
-    ctx.strokeRect(24, 24, W - 48, H - 48);
-    ctx.fillStyle = NAVY; ctx.fillRect(24, 24, W - 48, 5);
-    ctx.fillStyle = AMBER; ctx.fillRect(24, 29, W - 48, 3);
-
-    /* Header: existing logo on the left, DATE only on the right. */
+    /* HEADER */
     if (logoImg) {
-      var size = 82;
-      ctx.drawImage(logoImg, margin, 56, size, size);
+      var logoW = 112, logoH = 112;
+      ctx.drawImage(logoImg, margin, 58, logoW, logoH);
     } else {
-      /* Safe fallback if the existing website logo asset is unavailable at runtime. */
       ctx.strokeStyle = NAVY; ctx.lineWidth = 2;
-      ctx.strokeRect(margin, 56, 82, 82);
-      ctx.fillStyle = NAVY; ctx.font = "800 24px Arial, sans-serif";
-      ctx.textAlign = "center"; ctx.fillText("MDSL", margin + 41, 84); ctx.textAlign = "left";
+      ctx.strokeRect(margin, 62, 108, 90);
+      ctx.fillStyle = NAVY; ctx.font = "700 22px " + FONT;
+      ctx.textAlign = "center"; ctx.fillText("MDSL", margin + 54, 94); ctx.textAlign = "left";
     }
 
-    ctx.fillStyle = NAVY; ctx.font = "800 24px Arial, sans-serif";
-    ctx.textAlign = "right"; ctx.fillText("DATE", right, 76); ctx.textAlign = "left";
-    ctx.fillStyle = AMBER; ctx.fillRect(right - 92, 112, 92, 4);
+    ctx.fillStyle = NAVY_DEEP;
+    ctx.font = "700 23px " + FONT;
+    ctx.textAlign = "right";
+    ctx.fillText("DATE: " + pdfUpper(generationDate), right, 78);
+    ctx.fillStyle = AMBER;
+    ctx.fillRect(right - 190, 118, 190, 4);
+    ctx.textAlign = "left";
 
-    /* Authorised person and physical signature area. */
-    ctx.fillStyle = INK; ctx.font = "800 16px Arial, sans-serif";
-    ctx.fillText("NAME OF AUTHORISED:", margin, 188);
-    ctx.fillStyle = NAVY; ctx.font = "800 18px Arial, sans-serif";
-    ctx.fillText(pdfUpper(authorisedName || "ADMINISTRATOR"), margin + 210, 186);
+    /* AUTHORISATION / PHYSICAL SIGNATURE AREA */
+    ctx.fillStyle = NAVY;
+    ctx.fillRect(margin, 205, 7, 84);
+    ctx.fillStyle = INK;
+    ctx.font = "700 16px " + FONT;
+    ctx.fillText("NAME OF AUTHORISED:", margin + 22, 211);
+    ctx.fillStyle = NAVY_DEEP;
+    ctx.font = "700 18px " + FONT;
+    ctx.fillText(pdfUpper(authorisedName || "ADMINISTRATOR"), margin + 235, 208);
 
-    ctx.fillStyle = INK; ctx.font = "800 16px Arial, sans-serif";
-    ctx.fillText("SIGNATURE:", margin, 229);
+    ctx.fillStyle = INK;
+    ctx.font = "700 16px " + FONT;
+    ctx.fillText("SIGNATURE:", margin + 22, 250);
     ctx.strokeStyle = RULE; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(margin + 112, 254); ctx.lineTo(margin + 365, 254); ctx.stroke();
-    ctx.fillStyle = INK_4; ctx.font = "500 10px Arial, sans-serif";
-    ctx.fillText("", margin, 264);
+    ctx.beginPath(); ctx.moveTo(margin + 142, 278); ctx.lineTo(margin + 500, 278); ctx.stroke();
+    /* Intentionally leave a generous blank signing area. */
 
-    /* Main attendance table. Everything inside it is centred. */
-    var tableX = margin, tableY = 300;
+    /* ATTENDANCE TABLE */
+    var tableX = margin, tableY = 410;
     var col1 = 360, col2 = 360, col3 = tableW - col1 - col2;
-    var headerH = 50, rowH = 42;
+    var headerH = 50, rowH = 43;
     var tableH = headerH + rows.length * rowH;
     ctx.fillStyle = "#ffffff"; ctx.fillRect(tableX, tableY, tableW, tableH);
     ctx.fillStyle = PAPER_3; ctx.fillRect(tableX + 1, tableY + 1, tableW - 2, headerH - 2);
@@ -1021,31 +1085,32 @@
     }
     ctx.stroke();
 
-    ctx.fillStyle = NAVY_DEEP; ctx.font = "800 16px Arial, sans-serif";
-    pdfCenteredText(ctx, "STAFF", tableX + col1 / 2, tableY + 15, col1 - 30);
-    pdfCenteredText(ctx, "RESUMPTION", tableX + col1 + col2 / 2, tableY + 15, col2 - 30);
-    pdfCenteredText(ctx, "CLOSING", tableX + col1 + col2 + col3 / 2, tableY + 15, col3 - 30);
+    ctx.fillStyle = NAVY_DEEP; ctx.font = "700 16px " + FONT;
+    pdfCenteredText(ctx, "STAFF", tableX + col1 / 2, tableY + 16, col1 - 30, 17, 1);
+    pdfCenteredText(ctx, "RESUMPTION", tableX + col1 + col2 / 2, tableY + 16, col2 - 30, 17, 1);
+    pdfCenteredText(ctx, "CLOSING", tableX + col1 + col2 + col3 / 2, tableY + 16, col3 - 30, 17, 1);
 
     rows.forEach(function (r, i) {
-      var y = tableY + headerH + i * rowH + 11;
-      ctx.font = "600 14px Arial, sans-serif";
+      var y = tableY + headerH + i * rowH + 12;
+      ctx.font = "500 14px " + FONT;
       ctx.fillStyle = INK;
-      pdfCenteredText(ctx, r.name, tableX + col1 / 2, y, col1 - 28);
+      pdfCenteredText(ctx, r.name, tableX + col1 / 2, y, col1 - 28, 16, 2);
       ctx.fillStyle = (r.resumption === "NOT RECORDED") ? "#8a3f2d" : INK;
-      pdfCenteredText(ctx, r.resumption, tableX + col1 + col2 / 2, y, col2 - 28);
+      pdfCenteredText(ctx, r.resumption, tableX + col1 + col2 / 2, y, col2 - 28, 16, 2);
       ctx.fillStyle = (r.closing === "NOT RECORDED") ? "#8a3f2d" : INK;
-      pdfCenteredText(ctx, r.closing, tableX + col1 + col2 + col3 / 2, y, col3 - 28);
+      pdfCenteredText(ctx, r.closing, tableX + col1 + col2 + col3 / 2, y, col3 - 28, 16, 2);
     });
 
-    /* Compact four-section footer. */
-    var footY = 1450, footH = 220, fw = tableW / 4;
-    ctx.strokeStyle = RULE; ctx.lineWidth = 1.2;
+    /* FOOTER — compact, centred, four balanced sections. */
+    var footY = 1518, footH = 150, fw = tableW / 4;
+    ctx.fillStyle = FOOT;
+    ctx.fillRect(tableX, footY, tableW, footH);
+    ctx.strokeStyle = RULE; ctx.lineWidth = 1.1;
     ctx.strokeRect(tableX, footY, tableW, footH);
-    for (var c = 1; c < 4; c++) {
-      ctx.beginPath(); ctx.moveTo(tableX + fw * c, footY); ctx.lineTo(tableX + fw * c, footY + footH); ctx.stroke();
-    }
     ctx.fillStyle = NAVY; ctx.fillRect(tableX, footY, tableW, 4);
-
+    for (var c = 1; c < 4; c++) {
+      ctx.beginPath(); ctx.moveTo(tableX + fw * c, footY + 12); ctx.lineTo(tableX + fw * c, footY + footH - 12); ctx.stroke();
+    }
     var foot = [
       ["OFFICE ADDRESS", ["PLOT 135, GRA PHASE 8,", "G.U. AKE ROAD,", "PORT HARCOURT, RIVERS STATE, NIGERIA"]],
       ["OFFICE ADDRESS", ["VGB COURT, PENTHOUSE 2,", "86A ODUDUWA CRESCENT,", "GRA, IKEJA, LAGOS STATE, NIGERIA"]],
@@ -1054,18 +1119,18 @@
     ];
     foot.forEach(function (f, i) {
       var cx = tableX + i * fw + fw / 2;
-      ctx.fillStyle = NAVY; ctx.font = "800 12px Arial, sans-serif";
-      pdfCenteredText(ctx, f[0], cx, footY + 20, fw - 22);
-      ctx.fillStyle = INK_2; ctx.font = "500 10.5px Arial, sans-serif";
+      ctx.fillStyle = NAVY_DEEP; ctx.font = "700 11px " + FONT;
+      pdfCenteredText(ctx, f[0], cx, footY + 17, fw - 20, 13, 2);
+      ctx.fillStyle = INK_2; ctx.font = "500 9.5px " + FONT;
       f[1].forEach(function (line, idx) {
-        pdfCenteredText(ctx, line, cx, footY + 57 + idx * 24, fw - 22);
+        pdfCenteredText(ctx, line, cx, footY + 50 + idx * 22, fw - 20, 12, 2);
       });
     });
 
     if (pageTotal > 1) {
-      ctx.fillStyle = INK_4; ctx.font = "600 9px Arial, sans-serif";
+      ctx.fillStyle = INK_4; ctx.font = "500 9px " + FONT;
       ctx.textAlign = "right";
-      ctx.fillText("PAGE " + pageIndex + " OF " + pageTotal, right, 1690);
+      ctx.fillText("PAGE " + pageIndex + " OF " + pageTotal, right, 1692);
       ctx.textAlign = "left";
     }
     return canvas;
@@ -1092,7 +1157,6 @@
     for (var i = 0; i < pageCount; i++) {
       pageIds.push(nextId++); imageIds.push(nextId++); contentIds.push(nextId++);
     }
-    var fontId = nextId++;
     obj(catalogId, "<< /Type /Catalog /Pages " + pagesId + " 0 R >>");
     obj(pagesId, "<< /Type /Pages /Kids [" + pageIds.map(function (id) { return id + " 0 R"; }).join(" ") + "] /Count " + pageCount + " >>");
 
@@ -1109,7 +1173,6 @@
       obj(contentIds[p], "<< /Length " + content.length + " >>\nstream\n" + content + "endstream");
       obj(pageIds[p], "<< /Type /Page /Parent " + pagesId + " 0 R /MediaBox [0 0 595.28 841.89] /Resources << /XObject << /Im" + p + " " + imageIds[p] + " 0 R >> >> /Contents " + contentIds[p] + " 0 R >>");
     }
-    obj(fontId, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
 
     var xref = length;
     pushText("xref\n0 " + (nextId) + "\n0000000000 65535 f \n");
@@ -1132,21 +1195,22 @@
     var btn = el("exportPdfBtn");
     if (btn) setBtnLoading(btn, true);
     try {
+      await ensurePdfFonts();
       var logo = await loadPdfLogo();
-      var authorisedName = currentUser ? profileDisplayName(currentUser) : (authUser && authUser.email ? authUser.email : "ADMINISTRATOR");
+      var authorisedName = currentUser ? ([currentUser.firstName, currentUser.lastName].filter(function (x) { return String(x || "").trim(); }).join(" ").trim() || currentUser.fullName || "ADMINISTRATOR") : (authUser && authUser.email ? authUser.email : "ADMINISTRATOR");
+      var generationDate = pdfFormatGenerationDate(new Date());
       var pages = [], pageWidth = 1240, pageHeight = 1754;
-      /* Keep each page aligned to the reference layout.  A long date's table
-         continues naturally onto additional pages while repeating the header. */
+      /* Keep a generous signing/header area and reserve the compact footer. */
+      var maxRows = 20;
       dates.forEach(function (key) {
         var rows = pdfRowsForDate(key, staff);
-        var maxRows = 23;
         for (var start = 0; start < rows.length; start += maxRows) {
-          var chunk = rows.slice(start, start + maxRows);
-          pages.push({ key: key, rows: chunk });
+          pages.push({ key: key, rows: rows.slice(start, start + maxRows) });
         }
       });
-      var total = pages.length, jpgs = pages.map(function (p, idx) {
-        return jpegDataUrlToBytes(pdfPageCanvas(p.key, p.rows, idx + 1, total, logo, authorisedName).toDataURL("image/jpeg", 0.88));
+      var total = pages.length;
+      var jpgs = pages.map(function (p, idx) {
+        return jpegDataUrlToBytes(pdfPageCanvas(p.rows, idx + 1, total, logo, authorisedName, generationDate).toDataURL("image/jpeg", 0.90));
       });
       var pdf = pdfBytesFromJpegs(jpgs, pageWidth, pageHeight);
       var blob = new Blob([pdf], { type: "application/pdf" });
