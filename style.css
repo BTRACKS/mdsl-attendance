@@ -1130,16 +1130,3 @@ body.maintenance-page{background:var(--gradient-hero);min-height:100vh}
   .message-preview-item{width:100%;max-width:none}
 }
 
-/* HSE Download PDF text visibility fix — color only */
-#hsePdfBtn,
-#hsePdfBtn:hover,
-#hsePdfBtn:focus,
-#hsePdfBtn:active {
-  color: #fff !important;
-}
-#hsePdfBtn svg,
-#hsePdfBtn:hover svg,
-#hsePdfBtn:focus svg,
-#hsePdfBtn:active svg {
-  color: inherit;
-}
