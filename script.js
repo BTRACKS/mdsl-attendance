@@ -184,7 +184,7 @@
   }
 
   function accountDeactivatedMessage() {
-    return "Account Deactivated<br><span>Your staff account has been deactivated and you cannot access the system at this time.</span><br><span>If you believe this was done by mistake, please contact the <strong>IT Support Department</strong> to rectify the issue.</span>";
+    return "Account Deactivated<br><span>Your staff account has been deactivated and you cannot access the system at this time.</span><br><span>If you believe this was done by mistake, please contact the <strong>IT Department</strong> to rectify the issue.</span>";
   }
 
   async function enforceCurrentAccountStatus(showMessage) {
@@ -3715,7 +3715,31 @@
 
       var signInRes = await supabaseClient.auth.signInWithPassword({ email: email, password: v.password });
       if (signInRes.error || !signInRes.data.user) {
-        toast("Invalid credentials. Please try again.", "error");
+        /* A deactivated account is banned at the Supabase Auth layer. When
+           Auth rejects that account, confirm the profile status so the user
+           gets the dedicated deactivation message instead of a generic
+           invalid-credentials message. Other authentication failures keep
+           the existing security-safe message. */
+        var deactivated = false;
+        try {
+          var statusRes = await supabaseClient.from("profiles")
+            .select("id,status,account_status,is_active,active")
+            .eq("email", email).maybeSingle();
+          if (!statusRes.error && statusRes.data) {
+            deactivated = !isAccountActive({
+              isActive: statusRes.data.is_active,
+              active: statusRes.data.active,
+              accountStatus: statusRes.data.account_status,
+              status: statusRes.data.status
+            });
+          }
+        } catch (statusErr) {}
+
+        if (deactivated) {
+          message(accountDeactivatedMessage());
+        } else {
+          toast("Invalid credentials. Please try again.", "error");
+        }
         setBtnLoading(submitBtn, false);
         return;
       }
@@ -3830,11 +3854,13 @@
   });
 
   if (PAGE === "app") window.addEventListener("hashchange", render);
+  /* Re-check frequently enough that an administrator's deactivation is
+     enforced promptly for users who are already signed in. */
   setInterval(async function () {
     if (session()) {
       if (await enforceCurrentAccountStatus(true)) renderChrome();
     }
-  }, 30000);
+  }, 5000);
   init();
 })();
 
