@@ -160,6 +160,9 @@
   var USERS = { rows: [], loaded: false, loading: false, current: null };
 
   var NAME_KEYS = ["full_name", "name", "fullname", "display_name"];
+  var TITLE_NAME_KEYS = ["title"];
+  var FIRST_NAME_KEYS = ["first_name"];
+  var LAST_NAME_KEYS = ["last_name"];
   var EMAIL_KEYS = ["email", "work_email", "email_address"];
   var PHONE_KEYS = ["phone", "phone_number", "mobile", "telephone", "msisdn"];
   var TITLE_KEYS = ["position", "job_title", "title", "designation", "role_title"];
@@ -195,6 +198,16 @@
     return String(v).replace(/_/g, " ");
   }
   function displayName(row) {
+    var title = pick(row, TITLE_NAME_KEYS);
+    var first = pick(row, FIRST_NAME_KEYS);
+    var last = pick(row, LAST_NAME_KEYS);
+    if (first || last) {
+      var parts = [];
+      if (title) parts.push(String(title));
+      if (first) parts.push(String(first));
+      if (last) parts.push(String(last));
+      return parts.join(" ");
+    }
     var n = pick(row, NAME_KEYS);
     if (n) return String(n);
     var e = pick(row, EMAIL_KEYS);
@@ -440,6 +453,13 @@
     $("profileName").textContent = name;
     $("profileMeta").textContent = "";
 
+    kv("kvUserIdentity", [
+      ["Title", fmtValue(pick(row, TITLE_NAME_KEYS))],
+      ["First Name", fmtValue(pick(row, FIRST_NAME_KEYS))],
+      ["Last Name", fmtValue(pick(row, LAST_NAME_KEYS))],
+      ["Staff ID", fmtValue(pick(row, STAFF_KEYS))]
+    ]);
+
     kv("kvUserContact", [
       ["Email", fmtValue(pick(row, EMAIL_KEYS))],
       ["Phone number", fmtValue(pick(row, PHONE_KEYS))],
@@ -460,7 +480,7 @@
     ]);
 
     var known = {};
-    [NAME_KEYS, EMAIL_KEYS, PHONE_KEYS, TITLE_KEYS, STAFF_KEYS, DEPT_KEYS, STATUS_KEYS, TYPE_KEYS, AVATAR_KEYS, ROLE_KEYS]
+    [NAME_KEYS, TITLE_NAME_KEYS, FIRST_NAME_KEYS, LAST_NAME_KEYS, EMAIL_KEYS, PHONE_KEYS, TITLE_KEYS, STAFF_KEYS, DEPT_KEYS, STATUS_KEYS, TYPE_KEYS, AVATAR_KEYS, ROLE_KEYS]
       .forEach(function (g) { g.forEach(function (k) { known[k] = 1; }); });
     ["id", "user_id", "created_at", "updated_at", "address"].forEach(function (k) { known[k] = 1; });
     var extras = Object.keys(row).filter(function (k) {
@@ -1371,11 +1391,12 @@
      database — password resets go through Supabase Auth. */
 
   var EDIT_FIELDS = [
-    { keys: NAME_KEYS, label: "Full name", max: 120 },
+    { keys: TITLE_NAME_KEYS, label: "Title", max: 4, type: "select", options: ["Mr", "Mrs", "Miss"] },
+    { keys: FIRST_NAME_KEYS, label: "First Name", max: 80 },
+    { keys: LAST_NAME_KEYS, label: "Last Name", max: 80 },
     { keys: PHONE_KEYS, label: "Phone number", max: 32 },
     { keys: TITLE_KEYS, label: "Position / job title", max: 80 },
     { keys: DEPT_KEYS, label: "Department", max: 80 },
-    { keys: STAFF_KEYS, label: "Staff ID", max: 40 },
     { keys: TYPE_KEYS, label: "Employment type", max: 40 },
     { keys: ["address"], label: "Address", max: 200 }
   ];
@@ -1690,16 +1711,27 @@
       return;
     }
 
+    var hasStructuredName = [TITLE_NAME_KEYS, FIRST_NAME_KEYS, LAST_NAME_KEYS].every(function (keys) { return !!colOf(row, keys); });
     EDIT_FIELDS.forEach(function (f) {
       var col = colOf(row, f.keys);
-      if (col) EDIT.cols.push({ col: col, label: f.label, max: f.max });
+      if (col && (f.keys === TITLE_NAME_KEYS || f.keys === FIRST_NAME_KEYS || f.keys === LAST_NAME_KEYS ? hasStructuredName : true)) {
+        EDIT.cols.push({ col: col, label: f.label, max: f.max, type: f.type, options: f.options });
+      }
     });
 
     box.innerHTML = EDIT.cols.map(function (f) {
       var v = row[f.col];
+      var value = v === null || v === undefined ? "" : String(v);
+      if (f.type === "select") {
+        return '<div class="field"><label for="pf_' + esc(f.col) + '">' + esc(f.label) + '</label>' +
+          '<select id="pf_' + esc(f.col) + '" data-col="' + esc(f.col) + '">' +
+          '<option value="">Select title…</option>' + f.options.map(function (o) {
+            return '<option value="' + esc(o) + '"' + (value === o ? ' selected' : '') + '>' + esc(o) + '</option>';
+          }).join("") + '</select></div>';
+      }
       return '<div class="field"><label for="pf_' + esc(f.col) + '">' + esc(f.label) + "</label>" +
         '<input id="pf_' + esc(f.col) + '" data-col="' + esc(f.col) + '" type="text" maxlength="' + f.max +
-        '" value="' + esc(v === null || v === undefined ? "" : String(v)) + '" /></div>';
+        '" value="' + esc(value) + '" /></div>';
     }).join("") || '<p class="edit-hint">No editable profile fields are stored on this record.</p>';
 
     var avatarCol = colOf(row, AVATAR_KEYS);
