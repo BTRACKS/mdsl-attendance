@@ -1732,10 +1732,10 @@
 
   function hseTable(recs) {
     if (!recs.length) return '<div class="table-wrap"><p class="empty">No HSE check-ins recorded for this session.</p></div>';
-    return '<div class="table-wrap"><table><thead><tr><th>Staff Name</th><th>Staff ID</th><th>Department</th><th>Date</th><th>Check-in Time</th><th>Status</th></tr></thead><tbody>' +
+    return '<div class="table-wrap"><table><thead><tr><th>Staff Name</th><th>Date</th><th>Status</th></tr></thead><tbody>' +
       recs.map(function (r) {
-        return "<tr><td>" + esc(r.name) + "</td><td>" + esc(r.staffId) + "</td><td>" + esc(r.department) + "</td>" +
-          "<td>" + esc(csvDate(r.date)) + '</td><td class="num">' + esc(r.time) + "</td>" +
+        return "<tr><td>" + esc(r.name) + "</td>" +
+          "<td>" + esc(csvDate(r.date)) + "</td>" +
           '<td><span class="tag tag-ok">' + esc(r.status) + "</span></td></tr>";
       }).join("") + "</tbody></table></div>";
   }
