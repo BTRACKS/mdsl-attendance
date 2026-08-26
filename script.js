@@ -1060,7 +1060,7 @@
     ctx.restore();
   }
 
-  function pdfPageCanvas(rows, pageIndex, pageTotal, logoImg, authorisedName, generationDate) {
+  function pdfPageCanvas(rows, pageIndex, pageTotal, logoImg, authorisedName, generationDate, hseTopic) {
     var W = 1240, H = 1754, canvas = document.createElement("canvas");
     canvas.width = W; canvas.height = H;
     var ctx = canvas.getContext("2d");
@@ -1101,8 +1101,16 @@
     ctx.strokeStyle = RULE_STRONG; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(margin, dividerY + 0.5); ctx.lineTo(right, dividerY + 0.5); ctx.stroke();
 
-    /* ---------------- AUTHORISATION ---------------- */
-    var authY = dividerY + 62;
+    /* ---------------- HSE TOPIC / AUTHORISATION ---------------- */
+    var topicOffset = hseTopic ? 72 : 0;
+    if (hseTopic) {
+      var topicY = dividerY + 40;
+      ctx.fillStyle = INK_3; ctx.font = "600 12px " + FONT;
+      ctx.fillText("HSE TOPIC", margin, topicY);
+      ctx.fillStyle = BLACK; ctx.font = "700 20px " + FONT;
+      ctx.fillText(pdfUpper(hseTopic), margin, topicY + 24);
+    }
+    var authY = dividerY + 62 + topicOffset;
     ctx.fillStyle = INK_3; ctx.font = "600 12px " + FONT;
     ctx.fillText("NAME OF AUTHORISED", margin, authY);
     ctx.fillStyle = BLACK; ctx.font = "700 20px " + FONT;
@@ -1794,10 +1802,10 @@
 
   function hseTable(recs) {
     if (!recs.length) return '<div class="table-wrap"><p class="empty">No HSE check-ins recorded for this session.</p></div>';
-    return '<div class="table-wrap"><table><thead><tr><th>Staff Name</th><th>Staff ID</th><th>Department</th><th>Date</th><th>Check-in Time</th><th>Status</th></tr></thead><tbody>' +
+    return '<div class="table-wrap"><table><thead><tr><th>Staff Name</th><th>Date</th><th>Status</th></tr></thead><tbody>' +
       recs.map(function (r) {
-        return "<tr><td>" + esc(r.name) + "</td><td>" + esc(r.staffId) + "</td><td>" + esc(r.department) + "</td>" +
-          "<td>" + esc(csvDate(r.date)) + '</td><td class="num">' + esc(r.time) + "</td>" +
+        return "<tr><td>" + esc(r.name) + "</td>" +
+          "<td>" + esc(csvDate(r.date)) + "</td>" +
           '<td><span class="tag tag-ok">' + esc(r.status) + "</span></td></tr>";
       }).join("") + "</tbody></table></div>";
   }
@@ -1844,6 +1852,10 @@
       var generationDate = pdfFormatGenerationDate(new Date());
 
       /* HSE PDF rows intentionally contain only Staff Name, Date and Status. */
+        var hseTopic = recs.reduce(function (topic, r) {
+        return topic || String(r.topic || "").trim();
+      }, "") || String(hseSettings().topic || "").trim() || "HSE ATTENDANCE SESSION";
+
       var rows = recs.map(function (r) {
         return {
           name: r.name,
@@ -1860,7 +1872,7 @@
       var total = pages.length;
       var jpgs = pages.map(function (p, idx) {
         return jpegDataUrlToBytes(
-          pdfPageCanvas(p.rows, idx + 1, total, logo, authorisedName, generationDate)
+          pdfPageCanvas(p.rows, idx + 1, total, logo, authorisedName, generationDate, hseTopic)
             .toDataURL("image/jpeg", 0.90)
         );
       });
