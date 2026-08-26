@@ -1752,11 +1752,28 @@
   }
 
   async function writeProfile(id, patch) {
+    /* The database RPC is authoritative. Verify the actual row after the
+       write so the portal never reports success when a field did not persist. */
     var res = await sb.rpc("admin_update_profile", { p_user_id: id, p_changes: patch });
     if (res.error && missingFunction(res.error)) {
-      res = await sb.from("profiles").update(patch).eq("id", id);
+      res = await sb.from("profiles").update(patch).eq("id", id).select("*").maybeSingle();
     }
-    return res;
+    if (res.error) return res;
+
+    var check = await sb.from("profiles").select("*").eq("id", id).maybeSingle();
+    if (check.error) return check;
+    if (!check.data) return { error: { message: "The profile could not be found after saving." } };
+
+    var mismatches = [];
+    Object.keys(patch).forEach(function (key) {
+      var expected = patch[key] == null ? null : String(patch[key]);
+      var actual = check.data[key] == null ? null : String(check.data[key]);
+      if (expected !== actual) mismatches.push(key);
+    });
+    if (mismatches.length) {
+      return { error: { message: "The database did not persist these profile fields: " + mismatches.join(", ") + ". Please run the updated SUPABASE-TITLE-FIRST-LAST-FIX.sql." } };
+    }
+    return { data: check.data };
   }
 
   function askProfileSave() {
