@@ -1060,7 +1060,7 @@
     ctx.restore();
   }
 
-  function pdfPageCanvas(rows, pageIndex, pageTotal, logoImg, authorisedName, generationDate, hseTopic) {
+  function pdfPageCanvas(rows, pageIndex, pageTotal, logoImg, authorisedName, generationDate, hseTopic, meetingDate) {
     var W = 1240, H = 1754, canvas = document.createElement("canvas");
     canvas.width = W; canvas.height = H;
     var ctx = canvas.getContext("2d");
@@ -1102,13 +1102,19 @@
     ctx.beginPath(); ctx.moveTo(margin, dividerY + 0.5); ctx.lineTo(right, dividerY + 0.5); ctx.stroke();
 
     /* ---------------- HSE TOPIC / AUTHORISATION ---------------- */
-    var topicOffset = hseTopic ? 72 : 0;
+    var topicOffset = hseTopic ? 122 : 0;
     if (hseTopic) {
       var topicY = dividerY + 40;
       ctx.fillStyle = INK_3; ctx.font = "600 12px " + FONT;
       ctx.fillText("HSE TOPIC", margin, topicY);
       ctx.fillStyle = BLACK; ctx.font = "700 20px " + FONT;
       ctx.fillText(pdfUpper(hseTopic), margin, topicY + 24);
+
+      var meetingY = topicY + 58;
+      ctx.fillStyle = INK_3; ctx.font = "600 12px " + FONT;
+      ctx.fillText("MEETING DATE", margin, meetingY);
+      ctx.fillStyle = BLACK; ctx.font = "700 20px " + FONT;
+      ctx.fillText(pdfUpper(meetingDate || ""), margin, meetingY + 24);
     }
     var authY = dividerY + 62 + topicOffset;
     ctx.fillStyle = INK_3; ctx.font = "600 12px " + FONT;
@@ -1872,7 +1878,7 @@
       var total = pages.length;
       var jpgs = pages.map(function (p, idx) {
         return jpegDataUrlToBytes(
-          pdfPageCanvas(p.rows, idx + 1, total, logo, authorisedName, generationDate, hseTopic)
+          pdfPageCanvas(p.rows, idx + 1, total, logo, authorisedName, generationDate, hseTopic, prettyDate(key))
             .toDataURL("image/jpeg", 0.90)
         );
       });
