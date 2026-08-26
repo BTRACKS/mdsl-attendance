@@ -745,7 +745,70 @@
   function historyView(u) {
     return '<div class="page"><div class="page-head"><p class="eyebrow">Records</p><h1>Attendance History</h1></div>' +
       '<section class="section"><div class="section-head"><h2>All Records</h2><span>Most recent first</span></div>' +
-      historyTable(u) + "</section></div>";
+      historyExportPanel(u) + historyTable(u) + "</section></div>";
+  }
+
+  function historyExportPanel(u) {
+    var r = exportRange();
+    var rows = db.attendance.filter(function (a) {
+      return a.userId === u.id && a.date && r && a.date >= r.from && a.date <= r.to && (a.morning || a.evening);
+    });
+    return '<div class="export-card" id="historyExportCard">' +
+      '<div class="export-head"><div><p class="export-title">' + ICON.download + 'Attendance PDF</p>' +
+      '<p class="export-sub">Download your attendance history using the same PDF design as the Attendance export.</p></div>' +
+      '<span class="export-count">' + rows.length + ' record' + (rows.length === 1 ? '' : 's') + '</span></div>' +
+      '<div class="export-chips">' + EXPORT_PRESETS.map(function (p) {
+        return '<button type="button" class="export-chip' + (exportState.preset === p[0] ? ' active' : '') +
+          '" data-history-export-preset="' + p[0] + '">' + esc(p[1]) + '</button>';
+      }).join('') + '</div>' +
+      (exportState.preset === 'custom'
+        ? '<div class="export-dates"><div class="field"><label for="historyExportFrom">From</label>' +
+          '<input type="date" id="historyExportFrom" value="' + esc(exportState.from) + '" /></div>' +
+          '<div class="field"><label for="historyExportTo">To</label><input type="date" id="historyExportTo" value="' + esc(exportState.to) + '" /></div></div>'
+        : '') +
+      '<p class="export-range">' + (r ? 'Period: ' + esc(prettyDate(r.from)) + ' — ' + esc(prettyDate(r.to)) : 'Select a start and end date to continue.') + '</p>' +
+      '<div class="export-actions"><button type="button" class="btn btn-primary" id="historyExportPdfBtn">' + ICON.download + '<span>Download PDF</span></button></div>' +
+      '</div>';
+  }
+
+  async function downloadHistoryPdf(u) {
+    var range = exportRange();
+    if (!range) { toast('Select both start and end dates for the custom range.', 'error'); return; }
+    var dates = pdfDateKeys(range).filter(function (key) {
+      return db.attendance.some(function (a) { return a.userId === u.id && a.date === key; });
+    });
+    if (!dates.length) { toast('No attendance records are available in the selected period.', 'error'); return; }
+    var btn = el('historyExportPdfBtn');
+    if (btn) setBtnLoading(btn, true);
+    try {
+      await ensurePdfFonts();
+      var logo = await loadPdfLogo();
+      var authorisedName = pdfNameOnly(u);
+      var generationDate = pdfFormatGenerationDate(new Date());
+      var pageWidth = 1240, pageHeight = 1754, pages = [];
+      dates.forEach(function (key) {
+        pages.push({ key: key, rows: pdfRowsForDate(key, [u]) });
+      });
+      var total = pages.length;
+      var jpgs = pages.map(function (pg, idx) {
+        return jpegDataUrlToBytes(pdfPageCanvas(pg.rows, idx + 1, total, logo, authorisedName, generationDate).toDataURL('image/jpeg', 0.90));
+      });
+      var pdf = pdfBytesFromJpegs(jpgs, pageWidth, pageHeight);
+      var blob = new Blob([pdf], { type: 'application/pdf' });
+      var url = URL.createObjectURL(blob), link = document.createElement('a');
+      link.href = url;
+      link.download = range.from === range.to
+        ? 'Attendance_History_' + range.from + '.pdf'
+        : 'Attendance_History_' + range.from.split('-').reverse().join('-') + '_to_' + range.to.split('-').reverse().join('-') + '.pdf';
+      document.body.appendChild(link); link.click(); link.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
+      toast('Attendance History PDF generated successfully.');
+    } catch (e) {
+      console.error('Attendance History PDF generation:', e);
+      toast('The attendance history PDF could not be generated. Please try again.', 'error');
+    } finally {
+      if (btn) setBtnLoading(btn, false);
+    }
   }
 
   /* ------------------------- attendance export ------------------------- */
@@ -1732,10 +1795,10 @@
 
   function hseTable(recs) {
     if (!recs.length) return '<div class="table-wrap"><p class="empty">No HSE check-ins recorded for this session.</p></div>';
-    return '<div class="table-wrap"><table><thead><tr><th>Staff Name</th><th>Date</th><th>Status</th></tr></thead><tbody>' +
+    return '<div class="table-wrap"><table><thead><tr><th>Staff Name</th><th>Staff ID</th><th>Department</th><th>Date</th><th>Check-in Time</th><th>Status</th></tr></thead><tbody>' +
       recs.map(function (r) {
-        return "<tr><td>" + esc(r.name) + "</td>" +
-          "<td>" + esc(csvDate(r.date)) + "</td>" +
+        return "<tr><td>" + esc(r.name) + "</td><td>" + esc(r.staffId) + "</td><td>" + esc(r.department) + "</td>" +
+          "<td>" + esc(csvDate(r.date)) + '</td><td class="num">' + esc(r.time) + "</td>" +
           '<td><span class="tag tag-ok">' + esc(r.status) + "</span></td></tr>";
       }).join("") + "</tbody></table></div>";
   }
@@ -3322,6 +3385,17 @@
     var historyToggle = el("historyToggle");
     if (historyToggle) historyToggle.addEventListener("click", toggleHistoryContent);
     bindExport();
+    var historyCard = el("historyExportCard");
+    if (historyCard) {
+      Array.prototype.forEach.call(historyCard.querySelectorAll("[data-history-export-preset]"), function (b) {
+        b.addEventListener("click", function () { exportState.preset = b.getAttribute("data-history-export-preset"); render(); });
+      });
+      var hFrom = el("historyExportFrom"), hTo = el("historyExportTo");
+      if (hFrom) hFrom.addEventListener("change", function () { exportState.from = hFrom.value; render(); });
+      if (hTo) hTo.addEventListener("change", function () { exportState.to = hTo.value; render(); });
+      var hPdf = el("historyExportPdfBtn");
+      if (hPdf) hPdf.addEventListener("click", function () { downloadHistoryPdf(session()); });
+    }
     bindHse();
   }
 
