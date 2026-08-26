@@ -986,33 +986,27 @@
   }
 
   function pdfDrawDecorativeBorder(ctx, W, H, NAVY, AMBER) {
-    /* Light document border inspired by the supplied Service Report sample. */
+    /* Modern, subtle branded frame: hairline outer rule + navy inner rule
+       with small amber corner accents. Print-safe and non-decorative. */
     ctx.save();
-    ctx.strokeStyle = "#b9c3d0";
-    ctx.lineWidth = 1.2;
-    ctx.setLineDash([2, 6]);
-    ctx.strokeRect(18, 18, W - 36, H - 36);
-    ctx.setLineDash([1, 5]);
-    ctx.strokeStyle = NAVY;
-    ctx.strokeRect(24, 24, W - 48, H - 48);
-    ctx.setLineDash([]);
+    ctx.strokeStyle = "#dfe4ec";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(30.5, 30.5, W - 61, H - 61);
 
-    /* Small repeated corner/edge details, kept subtle for printing. */
-    ctx.fillStyle = NAVY;
-    var step = 34;
-    for (var x = 34; x <= W - 34; x += step) {
-      ctx.beginPath(); ctx.arc(x, 24, 1.7, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(x, H - 24, 1.7, 0, Math.PI * 2); ctx.fill();
-    }
-    for (var y = 34; y <= H - 34; y += step) {
-      ctx.beginPath(); ctx.arc(24, y, 1.7, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(W - 24, y, 1.7, 0, Math.PI * 2); ctx.fill();
-    }
-    [[24,24],[W-24,24],[24,H-24],[W-24,H-24]].forEach(function (p) {
-      ctx.fillStyle = AMBER;
-      ctx.beginPath(); ctx.arc(p[0], p[1], 3, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = NAVY;
-      ctx.beginPath(); ctx.arc(p[0], p[1], 1.25, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = NAVY;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(40, 40, W - 80, H - 80);
+
+    /* Amber corner accents */
+    ctx.strokeStyle = AMBER;
+    ctx.lineWidth = 4;
+    var a = 46, len = 54;
+    [[a, a, 1, 1], [W - a, a, -1, 1], [a, H - a, 1, -1], [W - a, H - a, -1, -1]].forEach(function (c) {
+      ctx.beginPath();
+      ctx.moveTo(c[0] + c[2] * len, c[1]);
+      ctx.lineTo(c[0], c[1]);
+      ctx.lineTo(c[0], c[1] + c[3] * len);
+      ctx.stroke();
     });
     ctx.restore();
   }
@@ -1021,95 +1015,112 @@
     var W = 1240, H = 1754, canvas = document.createElement("canvas");
     canvas.width = W; canvas.height = H;
     var ctx = canvas.getContext("2d");
-    var margin = 72, right = W - margin, tableW = W - margin * 2;
+    var margin = 92, right = W - margin, tableW = W - margin * 2;
     var NAVY = "#123a6b", NAVY_DEEP = "#0d2a4d", AMBER = "#f5a623", INK = "#101828";
-    var INK_2 = "#344054", INK_4 = "#667085", RULE = "#cfd6e1", PAPER_3 = "#eef1f6", FOOT = "#e8edf4";
+    var INK_2 = "#344054", INK_3 = "#5b6577", INK_4 = "#8a93a5";
+    var RULE = "#e6e9f0", RULE_STRONG = "#d5dae4", ZEBRA = "#f7f8fb";
     var FONT = "Inter";
 
     ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, W, H);
     ctx.textBaseline = "top";
     pdfDrawDecorativeBorder(ctx, W, H, NAVY, AMBER);
 
-    /* HEADER */
+    /* ---------------- HEADER (generous, vertically balanced) ---------------- */
+    var headerTop = 112, logoBox = 104;
     if (logoImg) {
-      var logoW = 112, logoH = 112;
-      ctx.drawImage(logoImg, margin, 58, logoW, logoH);
+      var ratio = (logoImg.width && logoImg.height) ? logoImg.width / logoImg.height : 1;
+      var lw = logoBox, lh = logoBox;
+      if (ratio > 1) lh = logoBox / ratio; else lw = logoBox * ratio;
+      ctx.drawImage(logoImg, margin, headerTop + (logoBox - lh) / 2, lw, lh);
     } else {
       ctx.strokeStyle = NAVY; ctx.lineWidth = 2;
-      ctx.strokeRect(margin, 62, 108, 90);
-      ctx.fillStyle = NAVY; ctx.font = "700 22px " + FONT;
-      ctx.textAlign = "center"; ctx.fillText("MDSL", margin + 54, 94); ctx.textAlign = "left";
+      ctx.strokeRect(margin, headerTop, logoBox, logoBox);
+      ctx.fillStyle = NAVY; ctx.font = "700 24px " + FONT;
+      ctx.textAlign = "center"; ctx.fillText("MDSL", margin + logoBox / 2, headerTop + logoBox / 2 - 14);
+      ctx.textAlign = "left";
     }
 
-    ctx.fillStyle = NAVY_DEEP;
-    ctx.font = "700 23px " + FONT;
     ctx.textAlign = "right";
-    ctx.fillText("DATE: " + pdfUpper(generationDate), right, 78);
-    ctx.fillStyle = AMBER;
-    ctx.fillRect(right - 190, 118, 190, 4);
+    ctx.fillStyle = INK_4; ctx.font = "600 12px " + FONT;
+    ctx.fillText("DATE GENERATED", right, headerTop + 22);
+    ctx.fillStyle = NAVY_DEEP; ctx.font = "700 21px " + FONT;
+    ctx.fillText(pdfUpper(generationDate), right, headerTop + 46);
     ctx.textAlign = "left";
+    ctx.fillStyle = AMBER;
+    ctx.fillRect(right - 132, headerTop + 84, 132, 3);
 
-    /* AUTHORISATION / PHYSICAL SIGNATURE AREA */
-    ctx.fillStyle = NAVY;
-    ctx.fillRect(margin, 205, 7, 84);
-    ctx.fillStyle = INK;
-    ctx.font = "700 16px " + FONT;
-    ctx.fillText("NAME OF AUTHORISED:", margin + 22, 211);
-    ctx.fillStyle = NAVY_DEEP;
-    ctx.font = "700 18px " + FONT;
-    ctx.fillText(pdfUpper(authorisedName || "ADMINISTRATOR"), margin + 235, 208);
+    /* Header / body divider with clear breathing room */
+    var dividerY = headerTop + logoBox + 56;
+    ctx.strokeStyle = RULE_STRONG; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(margin, dividerY + 0.5); ctx.lineTo(right, dividerY + 0.5); ctx.stroke();
 
-    ctx.fillStyle = INK;
-    ctx.font = "700 16px " + FONT;
-    ctx.fillText("SIGNATURE:", margin + 22, 250);
-    ctx.strokeStyle = RULE; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(margin + 142, 278); ctx.lineTo(margin + 500, 278); ctx.stroke();
-    /* Intentionally leave a generous blank signing area. */
+    /* ---------------- AUTHORISATION ---------------- */
+    var authY = dividerY + 62;
+    ctx.fillStyle = INK_3; ctx.font = "600 12px " + FONT;
+    ctx.fillText("NAME OF AUTHORISED", margin, authY);
+    ctx.fillStyle = NAVY_DEEP; ctx.font = "700 20px " + FONT;
+    ctx.fillText(pdfUpper(authorisedName || "ADMINISTRATOR"), margin, authY + 24);
 
-    /* ATTENDANCE TABLE */
-    var tableX = margin, tableY = 410;
-    var col1 = 360, col2 = 360, col3 = tableW - col1 - col2;
-    var headerH = 50, rowH = 43;
+    var signY = authY + 90;
+    ctx.fillStyle = INK; ctx.font = "600 15px " + FONT;
+    ctx.fillText("SIGNATURE:", margin, signY);
+    /* No line, box or underscores — clean blank signing space follows. */
+
+    /* ---------------- ATTENDANCE TABLE ---------------- */
+    var labelY = signY + 118;
+    ctx.fillStyle = INK_4; ctx.font = "600 12px " + FONT;
+    ctx.fillText("ATTENDANCE RECORD", margin, labelY);
+
+    var tableX = margin, tableY = labelY + 30;
+    var col1 = Math.round(tableW * 0.40), col2 = Math.round(tableW * 0.30), col3 = tableW - col1 - col2;
+    var headerH = 54, rowH = 46;
     var tableH = headerH + rows.length * rowH;
-    ctx.fillStyle = "#ffffff"; ctx.fillRect(tableX, tableY, tableW, tableH);
-    ctx.fillStyle = PAPER_3; ctx.fillRect(tableX + 1, tableY + 1, tableW - 2, headerH - 2);
-    ctx.strokeStyle = NAVY; ctx.lineWidth = 1.8;
-    ctx.strokeRect(tableX, tableY, tableW, tableH);
-    ctx.beginPath();
-    ctx.moveTo(tableX + col1, tableY); ctx.lineTo(tableX + col1, tableY + tableH);
-    ctx.moveTo(tableX + col1 + col2, tableY); ctx.lineTo(tableX + col1 + col2, tableY + tableH);
-    ctx.moveTo(tableX, tableY + headerH); ctx.lineTo(tableX + tableW, tableY + headerH);
-    for (var i = 1; i < rows.length; i++) {
-      ctx.moveTo(tableX, tableY + headerH + i * rowH);
-      ctx.lineTo(tableX + tableW, tableY + headerH + i * rowH);
-    }
-    ctx.stroke();
 
-    ctx.fillStyle = NAVY_DEEP; ctx.font = "700 16px " + FONT;
-    pdfCenteredText(ctx, "STAFF", tableX + col1 / 2, tableY + 16, col1 - 30, 17, 1);
-    pdfCenteredText(ctx, "RESUMPTION", tableX + col1 + col2 / 2, tableY + 16, col2 - 30, 17, 1);
-    pdfCenteredText(ctx, "CLOSING", tableX + col1 + col2 + col3 / 2, tableY + 16, col3 - 30, 17, 1);
+    /* Header band in brand navy */
+    ctx.fillStyle = NAVY;
+    ctx.fillRect(tableX, tableY, tableW, headerH);
+    ctx.fillStyle = "#ffffff"; ctx.font = "700 15px " + FONT;
+    pdfCenteredText(ctx, "STAFF", tableX + col1 / 2, tableY + 18, col1 - 30, 17, 1);
+    pdfCenteredText(ctx, "RESUMPTION", tableX + col1 + col2 / 2, tableY + 18, col2 - 30, 17, 1);
+    pdfCenteredText(ctx, "CLOSING", tableX + col1 + col2 + col3 / 2, tableY + 18, col3 - 30, 17, 1);
 
+    /* Rows: subtle zebra + light rules */
     rows.forEach(function (r, i) {
-      var y = tableY + headerH + i * rowH + 12;
-      ctx.font = "500 14px " + FONT;
+      var top = tableY + headerH + i * rowH;
+      if (i % 2 === 1) { ctx.fillStyle = ZEBRA; ctx.fillRect(tableX, top, tableW, rowH); }
+      if (i > 0) {
+        ctx.strokeStyle = RULE; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(tableX, top + 0.5); ctx.lineTo(tableX + tableW, top + 0.5); ctx.stroke();
+      }
+      var y = top + 14;
+      ctx.font = "600 14px " + FONT;
       ctx.fillStyle = INK;
       pdfCenteredText(ctx, r.name, tableX + col1 / 2, y, col1 - 28, 16, 2);
-      ctx.fillStyle = (r.resumption === "NOT RECORDED") ? "#8a3f2d" : INK;
+      ctx.font = "500 14px " + FONT;
+      ctx.fillStyle = (r.resumption === "NOT RECORDED") ? INK_4 : INK_2;
       pdfCenteredText(ctx, r.resumption, tableX + col1 + col2 / 2, y, col2 - 28, 16, 2);
-      ctx.fillStyle = (r.closing === "NOT RECORDED") ? "#8a3f2d" : INK;
+      ctx.fillStyle = (r.closing === "NOT RECORDED") ? INK_4 : INK_2;
       pdfCenteredText(ctx, r.closing, tableX + col1 + col2 + col3 / 2, y, col3 - 28, 16, 2);
     });
 
-    /* FOOTER — compact, centred, four balanced sections. */
-    var footY = 1518, footH = 150, fw = tableW / 4;
-    ctx.fillStyle = FOOT;
+    /* Outer table frame + column dividers */
+    ctx.strokeStyle = RULE_STRONG; ctx.lineWidth = 1;
+    ctx.strokeRect(tableX + 0.5, tableY + 0.5, tableW - 1, tableH - 1);
+    ctx.beginPath();
+    ctx.moveTo(tableX + col1 + 0.5, tableY + headerH); ctx.lineTo(tableX + col1 + 0.5, tableY + tableH);
+    ctx.moveTo(tableX + col1 + col2 + 0.5, tableY + headerH); ctx.lineTo(tableX + col1 + col2 + 0.5, tableY + tableH);
+    ctx.stroke();
+
+    /* ---------------- FOOTER — compact, centred, four sections ---------------- */
+    var footY = 1524, footH = 138, fw = tableW / 4;
+    ctx.fillStyle = "#fbfcfe";
     ctx.fillRect(tableX, footY, tableW, footH);
-    ctx.strokeStyle = RULE; ctx.lineWidth = 1.1;
-    ctx.strokeRect(tableX, footY, tableW, footH);
-    ctx.fillStyle = NAVY; ctx.fillRect(tableX, footY, tableW, 4);
+    ctx.strokeStyle = RULE; ctx.lineWidth = 1;
+    ctx.strokeRect(tableX + 0.5, footY + 0.5, tableW - 1, footH - 1);
+    ctx.fillStyle = NAVY; ctx.fillRect(tableX, footY, tableW, 3);
+    ctx.strokeStyle = RULE;
     for (var c = 1; c < 4; c++) {
-      ctx.beginPath(); ctx.moveTo(tableX + fw * c, footY + 12); ctx.lineTo(tableX + fw * c, footY + footH - 12); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(tableX + fw * c + 0.5, footY + 22); ctx.lineTo(tableX + fw * c + 0.5, footY + footH - 22); ctx.stroke();
     }
     var foot = [
       ["OFFICE ADDRESS", ["PLOT 135, GRA PHASE 8,", "G.U. AKE ROAD,", "PORT HARCOURT, RIVERS STATE, NIGERIA"]],
@@ -1120,17 +1131,17 @@
     foot.forEach(function (f, i) {
       var cx = tableX + i * fw + fw / 2;
       ctx.fillStyle = NAVY_DEEP; ctx.font = "700 11px " + FONT;
-      pdfCenteredText(ctx, f[0], cx, footY + 17, fw - 20, 13, 2);
-      ctx.fillStyle = INK_2; ctx.font = "500 9.5px " + FONT;
+      pdfCenteredText(ctx, f[0], cx, footY + 26, fw - 24, 13, 2);
+      ctx.fillStyle = INK_3; ctx.font = "500 10px " + FONT;
       f[1].forEach(function (line, idx) {
-        pdfCenteredText(ctx, line, cx, footY + 50 + idx * 22, fw - 20, 12, 2);
+        pdfCenteredText(ctx, line, cx, footY + 60 + idx * 20, fw - 24, 12, 1);
       });
     });
 
     if (pageTotal > 1) {
-      ctx.fillStyle = INK_4; ctx.font = "500 9px " + FONT;
+      ctx.fillStyle = INK_4; ctx.font = "500 10px " + FONT;
       ctx.textAlign = "right";
-      ctx.fillText("PAGE " + pageIndex + " OF " + pageTotal, right, 1692);
+      ctx.fillText("PAGE " + pageIndex + " OF " + pageTotal, right, footY + footH + 20);
       ctx.textAlign = "left";
     }
     return canvas;
@@ -1201,7 +1212,7 @@
       var generationDate = pdfFormatGenerationDate(new Date());
       var pages = [], pageWidth = 1240, pageHeight = 1754;
       /* Keep a generous signing/header area and reserve the compact footer. */
-      var maxRows = 20;
+      var maxRows = 18;
       dates.forEach(function (key) {
         var rows = pdfRowsForDate(key, staff);
         for (var start = 0; start < rows.length; start += maxRows) {
