@@ -187,6 +187,18 @@
     return "Account Deactivated<br><span>Your staff account has been deactivated and you cannot access the system at this time.</span><br><span>If you believe this was done by mistake, please contact the <strong>IT Department</strong> to rectify the issue.</span>";
   }
 
+  function showLoginDeactivatedMessage() {
+    var loginMsg = document.getElementById("loginMsg");
+    if (loginMsg) {
+      loginMsg.hidden = false;
+      loginMsg.className = "alert alert-error";
+      loginMsg.innerHTML = accountDeactivatedMessage();
+      loginMsg.scrollIntoView({ behavior: "smooth", block: "center" });
+    } else {
+      toast("Account Deactivated. Your account has been deactivated. If you feel this was an error, please contact the IT Department to rectify the issue.", "error");
+    }
+  }
+
   async function enforceCurrentAccountStatus(showMessage) {
     if (!authUser) return true;
     var res = await supabaseClient.from("profiles").select("id,status,account_status,is_active,active").eq("id", authUser.id).maybeSingle();
@@ -3732,7 +3744,7 @@
 
           if (isBanned) {
             setBtnLoading(submitBtn, false);
-            message(accountDeactivatedMessage());
+            showLoginDeactivatedMessage();
             return;
           }
 
@@ -3746,8 +3758,13 @@
             p_identifier: email
           });
           setBtnLoading(submitBtn, false);
-          if (!statusRes.error && statusRes.data === "deactivated") {
-            message(accountDeactivatedMessage());
+          var statusValue = statusRes && statusRes.data;
+          if (Array.isArray(statusValue)) statusValue = statusValue[0];
+          if (statusValue && typeof statusValue === "object") {
+            statusValue = statusValue.status || statusValue.account_status || statusValue.result;
+          }
+          if (!statusRes.error && String(statusValue || "").toLowerCase() === "deactivated") {
+            showLoginDeactivatedMessage();
           } else {
             toast("Invalid credentials. Please try again.", "error");
           }
@@ -3758,14 +3775,19 @@
         var thrownText = String((authException && (authException.message || authException.code || authException.name)) || "").toLowerCase();
         if (thrownText.indexOf("banned") !== -1 || thrownText.indexOf("user_banned") !== -1) {
           setBtnLoading(submitBtn, false);
-          message(accountDeactivatedMessage());
+          showLoginDeactivatedMessage();
         } else {
           var thrownStatusRes = await supabaseClient.rpc("get_login_account_status", {
             p_identifier: email
           });
           setBtnLoading(submitBtn, false);
-          if (!thrownStatusRes.error && thrownStatusRes.data === "deactivated") {
-            message(accountDeactivatedMessage());
+          var thrownStatusValue = thrownStatusRes && thrownStatusRes.data;
+          if (Array.isArray(thrownStatusValue)) thrownStatusValue = thrownStatusValue[0];
+          if (thrownStatusValue && typeof thrownStatusValue === "object") {
+            thrownStatusValue = thrownStatusValue.status || thrownStatusValue.account_status || thrownStatusValue.result;
+          }
+          if (!thrownStatusRes.error && String(thrownStatusValue || "").toLowerCase() === "deactivated") {
+            showLoginDeactivatedMessage();
           } else {
             toast("Invalid credentials. Please try again.", "error");
           }
