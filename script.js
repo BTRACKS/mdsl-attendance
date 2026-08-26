@@ -968,14 +968,12 @@
     return staff.map(function (u) {
       var a = record(u.id, key);
       var leave = leaveForDate(u.id, key);
-      if (leave) {
-        return { name: pdfNameOnly(u), resumption: "ON LEAVE", closing: "ON LEAVE" };
-      }
-      return {
-        name: pdfNameOnly(u),
-        resumption: a && a.morning && a.morning.time ? csvTime(a.morning.time) : "NOT RECORDED",
-        closing: a && a.evening && a.evening.time ? csvTime(a.evening.time) : "NOT RECORDED"
-      };
+      var status;
+      if (leave) status = "ON LEAVE";
+      else if (a && a.morning && a.evening) status = "COMPLETE";
+      else if (a && a.morning) status = "AWAITING CLOSING";
+      else status = "INCOMPLETE";
+      return { name: pdfNameOnly(u), date: prettyDate(key), status: status };
     });
   }
 
@@ -1129,9 +1127,9 @@
     ctx.fillStyle = BLACK;
     ctx.fillRect(tableX, tableY, tableW, headerH);
     ctx.fillStyle = "#ffffff"; ctx.font = "700 15px " + FONT;
-    pdfCenteredText(ctx, "STAFF", tableX + col1 / 2, tableY + 18, col1 - 30, 17, 1);
-    pdfCenteredText(ctx, "RESUMPTION", tableX + col1 + col2 / 2, tableY + 18, col2 - 30, 17, 1);
-    pdfCenteredText(ctx, "CLOSING", tableX + col1 + col2 + col3 / 2, tableY + 18, col3 - 30, 17, 1);
+    pdfCenteredText(ctx, "STAFF NAME", tableX + col1 / 2, tableY + 18, col1 - 30, 17, 1);
+    pdfCenteredText(ctx, "DATE", tableX + col1 + col2 / 2, tableY + 18, col2 - 30, 17, 1);
+    pdfCenteredText(ctx, "STATUS", tableX + col1 + col2 + col3 / 2, tableY + 18, col3 - 30, 17, 1);
 
     /* Rows: subtle zebra + light rules */
     rows.forEach(function (r, i) {
@@ -1146,10 +1144,10 @@
       ctx.fillStyle = INK;
       pdfCenteredText(ctx, r.name, tableX + col1 / 2, y, col1 - 28, 16, 2);
       ctx.font = "500 14px " + FONT;
-      ctx.fillStyle = (r.resumption === "NOT RECORDED") ? INK_4 : INK_2;
-      pdfCenteredText(ctx, r.resumption, tableX + col1 + col2 / 2, y, col2 - 28, 16, 2);
-      ctx.fillStyle = (r.closing === "NOT RECORDED") ? INK_4 : INK_2;
-      pdfCenteredText(ctx, r.closing, tableX + col1 + col2 + col3 / 2, y, col3 - 28, 16, 2);
+      ctx.fillStyle = INK_2;
+      pdfCenteredText(ctx, r.date, tableX + col1 + col2 / 2, y, col2 - 28, 16, 2);
+      ctx.fillStyle = INK_2;
+      pdfCenteredText(ctx, r.status, tableX + col1 + col2 + col3 / 2, y, col3 - 28, 16, 2);
     });
 
     /* Outer table frame + column dividers */
