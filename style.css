@@ -1130,3 +1130,6 @@ body.maintenance-page{background:var(--gradient-hero);min-height:100vh}
   .message-preview-item{width:100%;max-width:none}
 }
 
+
+/* HSE Download PDF: text matches existing icon color only */
+#hsePdfBtn span { color: inherit; }
