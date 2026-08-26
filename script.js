@@ -3715,27 +3715,14 @@
 
       var signInRes = await supabaseClient.auth.signInWithPassword({ email: email, password: v.password });
       if (signInRes.error || !signInRes.data.user) {
-        /* A deactivated account is banned at the Supabase Auth layer. When
-           Auth rejects that account, confirm the profile status so the user
-           gets the dedicated deactivation message instead of a generic
-           invalid-credentials message. Other authentication failures keep
-           the existing security-safe message. */
-        var deactivated = false;
-        try {
-          var statusRes = await supabaseClient.from("profiles")
-            .select("id,status,account_status,is_active,active")
-            .eq("email", email).maybeSingle();
-          if (!statusRes.error && statusRes.data) {
-            deactivated = !isAccountActive({
-              isActive: statusRes.data.is_active,
-              active: statusRes.data.active,
-              accountStatus: statusRes.data.account_status,
-              status: statusRes.data.status
-            });
-          }
-        } catch (statusErr) {}
-
-        if (deactivated) {
+        /* Supabase Auth returns the explicit `user_banned` error code when
+           the correct credentials belong to a user whose banned_until is
+           still active. Use the Auth error code first: an unauthenticated
+           browser may be blocked by RLS from reading the user's profile, so
+           checking profiles here is not reliable. Other authentication
+           failures keep the existing security-safe invalid-credentials text. */
+        var authErrorCode = signInRes.error && signInRes.error.code;
+        if (authErrorCode === "user_banned") {
           message(accountDeactivatedMessage());
         } else {
           toast("Invalid credentials. Please try again.", "error");
