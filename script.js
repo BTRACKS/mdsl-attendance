@@ -869,11 +869,9 @@
 
   /* ------------------------- attendance PDF documentation ------------------------- */
   /*
-     The PDF is rendered from the same in-memory attendance/profile data used by
-     the Admin attendance screen.  It deliberately uses the browser's canvas
-     rather than introducing a new runtime dependency, then wraps each rendered
-     page as a JPEG image inside a standards-compliant PDF.  This keeps the
-     feature self-contained and preserves the existing application bundle.
+     The PDF uses the same attendance/profile data already loaded by the Admin
+     attendance page.  No attendance calculations or database records are changed.
+     Pages are drawn with the browser canvas and packed into a self-contained PDF.
   */
   function pdfStaffList() {
     var q = String(filters.q || "").toLowerCase();
@@ -897,8 +895,6 @@
     while (d <= end) {
       var key = dateKey(d);
       var hasAttendance = db.attendance.some(function (a) { return a.date === key; });
-      /* Keep the official register meaningful: include working days even when
-         nobody has submitted yet; skip weekends/holidays with no records. */
       if (dayStatus(d).open || hasAttendance) out.push(key);
       d.setDate(d.getDate() + 1);
     }
@@ -910,18 +906,20 @@
       var a = record(u.id, key);
       var leave = leaveForDate(u.id, key);
       if (leave) {
-        return { name: profileDisplayName(u), resumption: "On leave", closing: "On leave" };
+        return { name: profileDisplayName(u), resumption: "ON LEAVE", closing: "ON LEAVE" };
       }
       return {
         name: profileDisplayName(u),
-        resumption: a && a.morning && a.morning.time ? csvTime(a.morning.time) : "Not recorded",
-        closing: a && a.evening && a.evening.time ? csvTime(a.evening.time) : "Not recorded"
+        resumption: a && a.morning && a.morning.time ? csvTime(a.morning.time) : "NOT RECORDED",
+        closing: a && a.evening && a.evening.time ? csvTime(a.evening.time) : "NOT RECORDED"
       };
     });
   }
 
+  function pdfUpper(text) { return String(text == null ? "" : text).toUpperCase(); }
+
   function pdfWrapText(ctx, text, maxWidth) {
-    var words = String(text || "").split(/\s+/), lines = [], line = "";
+    var words = pdfUpper(text).split(/\s+/), lines = [], line = "";
     words.forEach(function (word) {
       var test = line ? line + " " + word : word;
       if (ctx.measureText(test).width <= maxWidth || !line) line = test;
@@ -943,6 +941,12 @@
     return lines.length;
   }
 
+  function pdfCenteredText(ctx, text, centerX, y, maxWidth) {
+    ctx.textAlign = "center";
+    pdfDrawWrapped(ctx, text, centerX, y, maxWidth, 17, 2);
+    ctx.textAlign = "left";
+  }
+
   function loadPdfLogo() {
     return new Promise(function (resolve) {
       var img = new Image();
@@ -952,70 +956,64 @@
     });
   }
 
-  function pdfPageCanvas(dateKeyValue, rows, pageIndex, pageTotal, logoImg) {
+  function pdfPageCanvas(dateKeyValue, rows, pageIndex, pageTotal, logoImg, authorisedName) {
     var W = 1240, H = 1754, canvas = document.createElement("canvas");
     canvas.width = W; canvas.height = H;
     var ctx = canvas.getContext("2d");
+    var margin = 72, right = W - margin, tableW = W - margin * 2;
+    var NAVY = "#123a6b", NAVY_DEEP = "#0d2a4d", AMBER = "#f5a623", INK = "#101828";
+    var INK_2 = "#344054", INK_4 = "#8a93a5", RULE = "#d5dae4", PAPER_3 = "#eef1f6";
+
     ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, W, H);
     ctx.textBaseline = "top";
 
-    var margin = 72, right = W - margin;
-    ctx.strokeStyle = "#243b63"; ctx.lineWidth = 2;
+    /* Outer frame and subtle brand accent, matching the existing portal palette. */
+    ctx.strokeStyle = RULE; ctx.lineWidth = 2;
     ctx.strokeRect(24, 24, W - 48, H - 48);
+    ctx.fillStyle = NAVY; ctx.fillRect(24, 24, W - 48, 5);
+    ctx.fillStyle = AMBER; ctx.fillRect(24, 29, W - 48, 3);
 
-    /* Header — deliberately follows the supplied sketch: logo left, date right. */
+    /* Header: existing logo on the left, DATE only on the right. */
     if (logoImg) {
-      var size = 78;
-      ctx.drawImage(logoImg, margin, 58, size, size);
-      ctx.fillStyle = "#163a68";
-      ctx.font = "700 24px Arial, sans-serif";
-      ctx.fillText("Multidigital Service Limited", margin + 94, 70);
-      ctx.font = "500 15px Arial, sans-serif";
-      ctx.fillStyle = "#53627a";
-      ctx.fillText("E-Attendance Platform", margin + 94, 104);
+      var size = 82;
+      ctx.drawImage(logoImg, margin, 56, size, size);
     } else {
-      ctx.fillStyle = "#163a68";
-      ctx.strokeStyle = "#163a68";
-      ctx.lineWidth = 3;
-      ctx.strokeRect(margin, 58, 78, 78);
-      ctx.font = "800 25px Arial, sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText("MDSL", margin + 39, 83);
-      ctx.textAlign = "left";
-      ctx.font = "700 24px Arial, sans-serif";
-      ctx.fillText("Multidigital Service Limited", margin + 94, 70);
-      ctx.font = "500 15px Arial, sans-serif";
-      ctx.fillStyle = "#53627a";
-      ctx.fillText("E-Attendance Platform", margin + 94, 104);
+      /* Safe fallback if the existing website logo asset is unavailable at runtime. */
+      ctx.strokeStyle = NAVY; ctx.lineWidth = 2;
+      ctx.strokeRect(margin, 56, 82, 82);
+      ctx.fillStyle = NAVY; ctx.font = "800 24px Arial, sans-serif";
+      ctx.textAlign = "center"; ctx.fillText("MDSL", margin + 41, 84); ctx.textAlign = "left";
     }
 
-    ctx.textAlign = "right";
-    ctx.fillStyle = "#163a68";
-    ctx.font = "700 24px Arial, sans-serif";
-    ctx.fillText("Date for the Attendance", right, 66);
-    ctx.font = "600 18px Arial, sans-serif";
-    ctx.fillText(prettyDate(dateKeyValue), right, 101);
-    if (pageTotal > 1) {
-      ctx.font = "500 13px Arial, sans-serif";
-      ctx.fillStyle = "#68758a";
-      ctx.fillText("Page " + pageIndex + " of " + pageTotal, right, 132);
-    }
-    ctx.textAlign = "left";
+    ctx.fillStyle = NAVY; ctx.font = "800 24px Arial, sans-serif";
+    ctx.textAlign = "right"; ctx.fillText("DATE", right, 76); ctx.textAlign = "left";
+    ctx.fillStyle = AMBER; ctx.fillRect(right - 92, 112, 92, 4);
 
-    ctx.fillStyle = "#1b3156";
-    ctx.font = "600 17px Arial, sans-serif";
-    ctx.fillText("Name of Authorised:", margin, 205);
-    ctx.strokeStyle = "#9aa8bb"; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(margin + 205, 224); ctx.lineTo(right, 224); ctx.stroke();
+    /* Authorised person and physical signature area. */
+    ctx.fillStyle = INK; ctx.font = "800 16px Arial, sans-serif";
+    ctx.fillText("NAME OF AUTHORISED:", margin, 188);
+    ctx.fillStyle = NAVY; ctx.font = "800 18px Arial, sans-serif";
+    ctx.fillText(pdfUpper(authorisedName || "ADMINISTRATOR"), margin + 210, 186);
 
-    var tableX = margin, tableY = 270, tableW = W - margin * 2;
+    ctx.fillStyle = INK; ctx.font = "800 16px Arial, sans-serif";
+    ctx.fillText("SIGNATURE:", margin, 229);
+    ctx.strokeStyle = RULE; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(margin + 112, 254); ctx.lineTo(margin + 365, 254); ctx.stroke();
+    ctx.fillStyle = INK_4; ctx.font = "500 10px Arial, sans-serif";
+    ctx.fillText("", margin, 264);
+
+    /* Main attendance table. Everything inside it is centred. */
+    var tableX = margin, tableY = 300;
     var col1 = 360, col2 = 360, col3 = tableW - col1 - col2;
-    var headerH = 52, rowH = 42;
-    ctx.strokeStyle = "#243b63"; ctx.lineWidth = 1.8;
-    ctx.strokeRect(tableX, tableY, tableW, headerH + rows.length * rowH);
+    var headerH = 50, rowH = 42;
+    var tableH = headerH + rows.length * rowH;
+    ctx.fillStyle = "#ffffff"; ctx.fillRect(tableX, tableY, tableW, tableH);
+    ctx.fillStyle = PAPER_3; ctx.fillRect(tableX + 1, tableY + 1, tableW - 2, headerH - 2);
+    ctx.strokeStyle = NAVY; ctx.lineWidth = 1.8;
+    ctx.strokeRect(tableX, tableY, tableW, tableH);
     ctx.beginPath();
-    ctx.moveTo(tableX + col1, tableY); ctx.lineTo(tableX + col1, tableY + headerH + rows.length * rowH);
-    ctx.moveTo(tableX + col1 + col2, tableY); ctx.lineTo(tableX + col1 + col2, tableY + headerH + rows.length * rowH);
+    ctx.moveTo(tableX + col1, tableY); ctx.lineTo(tableX + col1, tableY + tableH);
+    ctx.moveTo(tableX + col1 + col2, tableY); ctx.lineTo(tableX + col1 + col2, tableY + tableH);
     ctx.moveTo(tableX, tableY + headerH); ctx.lineTo(tableX + tableW, tableY + headerH);
     for (var i = 1; i < rows.length; i++) {
       ctx.moveTo(tableX, tableY + headerH + i * rowH);
@@ -1023,49 +1021,53 @@
     }
     ctx.stroke();
 
-    ctx.fillStyle = "#edf2f8"; ctx.fillRect(tableX + 1, tableY + 1, tableW - 2, headerH - 2);
-    ctx.fillStyle = "#18345f"; ctx.font = "700 17px Arial, sans-serif";
-    ctx.fillText("STAFF", tableX + 18, tableY + 17);
-    ctx.fillText("RESUMPTION", tableX + col1 + 18, tableY + 17);
-    ctx.fillText("CLOSING", tableX + col1 + col2 + 18, tableY + 17);
+    ctx.fillStyle = NAVY_DEEP; ctx.font = "800 16px Arial, sans-serif";
+    pdfCenteredText(ctx, "STAFF", tableX + col1 / 2, tableY + 15, col1 - 30);
+    pdfCenteredText(ctx, "RESUMPTION", tableX + col1 + col2 / 2, tableY + 15, col2 - 30);
+    pdfCenteredText(ctx, "CLOSING", tableX + col1 + col2 + col3 / 2, tableY + 15, col3 - 30);
 
-    ctx.font = "500 15px Arial, sans-serif";
     rows.forEach(function (r, i) {
-      var y = tableY + headerH + i * rowH + 12;
-      ctx.fillStyle = "#1f2f46";
-      pdfDrawWrapped(ctx, r.name, tableX + 18, y, col1 - 36, 18, 1);
-      ctx.fillStyle = r.resumption === "Not recorded" ? "#8a3f2d" : "#1f2f46";
-      pdfDrawWrapped(ctx, r.resumption, tableX + col1 + 18, y, col2 - 36, 18, 1);
-      ctx.fillStyle = r.closing === "Not recorded" ? "#8a3f2d" : "#1f2f46";
-      pdfDrawWrapped(ctx, r.closing, tableX + col1 + col2 + 18, y, col3 - 36, 18, 1);
+      var y = tableY + headerH + i * rowH + 11;
+      ctx.font = "600 14px Arial, sans-serif";
+      ctx.fillStyle = INK;
+      pdfCenteredText(ctx, r.name, tableX + col1 / 2, y, col1 - 28);
+      ctx.fillStyle = (r.resumption === "NOT RECORDED") ? "#8a3f2d" : INK;
+      pdfCenteredText(ctx, r.resumption, tableX + col1 + col2 / 2, y, col2 - 28);
+      ctx.fillStyle = (r.closing === "NOT RECORDED") ? "#8a3f2d" : INK;
+      pdfCenteredText(ctx, r.closing, tableX + col1 + col2 + col3 / 2, y, col3 - 28);
     });
 
-    /* Footer — four equal sections, matching the supplied sketch. */
-    var footY = 1455, footH = 205, fw = tableW / 4;
-    ctx.strokeStyle = "#243b63"; ctx.lineWidth = 1.5;
+    /* Compact four-section footer. */
+    var footY = 1450, footH = 220, fw = tableW / 4;
+    ctx.strokeStyle = RULE; ctx.lineWidth = 1.2;
     ctx.strokeRect(tableX, footY, tableW, footH);
     for (var c = 1; c < 4; c++) {
       ctx.beginPath(); ctx.moveTo(tableX + fw * c, footY); ctx.lineTo(tableX + fw * c, footY + footH); ctx.stroke();
     }
+    ctx.fillStyle = NAVY; ctx.fillRect(tableX, footY, tableW, 4);
+
     var foot = [
-      ["Port Harcourt Office", "Plot 135, GRA Phase 8,\nG.U. Ake Road,\nPort Harcourt, Rivers State, Nigeria"],
-      ["Lagos Office", "VGB Court, Penthouse 2,\n86A Oduduwa Crescent,\nGRA, Ikeja, Lagos State, Nigeria"],
-      ["Admin / General Enquiries", "info@multidigitalng.com\nenquires@multidigitalng.com\nTEL: +2348067184912"],
-      ["Technical / Services", "service@multidigitalng.com\ntechnical@multidigitalng.com"]
+      ["OFFICE ADDRESS", ["PLOT 135, GRA PHASE 8,", "G.U. AKE ROAD,", "PORT HARCOURT, RIVERS STATE, NIGERIA"]],
+      ["OFFICE ADDRESS", ["VGB COURT, PENTHOUSE 2,", "86A ODUDUWA CRESCENT,", "GRA, IKEJA, LAGOS STATE, NIGERIA"]],
+      ["ADMIN / GENERAL ENQUIRIES", ["INFO@MULTIDIGITALNG.COM", "ENQUIRES@MULTIDIGITALNG.COM", "TEL: +2348067184912"]],
+      ["TECHNICAL / SERVICES", ["SERVICE@MULTIDIGITALNG.COM", "TECHNICAL@MULTIDIGITALNG.COM"]]
     ];
     foot.forEach(function (f, i) {
-      var x = tableX + i * fw + 16;
-      ctx.fillStyle = "#18345f"; ctx.font = "700 14px Arial, sans-serif";
-      pdfDrawWrapped(ctx, f[0], x, footY + 18, fw - 32, 18, 2);
-      ctx.fillStyle = "#3e4e66"; ctx.font = "500 12px Arial, sans-serif";
-      var yy = footY + 58;
-      f[1].split("\n").forEach(function (line) {
-        pdfDrawWrapped(ctx, line, x, yy, fw - 32, 16, 2); yy += 19;
+      var cx = tableX + i * fw + fw / 2;
+      ctx.fillStyle = NAVY; ctx.font = "800 12px Arial, sans-serif";
+      pdfCenteredText(ctx, f[0], cx, footY + 20, fw - 22);
+      ctx.fillStyle = INK_2; ctx.font = "500 10.5px Arial, sans-serif";
+      f[1].forEach(function (line, idx) {
+        pdfCenteredText(ctx, line, cx, footY + 57 + idx * 24, fw - 22);
       });
     });
 
-    ctx.fillStyle = "#6b778a"; ctx.font = "500 11px Arial, sans-serif";
-    ctx.fillText("Official attendance documentation", margin, 1685);
+    if (pageTotal > 1) {
+      ctx.fillStyle = INK_4; ctx.font = "600 9px Arial, sans-serif";
+      ctx.textAlign = "right";
+      ctx.fillText("PAGE " + pageIndex + " OF " + pageTotal, right, 1690);
+      ctx.textAlign = "left";
+    }
     return canvas;
   }
 
@@ -1131,19 +1133,20 @@
     if (btn) setBtnLoading(btn, true);
     try {
       var logo = await loadPdfLogo();
+      var authorisedName = currentUser ? profileDisplayName(currentUser) : (authUser && authUser.email ? authUser.email : "ADMINISTRATOR");
       var pages = [], pageWidth = 1240, pageHeight = 1754;
       /* Keep each page aligned to the reference layout.  A long date's table
          continues naturally onto additional pages while repeating the header. */
       dates.forEach(function (key) {
         var rows = pdfRowsForDate(key, staff);
-        var maxRows = 24;
+        var maxRows = 23;
         for (var start = 0; start < rows.length; start += maxRows) {
           var chunk = rows.slice(start, start + maxRows);
           pages.push({ key: key, rows: chunk });
         }
       });
       var total = pages.length, jpgs = pages.map(function (p, idx) {
-        return jpegDataUrlToBytes(pdfPageCanvas(p.key, p.rows, idx + 1, total, logo).toDataURL("image/jpeg", 0.88));
+        return jpegDataUrlToBytes(pdfPageCanvas(p.key, p.rows, idx + 1, total, logo, authorisedName).toDataURL("image/jpeg", 0.88));
       });
       var pdf = pdfBytesFromJpegs(jpgs, pageWidth, pageHeight);
       var blob = new Blob([pdf], { type: "application/pdf" });
