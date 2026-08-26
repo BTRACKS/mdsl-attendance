@@ -1785,7 +1785,7 @@
 
       '<section class="section"><div class="section-head"><h2>Session Records</h2>' +
       '<div class="section-head-actions"><span>' + recs.length + " record" + (recs.length === 1 ? "" : "s") + "</span>" +
-      '<button class="btn btn-primary" type="button" id="hsePdfBtn">"+ ICON.download +"<span>Download PDF</span></button>" +
+      '<button class="btn btn-primary" type="button" id="hsePdfBtn">' + ICON.download + "<span>Download PDF</span></button>" +
        '<button class="btn btn-ghost btn-sm" type="button" id="hseCsvBtn">' + ICON.download + "<span>Download CSV</span></button>" +
       "</div></div>" +
       (s.topic ? '<p class="hse-topic">' + ICON.shield + "<span>Topic: " + esc(s.topic) + "</span></p>" : "") +
