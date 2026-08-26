@@ -195,7 +195,7 @@
       loginMsg.innerHTML = accountDeactivatedMessage();
       loginMsg.scrollIntoView({ behavior: "smooth", block: "center" });
     } else {
-      toast("Account Deactivated. Your account has been deactivated. If you feel this was an error, please contact the IT Department to rectify the issue.", "error");
+      toast("Account Deactivated. Your account has been deactivated. If you feel this was an error, please contact the IT Department to rectify the issue.", "error", "account-deactivated");
     }
   }
 
@@ -418,9 +418,10 @@
   }
 
   /* ------------------------- toasts & modal ------------------------- */
-  function toast(msg, type) {
+  function toast(msg, type, extraClass) {
     var t = document.createElement("div");
-    t.className = "toast" + (type === "error" ? " error" : "");
+    t.className = "toast" + (type === "error" ? " error" : "") + (extraClass ? " " + extraClass : "");
+    if (extraClass === "account-deactivated") t.style.borderLeft = "1px solid var(--rule)";
     t.textContent = msg;
     el("toasts").appendChild(t);
     setTimeout(function () { t.style.opacity = "0"; t.style.transition = "opacity .25s"; }, 3200);
