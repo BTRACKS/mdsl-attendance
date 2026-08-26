@@ -1102,27 +1102,32 @@
     ctx.beginPath(); ctx.moveTo(margin, dividerY + 0.5); ctx.lineTo(right, dividerY + 0.5); ctx.stroke();
 
     /* ---------------- HSE TOPIC / AUTHORISATION ---------------- */
-    var topicOffset = hseTopic ? 122 : 0;
+    /* Keep the four session-identification/sign-off sections on one consistent
+       vertical rhythm. The label-to-label spacing is identical for Topic,
+       Meeting Date, Authorised Person and Signature. */
+    var sectionGap = 80;
+    var topicY = dividerY + 40;
+    var meetingY = topicY + sectionGap;
+    var authY = hseTopic ? meetingY + sectionGap : topicY;
+    var signY = authY + sectionGap;
+
     if (hseTopic) {
-      var topicY = dividerY + 40;
       ctx.fillStyle = INK_3; ctx.font = "600 12px " + FONT;
       ctx.fillText("HSE TOPIC", margin, topicY);
       ctx.fillStyle = BLACK; ctx.font = "700 20px " + FONT;
       ctx.fillText(pdfUpper(hseTopic), margin, topicY + 24);
 
-      var meetingY = topicY + 58;
       ctx.fillStyle = INK_3; ctx.font = "600 12px " + FONT;
       ctx.fillText("MEETING DATE", margin, meetingY);
       ctx.fillStyle = BLACK; ctx.font = "700 20px " + FONT;
       ctx.fillText(pdfUpper(meetingDate || ""), margin, meetingY + 24);
     }
-    var authY = dividerY + 62 + topicOffset;
+
     ctx.fillStyle = INK_3; ctx.font = "600 12px " + FONT;
     ctx.fillText("NAME OF AUTHORISED", margin, authY);
     ctx.fillStyle = BLACK; ctx.font = "700 20px " + FONT;
     ctx.fillText(pdfUpper(authorisedName || "ADMINISTRATOR"), margin, authY + 24);
 
-    var signY = authY + 90;
     ctx.fillStyle = INK; ctx.font = "600 15px " + FONT;
     ctx.fillText("SIGNATURE:", margin, signY);
     /* No line, box or underscores — clean blank signing space follows. */
