@@ -3713,21 +3713,40 @@
         email = lookup.data;
       }
 
-      var signInRes = await supabaseClient.auth.signInWithPassword({ email: email, password: v.password });
-      if (signInRes.error || !signInRes.data.user) {
-        /* Supabase Auth returns the explicit `user_banned` error code when
-           the correct credentials belong to a user whose banned_until is
-           still active. Use the Auth error code first: an unauthenticated
-           browser may be blocked by RLS from reading the user's profile, so
-           checking profiles here is not reliable. Other authentication
-           failures keep the existing security-safe invalid-credentials text. */
-        var authErrorCode = signInRes.error && signInRes.error.code;
-        if (authErrorCode === "user_banned") {
+      try {
+        var signInRes = await supabaseClient.auth.signInWithPassword({ email: email, password: v.password });
+        if (signInRes.error || !signInRes.data.user) {
+          /* Supabase Auth exposes banned accounts as `user_banned`. Some
+             supabase-js versions expose the useful value on `code`, while
+             older versions may only expose it through name/message/status.
+             Check all Auth error identifiers so the UI never falls back to
+             the generic credentials message for a genuinely banned account. */
+          var authErr = signInRes.error || {};
+          var authErrorCode = String(authErr.code || authErr.name || "").toLowerCase();
+          var authErrorText = String(authErr.message || "").toLowerCase();
+          var isBanned = authErrorCode === "user_banned" ||
+            authErrorCode === "authapierror:user_banned" ||
+            authErrorText.indexOf("user is banned") !== -1 ||
+            authErrorText.indexOf("user_banned") !== -1 ||
+            authErrorText.indexOf("banned_until") !== -1;
+
+          setBtnLoading(submitBtn, false);
+          if (isBanned) {
+            message(accountDeactivatedMessage());
+          } else {
+            toast("Invalid credentials. Please try again.", "error");
+          }
+          return;
+        }
+      } catch (authException) {
+        /* Never leave the login button spinning if an Auth request throws. */
+        setBtnLoading(submitBtn, false);
+        var thrownText = String((authException && (authException.message || authException.code || authException.name)) || "").toLowerCase();
+        if (thrownText.indexOf("banned") !== -1 || thrownText.indexOf("user_banned") !== -1) {
           message(accountDeactivatedMessage());
         } else {
           toast("Invalid credentials. Please try again.", "error");
         }
-        setBtnLoading(submitBtn, false);
         return;
       }
 
