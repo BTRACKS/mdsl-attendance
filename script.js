@@ -3730,8 +3730,23 @@
             authErrorText.indexOf("user_banned") !== -1 ||
             authErrorText.indexOf("banned_until") !== -1;
 
-          setBtnLoading(submitBtn, false);
           if (isBanned) {
+            setBtnLoading(submitBtn, false);
+            message(accountDeactivatedMessage());
+            return;
+          }
+
+          /*
+           * Some Supabase Auth versions mask a banned account as the generic
+           * invalid-credentials error. In that case, ask the server-side RPC
+           * whether this login identifier belongs to a deactivated profile.
+           * The RPC never receives or checks the password.
+           */
+          var statusRes = await supabaseClient.rpc("get_login_account_status", {
+            p_identifier: email
+          });
+          setBtnLoading(submitBtn, false);
+          if (!statusRes.error && statusRes.data === "deactivated") {
             message(accountDeactivatedMessage());
           } else {
             toast("Invalid credentials. Please try again.", "error");
@@ -3740,12 +3755,20 @@
         }
       } catch (authException) {
         /* Never leave the login button spinning if an Auth request throws. */
-        setBtnLoading(submitBtn, false);
         var thrownText = String((authException && (authException.message || authException.code || authException.name)) || "").toLowerCase();
         if (thrownText.indexOf("banned") !== -1 || thrownText.indexOf("user_banned") !== -1) {
+          setBtnLoading(submitBtn, false);
           message(accountDeactivatedMessage());
         } else {
-          toast("Invalid credentials. Please try again.", "error");
+          var thrownStatusRes = await supabaseClient.rpc("get_login_account_status", {
+            p_identifier: email
+          });
+          setBtnLoading(submitBtn, false);
+          if (!thrownStatusRes.error && thrownStatusRes.data === "deactivated") {
+            message(accountDeactivatedMessage());
+          } else {
+            toast("Invalid credentials. Please try again.", "error");
+          }
         }
         return;
       }
