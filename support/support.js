@@ -165,7 +165,7 @@
   var LAST_NAME_KEYS = ["last_name"];
   var EMAIL_KEYS = ["email", "work_email", "email_address"];
   var PHONE_KEYS = ["phone", "phone_number", "mobile", "telephone", "msisdn"];
-  var TITLE_KEYS = ["position", "job_title", "designation", "role_title"];
+  var TITLE_KEYS = ["position", "job_title", "title", "designation", "role_title"];
   var STAFF_KEYS = ["staff_id", "staff_no", "employee_id", "staff_number"];
   var DEPT_KEYS = ["department", "dept", "unit", "branch"];
   var STATUS_KEYS = ["status", "account_status", "is_active", "active", "employment_status"];
@@ -1711,10 +1711,6 @@
       return;
     }
 
-    /* Structured identity fields are independent editable fields.
-       Do not hide Title merely because an older record has not yet populated
-       First Name or Last Name. This keeps existing records editable while
-       using the same shared profiles row. */
     EDIT_FIELDS.forEach(function (f) {
       var col = colOf(row, f.keys);
       if (col) {
