@@ -1036,7 +1036,13 @@ body.modal-open{overflow:hidden}
 #tab-leave .leave-empty-state p{margin:0;color:var(--ink-3);font-size:13px}
 #tab-leave .leave-empty-note{margin-top:8px!important;font-size:12px!important;color:var(--ink-4)!important}
 #tab-leave .leave-error-state{border-color:#e6b8b2;background:#fff8f7}
-@media(max-width:760px){#tab-leave .leave-summary-grid{grid-template-columns:1fr}#tab-leave .leave-support-toolbar{align-items:stretch}#tab-leave .leave-view-note{padding:0}}
+@media(max-width:760px){
+  #tab-leave .leave-summary-grid{grid-template-columns:1fr}
+  #tab-leave .leave-support-toolbar{display:flex;flex-direction:column;align-items:stretch;gap:10px;width:100%}
+  #tab-leave .leave-support-toolbar .search-field{display:flex;width:100%;min-width:0;flex:1 1 auto;gap:7px}
+  #tab-leave .leave-support-toolbar .search-field input{width:100%;min-width:0;min-height:48px;padding:12px 14px;font-size:16px}
+  #tab-leave .leave-view-note{padding:0}
+}
 
 /* ---------- Support Ticket Management ---------- */
 #supportTicketNavBadge{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:var(--amber);color:var(--navy-deep);font-size:10px;font-weight:800}
