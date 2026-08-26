@@ -984,6 +984,10 @@ body.maintenance-page{background:var(--gradient-hero);min-height:100vh}
 .message-row.failed .message-bubble{border-color:#f3b4ac;background:#fdf1f0}
 .message-row.failed .message-meta{color:#c0392b}
 .message-meta{position:absolute;right:9px;bottom:4px;font-size:9px;color:var(--ink-4);white-space:nowrap}
+.message-checks{display:inline-flex;align-items:center;justify-content:center;width:16px;height:10px;margin-left:4px;vertical-align:-1px;color:var(--ink-4);opacity:.55;transition:color var(--t),opacity var(--t)}
+.message-checks svg{width:16px;height:10px;display:block}
+.message-checks.is-read{color:var(--navy);opacity:1}
+
 .message-composer{flex:0 0 auto;padding:12px;border-top:1px solid var(--rule);background:var(--paper);display:flex;gap:10px;align-items:flex-end}
 .message-composer textarea{resize:none;min-height:44px;max-height:130px;padding:11px 13px;line-height:1.45}
 .message-composer .btn{height:44px;padding:0 19px;flex:0 0 auto}

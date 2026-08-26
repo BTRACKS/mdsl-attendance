@@ -3046,6 +3046,19 @@
           await loadMessagesForConversation(payload.new.conversation_id);
           refreshConversationList();
         }
+      })
+      /* Read receipts are separate from encrypted message rows. Listening to them
+         lets the sender's check marks change immediately when the recipient opens
+         the conversation, without polling or refreshing the page. */
+      .on("postgres_changes", { event: "*", schema: "public", table: "message_receipts" }, async function (payload) {
+        if (!session()) return;
+        var receipt = payload.new || payload.old || {};
+        if (!receipt.message_id) return;
+        var active = messageState.activeConversation;
+        if (location.hash === "#/messages" && active) {
+          await loadMessagesForConversation(active, { skipReadMark: true });
+          refreshConversationList();
+        }
       }).subscribe();
   }
   async function stopMessagingRealtime() { if (messageState.realtime) { await supabaseClient.removeChannel(messageState.realtime); messageState.realtime = null; } }
@@ -3100,15 +3113,56 @@
   function messageClearKey(conversationId) { var u = session(); return "md_msg_clear_" + (u ? u.id : "") + "_" + conversationId; }
   function getClearedBefore(conversationId) { try { return localStorage.getItem(messageClearKey(conversationId)) || null; } catch (e) { return null; } }
   function setClearedBefore(conversationId, iso) { try { localStorage.setItem(messageClearKey(conversationId), iso); } catch (e) {} }
-  async function loadMessagesForConversation(conversationId) {
+  async function getMessageReadMap(rows, conversationId) {
+    var map = {};
+    var ids = (rows || []).map(function (x) { return x.id; }).filter(Boolean);
+    if (!ids.length) return map;
+
+    /* Only read receipts belonging to recipients count toward the sender's
+       indicator. The current user's own receipt must never make a sent message
+       appear as read. */
+    var participantsRes = await supabaseClient.from("message_participants")
+      .select("user_id").eq("conversation_id", conversationId);
+    if (participantsRes.error) return map;
+    var recipientIds = (participantsRes.data || [])
+      .map(function (x) { return x.user_id; })
+      .filter(function (id) { return String(id) !== String(session().id); });
+    if (!recipientIds.length) return map;
+
+    var receiptsRes = await supabaseClient.from("message_receipts")
+      .select("message_id,user_id,read_at")
+      .in("message_id", ids)
+      .in("user_id", recipientIds);
+    if (receiptsRes.error) return map;
+
+    (receiptsRes.data || []).forEach(function (receipt) {
+      if (receipt.read_at) map[receipt.message_id] = true;
+    });
+    return map;
+  }
+
+  function messageChecksHtml(read) {
+    return '<span class="message-checks' + (read ? ' is-read' : '') + '" aria-label="' +
+      (read ? 'Read' : 'Sent') + '" title="' + (read ? 'Read' : 'Sent') +
+      '" aria-hidden="true">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<polyline points="2.5 12.5 6.5 16.5 13.5 8.5"></polyline>' +
+      '<polyline points="10.5 12.5 14.5 16.5 21.5 8.5"></polyline>' +
+      '</svg></span>';
+  }
+
+  async function loadMessagesForConversation(conversationId, options) {
     var u = session();
-    var renderRows = async function(rows, envelopes, markRead) {
+    options = options || {};
+    var markRead = options.skipReadMark !== true;
+    var renderRows = async function(rows, envelopes, shouldMarkRead, readMap) {
       var em = {}; (envelopes || []).forEach(function (x) { em[x.message_id] = x; });
       var html = '';
       for (var i = 0; i < rows.length; i++) {
         var row = rows[i], text = await decryptMessage(row, em[row.id]), mine = row.sender_id === u.id;
-        html += '<div class="message-row ' + (mine ? 'mine' : 'theirs') + '" data-message-id="' + esc(row.id) + '" data-created-at="' + esc(row.created_at) + '"><div class="message-bubble">' + messageContentHtml(text) + '<span class="message-meta">' + esc(messageTime(row.created_at)) + '</span></div></div>';
-        if (markRead && !mine) await supabaseClient.rpc("mark_message_read", { p_message_id: row.id });
+        var checks = mine ? messageChecksHtml(!!readMap[row.id]) : '';
+        html += '<div class="message-row ' + (mine ? 'mine' : 'theirs') + '" data-message-id="' + esc(row.id) + '" data-created-at="' + esc(row.created_at) + '"><div class="message-bubble">' + messageContentHtml(text) + '<span class="message-meta">' + esc(messageTime(row.created_at)) + checks + '</span></div></div>';
+        if (shouldMarkRead && !mine) await supabaseClient.rpc("mark_message_read", { p_message_id: row.id });
       }
       var stream = el("messageStream"); if (stream) {
         stream.innerHTML = html || '<div class="chat-empty chat-empty-small"><p>No messages yet. Say hello.</p></div>';
@@ -3120,7 +3174,8 @@
     var clearedBefore = getClearedBefore(conversationId);
     if (cached && Array.isArray(cached.rows) && cached.rows.length && messageState.unlockedPrivateKey) {
       var cachedRows = cached.rows.filter(function (row) { return !clearedBefore || row.created_at > clearedBefore; });
-      await renderRows(cachedRows, cached.envelopes || [], false);
+      var cachedReadMap = await getMessageReadMap(cachedRows, conversationId);
+      await renderRows(cachedRows, cached.envelopes || [], false, cachedReadMap);
     }
 
     var m = await supabaseClient.from("messages").select("id,conversation_id,sender_id,ciphertext,iv,created_at").eq("conversation_id", conversationId).order("created_at", { ascending: true }).limit(100);
@@ -3130,7 +3185,8 @@
     var env = ids.length ? await supabaseClient.from("message_key_envelopes").select("message_id,encrypted_key").in("message_id", ids).eq("user_id", u.id) : { data: [] };
     var envelopes = env.data || [];
     writeMessageCache("conversation", conversationId, { rows: rows, envelopes: envelopes });
-    await renderRows(rows, envelopes, true);
+    var readMap = await getMessageReadMap(rows, conversationId);
+    await renderRows(rows, envelopes, markRead, readMap);
     await refreshMessageUnread();
   }
   async function sendMessage(conversationId, text) {
@@ -3182,7 +3238,10 @@
   function markOptimisticMessageSent(tempId) {
     var row = document.getElementById(tempId); if (!row) return;
     row.classList.remove("pending");
-    var meta = row.querySelector(".message-meta"); if (meta) meta.textContent = messageTime(new Date().toISOString());
+    var meta = row.querySelector(".message-meta");
+    if (meta) {
+      meta.innerHTML = esc(messageTime(new Date().toISOString())) + messageChecksHtml(false);
+    }
   }
   function markOptimisticMessageFailed(tempId) {
     var row = document.getElementById(tempId); if (!row) return;
