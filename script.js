@@ -83,12 +83,29 @@
   var aboutCreatorProfiles = {};
 
   function mapProfile(p) {
+    var firstName = String(p.first_name || "").trim();
+    var lastName = String(p.last_name || "").trim();
+    var legacyName = String(p.full_name || "").trim();
+    if ((!firstName || !lastName) && legacyName) {
+      var parts = legacyName.split(/\s+/);
+      if (!firstName) firstName = parts.shift() || "";
+      if (!lastName) lastName = parts.join(" ");
+    }
+    var title = String(p.title || "").trim();
+    var composedName = [firstName, lastName].filter(Boolean).join(" ").trim();
     return {
-      id: p.id, fullName: p.full_name, staffId: p.staff_id, email: p.email,
+      id: p.id, fullName: legacyName || composedName, title: title, firstName: firstName, lastName: lastName,
+      staffId: p.staff_id, email: p.email,
       employmentType: p.employment_type, department: p.department, position: p.position,
       role: p.role, createdAt: p.created_at,
       phone: p.phone || "", avatarUrl: p.avatar_url || ""
     };
+  }
+
+  function profileDisplayName(u) {
+    if (!u) return "Staff member";
+    var name = [u.firstName, u.lastName].filter(function (x) { return String(x || "").trim(); }).join(" ").trim() || u.fullName || "Staff member";
+    return [u.title, name].filter(Boolean).join(" ").trim();
   }
   function mapAttendance(a) {
     return { userId: a.user_id, date: a.date, morning: a.morning || null, evening: a.evening || null };
@@ -486,7 +503,9 @@
       '<p class="eyebrow">Staff Registration</p><h1>Create your account</h1>' +
       '<p class="auth-sub">For Multidigital Service Limited personnel only. Details are verified against the staff register.</p>' +
       '<form id="signupForm" novalidate><div class="form-grid">' +
-      field("fullName", "Full Name", "text", "Adaeze Okonkwo") +
+      selectField("title", "Title", ["Mr", "Mrs", "Miss"]) +
+      field("firstName", "First Name", "text", "Adaeze") +
+      field("lastName", "Last Name", "text", "Okonkwo") +
       field("staffId", "Staff ID", "text", "MD-0123") +
       field("email", "Email Address", "email", "name@multidigitalng.com", true) +
       selectField("employmentType", "Employment Type", ["Intern", "Staff"]) +
@@ -574,7 +593,7 @@
     return '<div class="page"><div class="page-head"><p class="eyebrow">Staff Dashboard</p>' +
       '<h1 class="greeting-line">' +
       '<span class="greeting-salutation">' + esc(greeting.text) + ",</span>" +
-      '<span class="greeting-name">' + esc(u.fullName.split(" ")[0]) +
+      '<span class="greeting-name">' + esc(u.firstName || u.fullName.split(" ")[0]) +
       '<span class="greeting-icon" aria-hidden="true">' + greeting.icon + "</span></span>" +
       "</h1></div>" +
       '<div class="layout"><div>' +
@@ -624,7 +643,7 @@
   function profilePanel(u) {
     return '<aside><div class="panel"><div class="panel-head">' + ICON.userCard + 'Staff Profile</div><div class="panel-body">' +
       '<div class="identity">' + avatarHtml(u) +
-      "<div><h3>" + esc(u.fullName) + "</h3></div></div>" +
+      "<div><h3>" + esc(profileDisplayName(u)) + "</h3></div></div>" +
       '<dl class="dl">' +
       row("Staff ID", u.staffId) + row("Employment Type", u.employmentType) +
       row("Department", u.department) + row("Position", u.position) + row("Email", u.email) +
@@ -640,7 +659,7 @@
   /* Compact person row: profile picture + name only (no staff code). */
   function staffRow(u) {
     return '<div class="person-row">' + avatarHtml(u, "avatar-sm") +
-      '<span class="person-name">' + esc(u.fullName) + "</span></div>";
+      '<span class="person-name">' + esc(profileDisplayName(u)) + "</span></div>";
   }
   function staffList(list) {
     return '<div class="person-list">' + list.map(staffRow).join("") + "</div>";
@@ -780,7 +799,7 @@
       .map(function (a) {
         var u = byId[a.userId];
         return {
-          name: u.fullName,
+          name: profileDisplayName(u),
           staffId: u.staffId,
           employmentType: u.employmentType,
           date: a.date,
@@ -1004,7 +1023,7 @@
       staff.map(function (u) {
         var a = record(u.id, key);
         return '<tr><td><div class="staff-cell">' + avatarHtml(u, "avatar-sm") +
-          '<div class="staff-cell-info"><div class="who">' + esc(u.fullName) + '</div></div></div></td>' +
+          '<div class="staff-cell-info"><div class="who">' + esc(profileDisplayName(u)) + '</div></div></div></td>' +
           "<td>" + esc(u.department) + "</td><td>" + esc(u.employmentType) + "</td>" +
           '<td class="num">' + (a && a.morning ? esc(a.morning.time) : "—") + "</td>" +
           '<td class="num">' + (a && a.evening ? esc(a.evening.time) : "—") + "</td>" +
@@ -1080,7 +1099,7 @@
       staff.map(function (u) {
         var recs = db.attendance.filter(function (a) { return a.userId === u.id; }).sort(function (a, b) { return a.date < b.date ? 1 : -1; }).slice(0, 10);
         return '<div class="panel" style="margin-bottom:18px"><div class="panel-head panel-head-staff">' + avatarHtml(u, "avatar-sm") +
-          "<span>" + esc(u.fullName) + "</span></div>" +
+          "<span>" + esc(profileDisplayName(u)) + "</span></div>" +
           '<div class="panel-body panel-body-history">' +
           (leaveHistoryFor(u.id).length ? '<div class="leave-history-mini">' + leaveHistoryFor(u.id).slice(0,5).map(function(l){var today=dateKey(new Date());var st=l.status==="cancelled"?"Cancelled":(l.startDate<=today&&today<=l.endDate?"Active":(l.startDate>today?"Scheduled":"Completed"));return '<div><strong>'+esc(leaveTypeLabel(l.leaveType))+'</strong><span>'+esc(prettyDate(l.startDate))+' – '+esc(prettyDate(l.endDate))+' · '+esc(st)+(l.reason?' · '+esc(l.reason):'')+'</span></div>';}).join("") + '</div>' : '') +
           (recs.length ? '<div class="history-list">' +
@@ -1252,7 +1271,7 @@
       body = '<p class="hse-note danger">HSE attendance is closed for today.</p>' +
         '<p class="hse-sub">The window ran from ' + esc(prettyClock(s.open_time)) + " to " + esc(prettyClock(s.close_time)) + ".</p>";
     } else {
-      body = '<p class="hse-sub">You are signed in as <b>' + esc(u.fullName) + "</b> (" + esc(u.staffId) +
+      body = '<p class="hse-sub">You are signed in as <b>' + esc(profileDisplayName(u)) + "</b> (" + esc(u.staffId) +
         "). Your details are recorded automatically.</p>" +
         '<button class="btn btn-primary btn-lg btn-block" id="hseCheckIn" type="button">Check In for HSE</button>' +
         '<p class="hse-sub muted">Window: ' + esc(prettyClock(s.open_time)) + " – " + esc(prettyClock(s.close_time)) + "</p>";
@@ -1276,7 +1295,7 @@
       var now = new Date();
       var res = await supabaseClient.from("hse_attendance").insert({
         user_id: u.id,
-        staff_name: u.fullName,
+        staff_name: profileDisplayName(u),
         staff_id: u.staffId,
         department: u.department,
         session_date: key,
@@ -1760,7 +1779,9 @@
       '</div><span class="error" id="avatarError"></span></div></div>' +
 
       '<form id="profileForm" novalidate><div class="form-grid">' +
-      field("fullName", "Full Name", "text", "Adaeze Okonkwo") +
+      selectField("title", "Title", ["Mr", "Mrs", "Miss"]) +
+      field("firstName", "First Name", "text", "Adaeze") +
+      field("lastName", "Last Name", "text", "Okonkwo") +
       field("phone", "Phone Number", "tel", "+234 800 000 0000") +
       field("position", "Position / Role", "text", POSITIONS_HINT, true) +
       '</div><div class="form-foot form-foot-inline">' +
@@ -1784,6 +1805,9 @@
       '<aside><div class="panel"><div class="panel-head">' + ICON.userCard + 'Account Record</div><div class="panel-body">' +
       '<p class="dateline" style="margin-bottom:16px">These details are maintained by the administration team and cannot be edited here.</p>' +
       '<div class="form-grid form-grid-single">' +
+      readonlyField("title", "Title", u.title || "—") +
+      readonlyField("firstName", "First Name", u.firstName || "—") +
+      readonlyField("lastName", "Last Name", u.lastName || "—") +
       readonlyField("staffId", "Staff ID", u.staffId) +
       readonlyField("email", "Email Address", u.email) +
       readonlyField("department", "Department", u.department) +
@@ -1886,7 +1910,9 @@
     var pf = el("profileForm");
     if (pf) {
       function fillProfile() {
-        pf.querySelector('[name="fullName"]').value = u.fullName || "";
+        pf.querySelector('[name="title"]').value = u.title || "";
+        pf.querySelector('[name="firstName"]').value = u.firstName || "";
+        pf.querySelector('[name="lastName"]').value = u.lastName || "";
         pf.querySelector('[name="phone"]').value = u.phone || "";
         pf.querySelector('[name="position"]').value = u.position || "";
         Array.prototype.forEach.call(pf.querySelectorAll(".field"), function (f) {
@@ -1903,7 +1929,9 @@
       pf.addEventListener("submit", async function (e) {
         e.preventDefault();
         var v = readForm(pf, {
-          fullName: function (x) { return x.length >= 3 ? "" : "Enter your full name."; },
+          title: function (x) { return ["Mr", "Mrs", "Miss"].indexOf(x) !== -1 ? "" : "Select a title."; },
+          firstName: function (x) { return x.length >= 2 ? "" : "Enter your first name."; },
+          lastName: function (x) { return x.length >= 2 ? "" : "Enter your last name."; },
           phone: function (x) { return !x || /^[0-9+()\s-]{7,20}$/.test(x) ? "" : "Enter a valid phone number."; },
           position: req("Position")
         });
@@ -1912,7 +1940,8 @@
         var btn = pf.querySelector('button[type="submit"]');
         setBtnLoading(btn, true);
         var res = await supabaseClient.from("profiles").update({
-          full_name: v.fullName, phone: v.phone || null, position: v.position
+          title: v.title, first_name: v.firstName, last_name: v.lastName,
+          full_name: [v.firstName, v.lastName].join(" "), phone: v.phone || null, position: v.position
         }).eq("id", u.id);
         if (res.error) {
           setBtnLoading(btn, false);
@@ -2981,7 +3010,9 @@
     if (s) s.addEventListener("submit", async function (e) {
       e.preventDefault();
       var v = readForm(s, {
-        fullName: function (x) { return x.length >= 3 ? "" : "Enter your full name."; },
+        title: function (x) { return ["Mr", "Mrs", "Miss"].indexOf(x) !== -1 ? "" : "Select a title."; },
+        firstName: function (x) { return x.length >= 2 ? "" : "Enter your first name."; },
+        lastName: function (x) { return x.length >= 2 ? "" : "Enter your last name."; },
         staffId: function (x) { return x ? "" : "Staff ID is required."; },
         email: function (x) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x) ? "" : "Enter a valid email address."; },
         employmentType: req("Employment type"),
@@ -3012,7 +3043,8 @@
       }
 
       var profileRes = await supabaseClient.from("profiles").insert({
-        id: newAuthUser.id, full_name: v.fullName, staff_id: v.staffId, email: v.email,
+        id: newAuthUser.id, title: v.title, first_name: v.firstName, last_name: v.lastName,
+        full_name: [v.firstName, v.lastName].join(" "), staff_id: v.staffId, email: v.email,
         employment_type: v.employmentType, department: v.department, position: v.position,
         role: "staff"
       });
@@ -3047,15 +3079,15 @@
       var submitBtn = l.querySelector('button[type="submit"]');
       setBtnLoading(submitBtn, true);
 
-      var email = v.identifier;
+      var email = v.identifier.trim();
       if (email.indexOf("@") === -1) {
-        var lookup = await supabaseClient.from("profiles").select("email").ilike("staff_id", v.identifier).maybeSingle();
+        var lookup = await supabaseClient.rpc("get_login_email_by_staff_id", { p_staff_id: email });
         if (lookup.error || !lookup.data) {
           toast("Invalid credentials. Please try again.", "error");
           setBtnLoading(submitBtn, false);
           return;
         }
-        email = lookup.data.email;
+        email = lookup.data;
       }
 
       var signInRes = await supabaseClient.auth.signInWithPassword({ email: email, password: v.password });
@@ -3074,7 +3106,7 @@
         return;
       }
       await initMessaging();
-      toast("Signed in as " + currentUser.fullName + ".");
+      toast("Signed in as " + profileDisplayName(currentUser) + ".");
       location.hash = currentUser.role === "admin" ? "#/admin" : "#/dashboard";
       render();
     });
