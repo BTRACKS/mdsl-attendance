@@ -867,6 +867,302 @@
     toast(rows.length + " attendance record" + (rows.length === 1 ? "" : "s") + " exported.");
   }
 
+  /* ------------------------- attendance PDF documentation ------------------------- */
+  /*
+     The PDF is rendered from the same in-memory attendance/profile data used by
+     the Admin attendance screen.  It deliberately uses the browser's canvas
+     rather than introducing a new runtime dependency, then wraps each rendered
+     page as a JPEG image inside a standards-compliant PDF.  This keeps the
+     feature self-contained and preserves the existing application bundle.
+  */
+  function pdfStaffList() {
+    var q = String(filters.q || "").toLowerCase();
+    return db.users.filter(function (u) {
+      if (!u || u.role === "admin") return false;
+      var name = profileDisplayName(u).toLowerCase();
+      var legacy = String(u.fullName || "").toLowerCase();
+      var staffId = String(u.staffId || "").toLowerCase();
+      var email = String(u.email || "").toLowerCase();
+      var match = !q || name.indexOf(q) > -1 || legacy.indexOf(q) > -1 || staffId.indexOf(q) > -1 || email.indexOf(q) > -1;
+      return match && (!filters.dept || u.department === filters.dept) && (!filters.type || u.employmentType === filters.type);
+    }).sort(function (a, b) {
+      return profileDisplayName(a).toLowerCase().localeCompare(profileDisplayName(b).toLowerCase());
+    });
+  }
+
+  function pdfDateKeys(range) {
+    var out = [];
+    if (!range) return out;
+    var d = dateFromKey(range.from), end = dateFromKey(range.to);
+    while (d <= end) {
+      var key = dateKey(d);
+      var hasAttendance = db.attendance.some(function (a) { return a.date === key; });
+      /* Keep the official register meaningful: include working days even when
+         nobody has submitted yet; skip weekends/holidays with no records. */
+      if (dayStatus(d).open || hasAttendance) out.push(key);
+      d.setDate(d.getDate() + 1);
+    }
+    return out;
+  }
+
+  function pdfRowsForDate(key, staff) {
+    return staff.map(function (u) {
+      var a = record(u.id, key);
+      var leave = leaveForDate(u.id, key);
+      if (leave) {
+        return { name: profileDisplayName(u), resumption: "On leave", closing: "On leave" };
+      }
+      return {
+        name: profileDisplayName(u),
+        resumption: a && a.morning && a.morning.time ? csvTime(a.morning.time) : "Not recorded",
+        closing: a && a.evening && a.evening.time ? csvTime(a.evening.time) : "Not recorded"
+      };
+    });
+  }
+
+  function pdfWrapText(ctx, text, maxWidth) {
+    var words = String(text || "").split(/\s+/), lines = [], line = "";
+    words.forEach(function (word) {
+      var test = line ? line + " " + word : word;
+      if (ctx.measureText(test).width <= maxWidth || !line) line = test;
+      else { lines.push(line); line = word; }
+    });
+    if (line) lines.push(line);
+    return lines.length ? lines : [""];
+  }
+
+  function pdfDrawWrapped(ctx, text, x, y, maxWidth, lineHeight, maxLines) {
+    var lines = pdfWrapText(ctx, text, maxWidth);
+    if (maxLines && lines.length > maxLines) {
+      lines = lines.slice(0, maxLines);
+      var last = lines[lines.length - 1];
+      while (ctx.measureText(last + "…").width > maxWidth && last.length) last = last.slice(0, -1);
+      lines[lines.length - 1] = last + "…";
+    }
+    lines.forEach(function (line, i) { ctx.fillText(line, x, y + i * lineHeight); });
+    return lines.length;
+  }
+
+  function loadPdfLogo() {
+    return new Promise(function (resolve) {
+      var img = new Image();
+      img.onload = function () { resolve(img); };
+      img.onerror = function () { resolve(null); };
+      img.src = "logo-mark.png";
+    });
+  }
+
+  function pdfPageCanvas(dateKeyValue, rows, pageIndex, pageTotal, logoImg) {
+    var W = 1240, H = 1754, canvas = document.createElement("canvas");
+    canvas.width = W; canvas.height = H;
+    var ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, W, H);
+    ctx.textBaseline = "top";
+
+    var margin = 72, right = W - margin;
+    ctx.strokeStyle = "#243b63"; ctx.lineWidth = 2;
+    ctx.strokeRect(24, 24, W - 48, H - 48);
+
+    /* Header — deliberately follows the supplied sketch: logo left, date right. */
+    if (logoImg) {
+      var size = 78;
+      ctx.drawImage(logoImg, margin, 58, size, size);
+      ctx.fillStyle = "#163a68";
+      ctx.font = "700 24px Arial, sans-serif";
+      ctx.fillText("Multidigital Service Limited", margin + 94, 70);
+      ctx.font = "500 15px Arial, sans-serif";
+      ctx.fillStyle = "#53627a";
+      ctx.fillText("E-Attendance Platform", margin + 94, 104);
+    } else {
+      ctx.fillStyle = "#163a68";
+      ctx.strokeStyle = "#163a68";
+      ctx.lineWidth = 3;
+      ctx.strokeRect(margin, 58, 78, 78);
+      ctx.font = "800 25px Arial, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("MDSL", margin + 39, 83);
+      ctx.textAlign = "left";
+      ctx.font = "700 24px Arial, sans-serif";
+      ctx.fillText("Multidigital Service Limited", margin + 94, 70);
+      ctx.font = "500 15px Arial, sans-serif";
+      ctx.fillStyle = "#53627a";
+      ctx.fillText("E-Attendance Platform", margin + 94, 104);
+    }
+
+    ctx.textAlign = "right";
+    ctx.fillStyle = "#163a68";
+    ctx.font = "700 24px Arial, sans-serif";
+    ctx.fillText("Date for the Attendance", right, 66);
+    ctx.font = "600 18px Arial, sans-serif";
+    ctx.fillText(prettyDate(dateKeyValue), right, 101);
+    if (pageTotal > 1) {
+      ctx.font = "500 13px Arial, sans-serif";
+      ctx.fillStyle = "#68758a";
+      ctx.fillText("Page " + pageIndex + " of " + pageTotal, right, 132);
+    }
+    ctx.textAlign = "left";
+
+    ctx.fillStyle = "#1b3156";
+    ctx.font = "600 17px Arial, sans-serif";
+    ctx.fillText("Name of Authorised:", margin, 205);
+    ctx.strokeStyle = "#9aa8bb"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(margin + 205, 224); ctx.lineTo(right, 224); ctx.stroke();
+
+    var tableX = margin, tableY = 270, tableW = W - margin * 2;
+    var col1 = 360, col2 = 360, col3 = tableW - col1 - col2;
+    var headerH = 52, rowH = 42;
+    ctx.strokeStyle = "#243b63"; ctx.lineWidth = 1.8;
+    ctx.strokeRect(tableX, tableY, tableW, headerH + rows.length * rowH);
+    ctx.beginPath();
+    ctx.moveTo(tableX + col1, tableY); ctx.lineTo(tableX + col1, tableY + headerH + rows.length * rowH);
+    ctx.moveTo(tableX + col1 + col2, tableY); ctx.lineTo(tableX + col1 + col2, tableY + headerH + rows.length * rowH);
+    ctx.moveTo(tableX, tableY + headerH); ctx.lineTo(tableX + tableW, tableY + headerH);
+    for (var i = 1; i < rows.length; i++) {
+      ctx.moveTo(tableX, tableY + headerH + i * rowH);
+      ctx.lineTo(tableX + tableW, tableY + headerH + i * rowH);
+    }
+    ctx.stroke();
+
+    ctx.fillStyle = "#edf2f8"; ctx.fillRect(tableX + 1, tableY + 1, tableW - 2, headerH - 2);
+    ctx.fillStyle = "#18345f"; ctx.font = "700 17px Arial, sans-serif";
+    ctx.fillText("STAFF", tableX + 18, tableY + 17);
+    ctx.fillText("RESUMPTION", tableX + col1 + 18, tableY + 17);
+    ctx.fillText("CLOSING", tableX + col1 + col2 + 18, tableY + 17);
+
+    ctx.font = "500 15px Arial, sans-serif";
+    rows.forEach(function (r, i) {
+      var y = tableY + headerH + i * rowH + 12;
+      ctx.fillStyle = "#1f2f46";
+      pdfDrawWrapped(ctx, r.name, tableX + 18, y, col1 - 36, 18, 1);
+      ctx.fillStyle = r.resumption === "Not recorded" ? "#8a3f2d" : "#1f2f46";
+      pdfDrawWrapped(ctx, r.resumption, tableX + col1 + 18, y, col2 - 36, 18, 1);
+      ctx.fillStyle = r.closing === "Not recorded" ? "#8a3f2d" : "#1f2f46";
+      pdfDrawWrapped(ctx, r.closing, tableX + col1 + col2 + 18, y, col3 - 36, 18, 1);
+    });
+
+    /* Footer — four equal sections, matching the supplied sketch. */
+    var footY = 1455, footH = 205, fw = tableW / 4;
+    ctx.strokeStyle = "#243b63"; ctx.lineWidth = 1.5;
+    ctx.strokeRect(tableX, footY, tableW, footH);
+    for (var c = 1; c < 4; c++) {
+      ctx.beginPath(); ctx.moveTo(tableX + fw * c, footY); ctx.lineTo(tableX + fw * c, footY + footH); ctx.stroke();
+    }
+    var foot = [
+      ["Port Harcourt Office", "Plot 135, GRA Phase 8,\nG.U. Ake Road,\nPort Harcourt, Rivers State, Nigeria"],
+      ["Lagos Office", "VGB Court, Penthouse 2,\n86A Oduduwa Crescent,\nGRA, Ikeja, Lagos State, Nigeria"],
+      ["Admin / General Enquiries", "info@multidigitalng.com\nenquires@multidigitalng.com\nTEL: +2348067184912"],
+      ["Technical / Services", "service@multidigitalng.com\ntechnical@multidigitalng.com"]
+    ];
+    foot.forEach(function (f, i) {
+      var x = tableX + i * fw + 16;
+      ctx.fillStyle = "#18345f"; ctx.font = "700 14px Arial, sans-serif";
+      pdfDrawWrapped(ctx, f[0], x, footY + 18, fw - 32, 18, 2);
+      ctx.fillStyle = "#3e4e66"; ctx.font = "500 12px Arial, sans-serif";
+      var yy = footY + 58;
+      f[1].split("\n").forEach(function (line) {
+        pdfDrawWrapped(ctx, line, x, yy, fw - 32, 16, 2); yy += 19;
+      });
+    });
+
+    ctx.fillStyle = "#6b778a"; ctx.font = "500 11px Arial, sans-serif";
+    ctx.fillText("Official attendance documentation", margin, 1685);
+    return canvas;
+  }
+
+  function jpegDataUrlToBytes(dataUrl) {
+    var b64 = dataUrl.split(",")[1] || "";
+    var raw = atob(b64), out = new Uint8Array(raw.length);
+    for (var i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+    return out;
+  }
+
+  function pdfBytesFromJpegs(pages, width, height) {
+    var chunks = [], offsets = [0], length = 0;
+    function pushText(s) {
+      var b = new TextEncoder().encode(s); chunks.push(b); length += b.length;
+    }
+    function pushBytes(b) { chunks.push(b); length += b.length; }
+    function obj(n, body) { offsets[n] = length; pushText(n + " 0 obj\n" + body + "\nendobj\n"); }
+
+    pushText("%PDF-1.4\n%\xE2\xE3\xCF\xD3\n");
+    var pageCount = pages.length, catalogId = 1, pagesId = 2, nextId = 3;
+    var pageIds = [], imageIds = [], contentIds = [];
+    for (var i = 0; i < pageCount; i++) {
+      pageIds.push(nextId++); imageIds.push(nextId++); contentIds.push(nextId++);
+    }
+    var fontId = nextId++;
+    obj(catalogId, "<< /Type /Catalog /Pages " + pagesId + " 0 R >>");
+    obj(pagesId, "<< /Type /Pages /Kids [" + pageIds.map(function (id) { return id + " 0 R"; }).join(" ") + "] /Count " + pageCount + " >>");
+
+    for (var p = 0; p < pageCount; p++) {
+      var img = pages[p];
+      var imgBody = "<< /Type /XObject /Subtype /Image /Width " + width + " /Height " + height +
+        " /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length " + img.length + " >>\nstream\n";
+      offsets[imageIds[p]] = length;
+      pushText(imageIds[p] + " 0 obj\n" + imgBody);
+      pushBytes(img);
+      pushText("\nendstream\nendobj\n");
+
+      var content = "q\n595.28 0 0 841.89 0 0 cm\n/Im" + p + " Do\nQ\n";
+      obj(contentIds[p], "<< /Length " + content.length + " >>\nstream\n" + content + "endstream");
+      obj(pageIds[p], "<< /Type /Page /Parent " + pagesId + " 0 R /MediaBox [0 0 595.28 841.89] /Resources << /XObject << /Im" + p + " " + imageIds[p] + " 0 R >> >> /Contents " + contentIds[p] + " 0 R >>");
+    }
+    obj(fontId, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
+
+    var xref = length;
+    pushText("xref\n0 " + (nextId) + "\n0000000000 65535 f \n");
+    for (var id = 1; id < nextId; id++) pushText(String(offsets[id] || 0).padStart(10, "0") + " 00000 n \n");
+    pushText("trailer\n<< /Size " + nextId + " /Root " + catalogId + " 0 R >>\nstartxref\n" + xref + "\n%%EOF");
+
+    var total = chunks.reduce(function (n, b) { return n + b.length; }, 0), out = new Uint8Array(total), pos = 0;
+    chunks.forEach(function (b) { out.set(b, pos); pos += b.length; });
+    return out;
+  }
+
+  async function downloadAttendancePdf() {
+    var range = exportRange();
+    if (!range) { toast("Select both start and end dates for the custom range.", "error"); return; }
+    var staff = pdfStaffList();
+    if (!staff.length) { toast("No staff match the selected filters.", "error"); return; }
+    var dates = pdfDateKeys(range);
+    if (!dates.length) { toast("No attendance dates are available in the selected period.", "error"); return; }
+
+    var btn = el("exportPdfBtn");
+    if (btn) setBtnLoading(btn, true);
+    try {
+      var logo = await loadPdfLogo();
+      var pages = [], pageWidth = 1240, pageHeight = 1754;
+      /* Keep each page aligned to the reference layout.  A long date's table
+         continues naturally onto additional pages while repeating the header. */
+      dates.forEach(function (key) {
+        var rows = pdfRowsForDate(key, staff);
+        var maxRows = 24;
+        for (var start = 0; start < rows.length; start += maxRows) {
+          var chunk = rows.slice(start, start + maxRows);
+          pages.push({ key: key, rows: chunk });
+        }
+      });
+      var total = pages.length, jpgs = pages.map(function (p, idx) {
+        return jpegDataUrlToBytes(pdfPageCanvas(p.key, p.rows, idx + 1, total, logo).toDataURL("image/jpeg", 0.88));
+      });
+      var pdf = pdfBytesFromJpegs(jpgs, pageWidth, pageHeight);
+      var blob = new Blob([pdf], { type: "application/pdf" });
+      var url = URL.createObjectURL(blob), link = document.createElement("a");
+      link.href = url;
+      link.download = range.from === range.to
+        ? "Attendance_Report_" + range.from + ".pdf"
+        : "Attendance_Report_" + range.from.split("-").reverse().join("-") + "_to_" + range.to.split("-").reverse().join("-") + ".pdf";
+      document.body.appendChild(link); link.click(); link.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
+      toast("Attendance PDF generated successfully.");
+    } catch (e) {
+      console.error("Attendance PDF generation:", e);
+      toast("The attendance PDF could not be generated. Please try again.", "error");
+    } finally {
+      if (btn) setBtnLoading(btn, false);
+    }
+  }
+
   function openInGoogleSheets() {
     var r = exportRange();
     if (!r) { toast("Select both start and end dates for the custom range.", "error"); return; }
@@ -916,7 +1212,8 @@
       '<p class="export-range">' + (r ? "Period: " + esc(prettyDate(r.from)) + " — " + esc(prettyDate(r.to))
         : "Select a start and end date to continue.") + "</p>" +
       '<div class="export-actions">' +
-      '<button type="button" class="btn btn-primary" id="exportCsvBtn">' + ICON.download + "<span>Download CSV</span></button>" +
+      '<button type="button" class="btn btn-primary" id="exportPdfBtn">' + ICON.download + "<span>Download PDF</span></button>" +
+      '<button type="button" class="btn btn-ghost" id="exportCsvBtn">' + ICON.download + "<span>Download CSV</span></button>" +
       '<button type="button" class="btn btn-ghost" id="exportSheetsBtn">' + ICON.sheet + "<span>Open in Google Sheets</span></button>" +
       "</div></div>";
   }
@@ -933,6 +1230,8 @@
     var from = el("exportFrom"), to = el("exportTo");
     if (from) from.addEventListener("change", function () { exportState.from = from.value; render(); });
     if (to) to.addEventListener("change", function () { exportState.to = to.value; render(); });
+    var pdfBtn = el("exportPdfBtn");
+    if (pdfBtn) pdfBtn.addEventListener("click", downloadAttendancePdf);
     var csvBtn = el("exportCsvBtn");
     if (csvBtn) csvBtn.addEventListener("click", downloadCsv);
     var sheetBtn = el("exportSheetsBtn");
