@@ -3660,7 +3660,10 @@
     }
 
     if (hash === "#/admin" || hash === "#/admin/attendance" || hash === "#/admin/hse") {
-      if (normalizeRole(u.role) !== "admin") { location.hash = "#/dashboard"; return; }
+      // Use the exact role already resolved for the authenticated session by
+      // refreshSessionUser(). Do not perform a second, separate client-side
+      // role interpretation for Administration pages.
+      if (normalizeRole(currentUser && currentUser.role) !== "admin") { location.hash = "#/dashboard"; return; }
       view.innerHTML = hash === "#/admin" ? adminOverview()
         : hash === "#/admin/hse" ? hseAdminView()
         : adminManagement();
