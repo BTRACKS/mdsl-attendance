@@ -3877,17 +3877,33 @@
   }
 
   async function saveLearningTopic(form) {
-    var v = readForm(form, { title:req("Topic title"), category:req("Category"), module_order:req("Module order") }); if (!v) return;
-    var id = v.id || "";
-    var existingTopic = id ? learningTopic(id) : null;
-    var payload = { title:v.title, category:v.category, description:v.description||"", module_order:Number(v.module_order), published:!!form.published.checked, archived:(existingTopic ? !!existingTopic.archived : false) };
-    var topicRes = id ? await supabaseClient.from("learning_topics").update(payload).eq("id",id).select("*").single() : await supabaseClient.from("learning_topics").insert(Object.assign(payload,{created_by:authUser?authUser.id:null})).select("*").single();
-    if (topicRes.error) { toast(topicRes.error.message,"error"); return; }
-    var topic = topicRes.data;
-    var lessonPayload = { topic_id:topic.id, introduction:form.introduction.value.trim(), content:form.content.value.trim(), image_url:form.image_url.value.trim()||null, image_alt:form.image_alt.value.trim()||null };
-    var lessonRes = await supabaseClient.from("learning_lessons").upsert(lessonPayload,{onConflict:"topic_id"});
-    if (lessonRes.error) { toast(lessonRes.error.message,"error"); return; }
-    learningAdminState.editId=topic.id; await refreshData(); render(); toast(id?"Learning topic updated.":"Learning topic created.");
+    var v = readForm(form, { title:req("Topic title"), category:req("Category"), module_order:req("Module order") });
+    if (!v) return;
+    try {
+      var id = v.id || "";
+      var existingTopic = id ? learningTopic(id) : null;
+      if (!authUser) {
+        var sessionRes = await supabaseClient.auth.getSession();
+        authUser = sessionRes.data && sessionRes.data.session ? sessionRes.data.session.user : null;
+      }
+      if (!authUser) { toast("Your session has expired. Please sign in again.","error"); return; }
+      var order = Number(v.module_order);
+      if (!Number.isFinite(order) || order < 1) { toast("Module order must be a number greater than 0.","error"); return; }
+      var payload = { title:v.title, category:v.category, description:v.description||"", module_order:order, published:!!form.published.checked, archived:(existingTopic ? !!existingTopic.archived : false) };
+      var topicRes = id
+        ? await supabaseClient.from("learning_topics").update(payload).eq("id",id).select("*").single()
+        : await supabaseClient.from("learning_topics").insert(Object.assign(payload,{created_by:authUser.id})).select("*").single();
+      if (topicRes.error) { console.error("learning_topics write:",topicRes.error); toast("Topic could not be saved: " + (topicRes.error.message || "Database error"),"error"); return; }
+      var topic = topicRes.data;
+      if (!topic || !topic.id) { toast("The database did not return the saved topic.","error"); return; }
+      var lessonPayload = { topic_id:topic.id, introduction:form.introduction.value.trim(), content:form.content.value.trim(), image_url:form.image_url.value.trim()||null, image_alt:form.image_alt.value.trim()||null };
+      var lessonRes = await supabaseClient.from("learning_lessons").upsert(lessonPayload,{onConflict:"topic_id"});
+      if (lessonRes.error) { console.error("learning_lessons write:",lessonRes.error); toast("Topic saved, but lesson content could not be saved: " + (lessonRes.error.message || "Database error"),"error"); return; }
+      await refreshData();
+      var saved = (db.learningTopics || []).some(function(t){ return String(t.id) === String(topic.id); });
+      if (!saved) { toast("Topic was saved, but the current user cannot read it from learning_topics. Check the SELECT RLS policy.","error"); return; }
+      learningAdminState.editId=topic.id; render(); toast(id?"Learning topic updated.":"Learning topic created.");
+    } catch (err) { console.error("Learning topic save failed:",err); toast("Topic could not be saved: " + (err && err.message ? err.message : String(err)),"error"); }
   }
 
   async function saveLearningQuiz(form) {
