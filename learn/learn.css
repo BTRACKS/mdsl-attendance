@@ -1,45 +1,41 @@
-/* Dedicated Learn entry point. Keep the shared application stylesheet as the single source of visual truth. */
+/* Learn page: reuse the application's existing Dashboard design system. */
 @import url("../style.css");
 
-
-/* Temporary Learn display: preserve the shared site chrome and replace only the main learning area. */
-.learn-coming-soon{
-  width:100%;
-  max-width:100%;
-  box-sizing:border-box;
-}
-.learn-coming-card{
-  width:100%;
-  box-sizing:border-box;
-  min-height:360px;
+.learn-coming-soon{width:100%;box-sizing:border-box}
+.learn-coming-card{overflow:hidden}
+.learn-coming-card .section-head{margin-bottom:0}
+.learn-coming-body{
+  min-height:300px;
   display:flex;
   align-items:center;
   justify-content:center;
   text-align:center;
-}
-.learn-coming-inner{
-  width:min(680px,100%);
-  max-width:100%;
+  padding:56px 32px;
   box-sizing:border-box;
-  padding:24px;
 }
-.learn-coming-inner h1{
-  margin:8px 0 12px;
-  font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;
+.learn-coming-content{max-width:620px;margin:0 auto}
+.learn-coming-icon{
+  width:56px;height:56px;margin:0 auto 22px;
+  display:grid;place-items:center;
+  border:1px solid var(--rule);
+  border-radius:16px;
+  background:var(--paper-2);
+  color:var(--navy);
 }
-.learn-coming-inner p:last-child{
-  max-width:560px;
-  margin:0 auto;
-  line-height:1.7;
-  color:var(--ink-3);
-}
+.learn-coming-icon svg{width:26px;height:26px;display:block}
+.learn-coming-content h1{margin:0 0 12px;font-size:32px;line-height:1.15;letter-spacing:-.035em;color:var(--ink)}
+.learn-coming-content p:last-child{margin:0;color:var(--ink-3);font-size:14px;line-height:1.7}
+
 @media (max-width:760px){
-  .learn-coming-card{min-height:300px;}
-  .learn-coming-inner{padding:20px 16px;}
-  .learn-coming-inner h1{font-size:clamp(30px,8vw,42px);line-height:1.12;}
-  .learn-coming-inner p:last-child{font-size:14px;line-height:1.65;}
+  .learn-coming-body{min-height:250px;padding:44px 22px}
+  .learn-coming-content h1{font-size:28px}
+  .learn-coming-content p:last-child{font-size:13px}
 }
+
 @media (max-width:420px){
-  .learn-coming-card{min-height:270px;}
-  .learn-coming-inner{padding:18px 12px;}
+  .learn-coming-body{min-height:220px;padding:36px 16px}
+  .learn-coming-icon{width:50px;height:50px;margin-bottom:18px;border-radius:14px}
+  .learn-coming-icon svg{width:23px;height:23px}
+  .learn-coming-content h1{font-size:25px}
+  .learn-coming-content p:last-child{font-size:12.5px}
 }

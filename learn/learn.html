@@ -39,11 +39,32 @@
 
   <main id="view">
     <div class="page learn-coming-soon" aria-labelledby="learnComingTitle">
-      <section class="section learn-coming-card">
-        <div class="learn-coming-inner">
+      <div class="page-head">
+        <div>
           <p class="eyebrow">Learning</p>
-          <h1 id="learnComingTitle">Coming Soon</h1>
-          <p>Technical &amp; Operations learning content is currently being prepared.</p>
+          <h1 id="learnComingTitle">Learning</h1>
+          <p class="page-head-copy">Technical &amp; Operations learning content is currently being prepared.</p>
+        </div>
+      </div>
+      <section class="section learn-coming-card" aria-labelledby="learnComingCardTitle">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Learning</p>
+            <h2 id="learnComingCardTitle">Coming Soon</h2>
+          </div>
+        </div>
+        <div class="learn-coming-body">
+          <div class="learn-coming-content">
+            <div class="learn-coming-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/>
+                <path d="M4 5.5v15A2.5 2.5 0 0 1 6.5 18H20"/>
+                <path d="M8 7h8M8 10.5h6"/>
+              </svg>
+            </div>
+            <h1>Coming Soon</h1>
+            <p>Technical &amp; Operations learning content is currently being prepared.</p>
+          </div>
         </div>
       </section>
     </div>
@@ -122,11 +143,9 @@
     (function () {
       "use strict";
       var comingSoon = '<div class="page learn-coming-soon" aria-labelledby="learnComingTitle">' +
-        '<section class="section learn-coming-card"><div class="learn-coming-inner">' +
-        '<p class="eyebrow">Learning</p>' +
-        '<h1 id="learnComingTitle">Coming Soon</h1>' +
-        '<p>Technical &amp; Operations learning content is currently being prepared.</p>' +
-        '</div></section></div>';
+        '<div class="page-head"><div><p class="eyebrow">Learning</p><h1 id="learnComingTitle">Learning</h1><p class="page-head-copy">Technical &amp; Operations learning content is currently being prepared.</p></div></div>' +
+        '<section class="section learn-coming-card" aria-labelledby="learnComingCardTitle"><div class="section-head"><div><p class="eyebrow">Learning</p><h2 id="learnComingCardTitle">Coming Soon</h2></div></div>' +
+        '<div class="learn-coming-body"><div class="learn-coming-content"><div class="learn-coming-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 5.5v15A2.5 2.5 0 0 1 6.5 18H20"/><path d="M8 7h8M8 10.5h6"/></svg></div><h1>Coming Soon</h1><p>Technical &amp; Operations learning content is currently being prepared.</p></div></div></section></div>';
 
       function showComingSoon() {
         var view = document.getElementById("view");
