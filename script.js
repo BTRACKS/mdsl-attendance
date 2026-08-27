@@ -620,9 +620,9 @@
       links = [["#/login", "Sign in"], ["#/signup", "Register"]];
     } else {
       if (normalizeRole(u.role) === "admin") {
-        links = [["#/admin", "Overview"], ["#/admin/attendance", "Attendance Management"], ["#/admin/hse", "HSE Attendance"], ["#/dashboard", "Dashboard"], ["#/messages", "Messages"]];
+        links = [["#/admin", "Overview"], ["#/admin/attendance", "Attendance Management"], ["#/admin/hse", "HSE Attendance"], ["#/dashboard", "Dashboard"], ["#/messages", "Messages"], ["#/settings", "Settings"]];
       } else {
-        links = [["#/dashboard", "Dashboard"], ["#/history", "Attendance History"], ["#/leave", "Leave"], ["#/messages", "Messages"]];
+        links = [["#/dashboard", "Dashboard"], ["#/history", "Attendance History"], ["#/leave", "Leave"], ["#/messages", "Messages"], ["#/settings", "Settings"]];
       }
 
     }
