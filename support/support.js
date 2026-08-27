@@ -57,27 +57,6 @@
     sp.className = "spinner";
     btn.appendChild(sp);
   }
-  /* Support-ticket actions use this loading helper. Keep the original button
-     markup so Save changes / Send can be restored cleanly after success or error. */
-  function setBtnLoading(btn, loading) {
-    if (!btn) return;
-    if (loading) {
-      if (btn.dataset.loadingHtml === undefined) btn.dataset.loadingHtml = btn.innerHTML;
-      btn.disabled = true;
-      btn.classList.add("is-loading");
-      var light = btn.classList.contains("btn-dark") ? " spinner-light" : "";
-      if (!btn.querySelector(".spinner")) {
-        btn.insertAdjacentHTML("beforeend", '<span class="spinner' + light + '" aria-hidden="true"></span>');
-      }
-    } else {
-      btn.disabled = false;
-      btn.classList.remove("is-loading");
-      if (btn.dataset.loadingHtml !== undefined) {
-        btn.innerHTML = btn.dataset.loadingHtml;
-        delete btn.dataset.loadingHtml;
-      }
-    }
-  }
   function message(text, kind) {
     var el = $("loginMsg");
     if (!text) { el.hidden = true; return; }
@@ -86,9 +65,7 @@
     el.innerHTML = text;
   }
   function kv(target, rows) {
-    var el = $(target);
-    if (!el) return;
-    el.innerHTML = rows.map(function (r) {
+    $(target).innerHTML = rows.map(function (r) {
       return "<div><dt>" + esc(r[0]) + "</dt><dd>" + (r[2] ? r[1] : esc(r[1])) + "</dd></div>";
     }).join("");
   }
@@ -104,56 +81,44 @@
        2. public.support_roles        — dedicated role table (admin/it_support/staff)
        3. public.profiles.role        — legacy attendance role, admin only
      Never trust anything held in the browser. */
-  function withTimeout(promise, ms, label) {
-    return Promise.race([promise, new Promise(function(_, reject){ setTimeout(function(){ reject(new Error(label || "Request timed out.")); }, ms); })]);
-  }
-
   async function resolveAccess(user) {
     var result = { role: null, allowed: false, source: "none", error: null };
 
-    // Prefer the stable profiles.role column used by E-Attendance.
-    // This avoids blocking the portal on optional/missing portal RPCs or role tables.
+    // 1. Preferred: a single security-definer function.
     try {
-      var prof = await withTimeout(
-        sb.from("profiles").select("role").eq("id", user.id).maybeSingle(),
-        6000,
-        "Profile role lookup timed out."
-      );
-      if (!prof.error && prof.data) {
-        result.role = String(prof.data.role || "staff").toLowerCase();
-        result.source = "profiles.role";
-        result.allowed = ALLOWED_ROLES.indexOf(result.role) !== -1;
-        if (result.allowed) return result;
-      } else if (prof.error) {
-        result.error = prof.error.message;
-      }
-    } catch (e) { result.error = e.message; }
-
-    // Fallback to the portal role RPC when it exists.
-    try {
-      var rpc = await withTimeout(sb.rpc("portal_role"), 5000, "Portal role check timed out.");
+      var rpc = await sb.rpc("portal_role");
       if (!rpc.error && rpc.data) {
-        result.role = String(rpc.data).toLowerCase();
+        result.role = String(rpc.data);
         result.source = "portal_role() RPC";
         result.allowed = ALLOWED_ROLES.indexOf(result.role) !== -1;
         return result;
       }
-    } catch (e) {}
+    } catch (e) { /* function not deployed yet — fall through */ }
 
-    // Final fallback to the role tables.
+    // 2. Dedicated roles table (user_roles, falling back to legacy support_roles).
     try {
-      var rolesRes = await withTimeout(sb.from("user_roles").select("role").eq("user_id", user.id), 5000, "Role lookup timed out.");
-      if (rolesRes.error || !rolesRes.data || !rolesRes.data.length) {
-        rolesRes = await withTimeout(sb.from("support_roles").select("role").eq("user_id", user.id), 5000, "Support role lookup timed out.");
-      }
+      var rolesRes = await sb.from("user_roles").select("role").eq("user_id", user.id);
+      if (rolesRes.error) rolesRes = await sb.from("support_roles").select("role").eq("user_id", user.id);
       if (!rolesRes.error && rolesRes.data && rolesRes.data.length) {
-        var roles = rolesRes.data.map(function (r) { return String(r.role || "").toLowerCase(); });
+        var roles = rolesRes.data.map(function (r) { return r.role; });
         result.role = roles.indexOf("admin") !== -1 ? "admin" : roles[0];
-        result.source = "role table";
+        result.source = "user_roles table";
         result.allowed = roles.some(function (r) { return ALLOWED_ROLES.indexOf(r) !== -1; });
         return result;
       }
       if (rolesRes.error) result.error = rolesRes.error.message;
+    } catch (e) { result.error = e.message; }
+
+    // 3. Fallback to the existing attendance profile role (admins only).
+    try {
+      var prof = await sb.from("profiles").select("role").eq("id", user.id).maybeSingle();
+      if (!prof.error && prof.data) {
+        result.role = prof.data.role || "staff";
+        result.source = "profiles.role (legacy)";
+        result.allowed = result.role === "admin";
+        return result;
+      }
+      if (prof.error) result.error = prof.error.message;
     } catch (e) { result.error = e.message; }
 
     return result;
@@ -166,9 +131,6 @@
   var USERS = { rows: [], loaded: false, loading: false, current: null };
 
   var NAME_KEYS = ["full_name", "name", "fullname", "display_name"];
-  var TITLE_NAME_KEYS = ["title"];
-  var FIRST_NAME_KEYS = ["first_name"];
-  var LAST_NAME_KEYS = ["last_name"];
   var EMAIL_KEYS = ["email", "work_email", "email_address"];
   var PHONE_KEYS = ["phone", "phone_number", "mobile", "telephone", "msisdn"];
   var TITLE_KEYS = ["position", "job_title", "title", "designation", "role_title"];
@@ -204,16 +166,6 @@
     return String(v).replace(/_/g, " ");
   }
   function displayName(row) {
-    var title = pick(row, TITLE_NAME_KEYS);
-    var first = pick(row, FIRST_NAME_KEYS);
-    var last = pick(row, LAST_NAME_KEYS);
-    if (first || last) {
-      var parts = [];
-      if (title) parts.push(String(title));
-      if (first) parts.push(String(first));
-      if (last) parts.push(String(last));
-      return parts.join(" ");
-    }
     var n = pick(row, NAME_KEYS);
     if (n) return String(n);
     var e = pick(row, EMAIL_KEYS);
@@ -256,7 +208,7 @@
   }
 
   var LEAVE_TYPES = ["Annual Leave", "Sick Leave", "Casual Leave", "Maternity Leave", "Paternity Leave", "Study Leave", "Compassionate Leave", "Other"];
-  var LEAVES = { rows: [], loaded: false, error: null };
+  var LEAVES = { rows: [], loaded: false };
 
   function leaveForDate(userId, key) {
     return (LEAVES.rows || []).find(function(l) {
@@ -275,7 +227,6 @@
   }
   async function loadLeaves() {
     var res = await sb.from("staff_leave").select("*").order("start_date",{ascending:false});
-    LEAVES.error = res.error ? res.error.message : null;
     LEAVES.rows = res.error ? [] : (res.data || []);
     LEAVES.loaded = true;
     return res;
@@ -301,123 +252,6 @@
       (rows.length ? '<div class="table-wrap"><table><thead><tr><th>Type</th><th>Start</th><th>End</th><th>Reason</th><th>Status</th></tr></thead><tbody>'+
         rows.map(function(l){var activeNow=l.status!=="cancelled"&&l.start_date<=today&&today<=l.end_date;var future=l.status!=="cancelled"&&l.start_date>today;var st=l.status==="cancelled"?"Cancelled":activeNow?"Active":future?"Scheduled":"Completed";return '<tr><td>'+esc(leaveTypeLabel(l.leave_type))+'</td><td>'+esc(dashboardDateOnly(l.start_date))+'</td><td>'+esc(dashboardDateOnly(l.end_date))+'</td><td>'+esc(l.reason||"—")+'</td><td>'+esc(st)+'</td></tr>';}).join("")+
         '</tbody></table></div>' : '<p class="empty">No leave history recorded.</p>');
-  }
-
-  /* ------------------------- Tech Support Leave page ------------------------- */
-  function ensureLeavePortalTab() {
-    var nav = $("nav");
-    var portal = $("portalView");
-    if (!nav || !portal) return null;
-
-    /* Leave is a normal main navigation item and its panel lives with the
-       other portal sections, not at the bottom of portalView. */
-    var btn = nav.querySelector('button[data-tab="leave"]');
-    if (!btn) {
-      btn = document.createElement("button");
-      btn.type = "button";
-      btn.setAttribute("data-tab", "leave");
-      btn.textContent = "Leave";
-      var settingsBtn = nav.querySelector('button[data-tab="settings"]');
-      if (settingsBtn) nav.insertBefore(btn, settingsBtn);
-      else nav.appendChild(btn);
-    }
-
-    var panel = $("tab-leave");
-    if (!panel) {
-      panel = document.createElement("section");
-      panel.id = "tab-leave";
-      panel.className = "section support-leave-page";
-      panel.hidden = true;
-      var page = portal.querySelector("main.page");
-      if (page) page.appendChild(panel);
-      else portal.appendChild(panel);
-    }
-    return panel;
-  }
-
-  function leavePortalStatus(row, today) {
-    var status = String(row.status || "active").toLowerCase();
-    if (status === "cancelled") return "Cancelled";
-    if (row.start_date <= today && today <= row.end_date) return "Active";
-    if (row.start_date > today) return "Scheduled";
-    return "Completed";
-  }
-
-  async function renderSupportLeave() {
-    var root = ensureLeavePortalTab();
-    if (!root) return;
-    root.hidden = false;
-
-    if (!LEAVES.loaded) {
-      root.innerHTML = '<div class="page-head"><p class="eyebrow">Time Away</p><h1>Leave</h1><p class="dateline">Loading staff leave information…</p></div>';
-      await loadLeaves();
-    }
-
-    if (LEAVES.error) {
-      root.innerHTML = '<div class="page-head"><p class="eyebrow">Time Away</p><h1>Leave</h1><p class="dateline">View-only leave information for Tech Support.</p></div>' +
-        '<section class="leave-empty-state leave-error-state"><strong>Leave records could not be loaded</strong><p>' + esc(LEAVES.error) + '</p><button type="button" class="btn btn-secondary" id="leaveRetry">Retry</button></section>';
-      var retry = $("leaveRetry");
-      if (retry) retry.addEventListener("click", async function(){ LEAVES.loaded=false; await renderSupportLeave(); });
-      return;
-    }
-
-    if (!USERS.loaded) {
-      try { await loadUsers(false); } catch (e) {}
-    }
-
-    var today = localDateIso();
-    var qEl = $("leaveSupportSearch");
-    var q = qEl ? qEl.value.trim().toLowerCase() : "";
-    var rows = (LEAVES.rows || []).filter(function(l) {
-      var id = l.staff_id || l.user_id;
-      var user = (USERS.rows || []).find(function(u){ return String(rowId(u)) === String(id); });
-      var hay = [
-        user ? displayName(user) : "Staff member",
-        user ? pick(user, STAFF_KEYS) : "",
-        user ? pick(user, DEPT_KEYS) : "",
-        leaveTypeLabel(l.leave_type),
-        l.reason || "",
-        leavePortalStatus(l, today)
-      ].join(" ").toLowerCase();
-      return !q || hay.indexOf(q) !== -1;
-    });
-
-    var activeCount = (LEAVES.rows || []).filter(function(l){
-      return leavePortalStatus(l, today) === "Active";
-    }).length;
-    var scheduledCount = (LEAVES.rows || []).filter(function(l){
-      return leavePortalStatus(l, today) === "Scheduled";
-    }).length;
-
-    var body;
-    if (!LEAVES.rows.length) {
-      body = '<div class="leave-empty-state"><strong>No staff are currently on leave</strong><p>There are no leave records in the system at the moment.</p><p class="leave-empty-note">When a staff member activates leave, it will appear here automatically.</p></div>';
-    } else if (!rows.length) {
-      body = '<div class="leave-empty-state"><strong>No leave records found</strong><p>No staff leave records match your search.</p></div>';
-    } else {
-      body = '<div class="table-wrap"><table><thead><tr><th>Staff</th><th>Leave type</th><th>Start</th><th>End</th><th>Reason</th><th>Status</th></tr></thead><tbody>' +
-        rows.map(function(l){
-          var id = l.staff_id || l.user_id;
-          var user = (USERS.rows || []).find(function(u){ return String(rowId(u)) === String(id); });
-          var name = user ? displayName(user) : "Staff member";
-          var avatar = user ? avatarHtml(user) : '<div class="avatar">?</div>';
-          var status = leavePortalStatus(l, today);
-          return '<tr><td><div class="leave-staff-cell">' + avatar + '<div><strong>' + esc(name) + '</strong>' + (user && pick(user, STAFF_KEYS) ? '<small>' + esc(pick(user, STAFF_KEYS)) + '</small>' : '') + '</div></div></td>' +
-            '<td>' + esc(leaveTypeLabel(l.leave_type)) + '</td>' +
-            '<td>' + esc(dashboardDateOnly(l.start_date)) + '</td>' +
-            '<td>' + esc(dashboardDateOnly(l.end_date)) + '</td>' +
-            '<td>' + esc(l.reason || "—") + '</td>' +
-            '<td><span class="leave-status leave-status-' + status.toLowerCase() + '">' + esc(status) + '</span></td></tr>';
-        }).join("") + '</tbody></table></div>';
-    }
-
-    root.innerHTML = '<div class="page-head"><p class="eyebrow">Time Away</p><h1>Leave</h1><p class="dateline">View-only staff leave information. Tech Support cannot approve, reject, edit or cancel leave.</p></div>' +
-      '<section class="section"><div class="leave-summary-grid"><div><span>Currently on leave</span><strong>' + activeCount + '</strong></div><div><span>Scheduled</span><strong>' + scheduledCount + '</strong></div><div><span>Total records</span><strong>' + LEAVES.rows.length + '</strong></div></div>' +
-      '<div class="leave-support-toolbar"><label class="search-field"><span>Search staff or leave</span><input id="leaveSupportSearch" type="search" placeholder="Search name, staff ID, department, leave type…" value="' + esc(q) + '"></label><span class="leave-view-note">View only</span></div>' +
-      body + '</section>';
-
-    var search = $("leaveSupportSearch");
-    if (search) search.addEventListener("input", function(){ renderSupportLeave(); });
   }
 
   function matchesQuery(row, q) {
@@ -463,13 +297,6 @@
     $("profileName").textContent = name;
     $("profileMeta").textContent = "";
 
-    kv("kvUserIdentity", [
-      ["Title", fmtValue(pick(row, TITLE_NAME_KEYS))],
-      ["First Name", fmtValue(pick(row, FIRST_NAME_KEYS))],
-      ["Last Name", fmtValue(pick(row, LAST_NAME_KEYS))],
-      ["Staff ID", fmtValue(pick(row, STAFF_KEYS))]
-    ]);
-
     kv("kvUserContact", [
       ["Email", fmtValue(pick(row, EMAIL_KEYS))],
       ["Phone number", fmtValue(pick(row, PHONE_KEYS))],
@@ -490,7 +317,7 @@
     ]);
 
     var known = {};
-    [NAME_KEYS, TITLE_NAME_KEYS, FIRST_NAME_KEYS, LAST_NAME_KEYS, EMAIL_KEYS, PHONE_KEYS, TITLE_KEYS, STAFF_KEYS, DEPT_KEYS, STATUS_KEYS, TYPE_KEYS, AVATAR_KEYS, ROLE_KEYS]
+    [NAME_KEYS, EMAIL_KEYS, PHONE_KEYS, TITLE_KEYS, STAFF_KEYS, DEPT_KEYS, STATUS_KEYS, TYPE_KEYS, AVATAR_KEYS, ROLE_KEYS]
       .forEach(function (g) { g.forEach(function (k) { known[k] = 1; }); });
     ["id", "user_id", "created_at", "updated_at", "address"].forEach(function (k) { known[k] = 1; });
     var extras = Object.keys(row).filter(function (k) {
@@ -563,10 +390,11 @@
   }
 
   /* ------------------------- Phase 3: role management -------------------------
-     Role management is available to authorized IT Support and administrators.
-     The UI is only a convenience layer: the database RPC re-checks the caller
-     and performs the actual write. Changes are reloaded from the database
-     immediately so every portal view sees the new role. */
+     The UI below is a convenience layer only. Every role change is executed by
+     public.set_user_role(), a security-definer function that re-checks the
+     caller is an administrator, refuses to strip the last administrator, and
+     is the only path permitted by the row level security policies on
+     public.user_roles. Hiding a button here protects nothing on its own. */
   var ROLES = {};          /* user_id -> role, as stored in the database */
   var ADMIN_COUNT = 0;     /* administrators currently on record */
   var PENDING = null;      /* role change awaiting confirmation */
@@ -576,7 +404,6 @@
     return ROLES[id] || pick(row, ROLE_KEYS) || "staff";
   }
   function roleLabel(r) { return ROLE_LABEL[r] || r || "Staff"; }
-  function canManageRoles() { return ME.role === "admin" || ME.role === "it_support"; }
   function isAdmin() { return ME.role === "admin"; }
 
   async function loadRoles() {
@@ -607,16 +434,16 @@
     kv("kvUserRole", [
       ["Current portal role", roleLabel(current)],
       ["Portal access", ALLOWED_ROLES.indexOf(current) !== -1 ? "Granted" : "Not granted"],
-      ["Changed by", canManageRoles() ? "IT Support / Administrators" : "Administrators only"]
+      ["Changed by", "Administrators only"]
     ]);
 
     var form = $("roleForm");
     var note = $("roleNote");
     var sel = $("roleSelect");
 
-    if (!canManageRoles()) {
+    if (!isAdmin()) {
       form.hidden = true;
-      note.textContent = "Only authorized IT Support or an administrator can change portal roles. Your account has read-only access to this section.";
+      note.textContent = "Only an administrator can change portal roles. Your account has read-only access to this section.";
       return;
     }
     if (!id) {
@@ -636,7 +463,7 @@
     } else if (self) {
       note.textContent = "You are editing your own account. Reducing your role will immediately limit your access to this portal.";
     } else {
-      note.textContent = canManageRoles() ? "Changing a role takes effect immediately for " + name + ". You will be asked to confirm first." : "Role management is available only to authorized IT Support and administrators.";
+      note.textContent = "Changing a role takes effect immediately for " + name + ". You will be asked to confirm first.";
     }
   }
 
@@ -668,8 +495,17 @@
     busy(btn, true);
     loader(true);
 
-    var roleRpc = ME.role === "it_support" ? "it_support_set_user_role" : "set_user_role";
-    var res = await sb.rpc(roleRpc, { target_user: job.userId, new_role: job.to });
+    var res = await sb.rpc("set_user_role", { target_user: job.userId, new_role: job.to });
+
+    // The main E-Attendance application reads profiles.role. The database
+    // function synchronizes that canonical role with user_roles in one
+    // transaction; verify the profile value before reporting success.
+    if (!res.error) {
+      var verify = await sb.from("profiles").select("role").eq("id", job.userId).maybeSingle();
+      if (verify.error || !verify.data || verify.data.role !== job.to) {
+        res = { error: new Error("Role was not synchronized to the main E-Attendance profile.") };
+      }
+    }
 
     busy(btn, false);
     loader(false);
@@ -710,7 +546,7 @@
       var to = sel.value;
       if (!id) return;
       if (to === from) { toast("That is already " + name + "'s role."); return; }
-      if (!canManageRoles()) { toast("Only authorized IT Support or an administrator can change portal roles.", "bad"); return; }
+      if (!isAdmin()) { toast("Only an administrator can change portal roles.", "bad"); return; }
       if (ME.user && id === ME.user.id && from === "admin" && ADMIN_COUNT <= 1) {
         toast("You are the last administrator. Promote another user first.", "bad");
         return;
@@ -1402,12 +1238,11 @@
      database — password resets go through Supabase Auth. */
 
   var EDIT_FIELDS = [
-    { keys: TITLE_NAME_KEYS, label: "Title", max: 4, type: "select", options: ["Mr", "Mrs", "Miss"] },
-    { keys: FIRST_NAME_KEYS, label: "First Name", max: 80 },
-    { keys: LAST_NAME_KEYS, label: "Last Name", max: 80 },
+    { keys: NAME_KEYS, label: "Full name", max: 120 },
     { keys: PHONE_KEYS, label: "Phone number", max: 32 },
     { keys: TITLE_KEYS, label: "Position / job title", max: 80 },
     { keys: DEPT_KEYS, label: "Department", max: 80 },
+    { keys: STAFF_KEYS, label: "Staff ID", max: 40 },
     { keys: TYPE_KEYS, label: "Employment type", max: 40 },
     { keys: ["address"], label: "Address", max: 200 }
   ];
@@ -1553,9 +1388,13 @@
 
   async function writeAccountStatus(row, active) {
     var id = rowId(row);
-    /* Never fall back to a profile-only update: deactivation must also reach
-       Supabase Authentication so the credentials can no longer establish a session. */
-    return await sb.rpc("admin_set_account_status", { p_user_id: id, p_active: active });
+    var res = await sb.rpc("admin_set_account_status", { p_user_id: id, p_active: active });
+    if (res.error && missingFunction(res.error)) {
+      var patch = {};
+      patch[colOf(row, STATUS_KEYS)] = accountStatusValue(row, active);
+      res = await sb.from("profiles").update(patch).eq("id", id);
+    }
+    return res;
   }
 
   /* ---------- confirmation screen for sensitive account actions ---------- */
@@ -1720,24 +1559,14 @@
 
     EDIT_FIELDS.forEach(function (f) {
       var col = colOf(row, f.keys);
-      if (col) {
-        EDIT.cols.push({ col: col, label: f.label, max: f.max, type: f.type, options: f.options });
-      }
+      if (col) EDIT.cols.push({ col: col, label: f.label, max: f.max });
     });
 
     box.innerHTML = EDIT.cols.map(function (f) {
       var v = row[f.col];
-      var value = v === null || v === undefined ? "" : String(v);
-      if (f.type === "select") {
-        return '<div class="field"><label for="pf_' + esc(f.col) + '">' + esc(f.label) + '</label>' +
-          '<select id="pf_' + esc(f.col) + '" data-col="' + esc(f.col) + '">' +
-          '<option value="">Select title…</option>' + f.options.map(function (o) {
-            return '<option value="' + esc(o) + '"' + (value === o ? ' selected' : '') + '>' + esc(o) + '</option>';
-          }).join("") + '</select></div>';
-      }
       return '<div class="field"><label for="pf_' + esc(f.col) + '">' + esc(f.label) + "</label>" +
         '<input id="pf_' + esc(f.col) + '" data-col="' + esc(f.col) + '" type="text" maxlength="' + f.max +
-        '" value="' + esc(value) + '" /></div>';
+        '" value="' + esc(v === null || v === undefined ? "" : String(v)) + '" /></div>';
     }).join("") || '<p class="edit-hint">No editable profile fields are stored on this record.</p>';
 
     var avatarCol = colOf(row, AVATAR_KEYS);
@@ -1759,28 +1588,11 @@
   }
 
   async function writeProfile(id, patch) {
-    /* The database RPC is authoritative. Verify the actual row after the
-       write so the portal never reports success when a field did not persist. */
     var res = await sb.rpc("admin_update_profile", { p_user_id: id, p_changes: patch });
     if (res.error && missingFunction(res.error)) {
-      res = await sb.from("profiles").update(patch).eq("id", id).select("*").maybeSingle();
+      res = await sb.from("profiles").update(patch).eq("id", id);
     }
-    if (res.error) return res;
-
-    var check = await sb.from("profiles").select("*").eq("id", id).maybeSingle();
-    if (check.error) return check;
-    if (!check.data) return { error: { message: "The profile could not be found after saving." } };
-
-    var mismatches = [];
-    Object.keys(patch).forEach(function (key) {
-      var expected = patch[key] == null ? null : String(patch[key]);
-      var actual = check.data[key] == null ? null : String(check.data[key]);
-      if (expected !== actual) mismatches.push(key);
-    });
-    if (mismatches.length) {
-      return { error: { message: "The database did not persist these profile fields: " + mismatches.join(", ") + ". Please run the updated SUPABASE-TITLE-FIRST-LAST-FIX.sql." } };
-    }
-    return { data: check.data };
+    return res;
   }
 
   function askProfileSave() {
@@ -2181,18 +1993,14 @@
 
   /* ---------- system management tab ---------- */
   function initSystem() {
-    /* System management is optional. Some Tech-Support builds intentionally
-       remove the System Check/System Status UI. Never let missing system
-       elements stop the entire portal from rendering. */
+    initProfileTools();
+
     var root = $("tab-system");
     if (!root || root.getAttribute("data-ready") === "1") return;
     root.setAttribute("data-ready", "1");
-    try { initProfileTools(); } catch (e) {}
 
-    var scope = $("sysScope");
-    var note = $("sysNote");
-    if (scope) scope.textContent = isAdmin() ? "Administrator tools" : "IT Support view";
-    if (note) note.textContent = isAdmin()
+    $("sysScope").textContent = isAdmin() ? "Administrator tools" : "IT Support view";
+    $("sysNote").textContent = isAdmin()
       ? "Everything below writes to the data the main website already uses. Only the fields shown here can be changed — there is no raw table access, no SQL and no service key in the browser, and the database re-checks your role on every write."
       : "IT Support accounts can review staff records, roles and attendance. Account, profile, correction and settings changes are reserved for administrators and are refused by the database for other roles.";
 
@@ -2202,6 +2010,7 @@
       var target = document.querySelector('.nav button[data-tab="' + b.getAttribute("data-goto") + '"]');
       if (target) target.click();
     });
+
   }
 
   /* ------------------------- Phase 9: IT administration dashboard ------------------------- */
@@ -2213,12 +2022,8 @@
   function renderRecentAttendance(rows){var b=$("recentAttendance"),s=$("recentAttendanceState");if(!rows.length){b.innerHTML='';s.textContent='No attendance activity was found for today.';return;}s.textContent='';b.innerHTML=rows.slice(0,6).map(function(r){var id=attStaffId(r),u=(USERS.rows||[]).find(function(x){return String(x.id||x.user_id)===String(id);}),f=attFlags(r),l=f.in&&f.out?'Clock-in and clock-out recorded':f.in?'Clock-in recorded':f.out?'Clock-out recorded':'Attendance record';var d=dashboardAttendanceTime(r);var date=rowDate(r);var stamp=d?dashboardDateTime(d):dashboardDateOnly(date||localDateIso());return '<div class="activity-item"><div class="activity-main"><div class="activity-title"><strong>'+esc(u?displayName(u):'Staff member')+'</strong><span class="activity-separator">—</span><span class="activity-action">'+esc(l)+'</span></div></div><time class="activity-time" datetime="'+esc(d?d.toISOString():(date||localDateIso()))+'">'+esc(stamp)+'</time></div>';}).join('');}
   function renderRecentProfiles(){var b=$("recentProfiles"),s=$("recentProfilesState"),r=(USERS.rows||[]).slice().sort(function(a,b){return new Date(b.updated_at||b.created_at||0)-new Date(a.updated_at||a.created_at||0);}).slice(0,6);if(!r.length){b.innerHTML='';s.textContent='No profile or account updates are visible.';return;}s.textContent='';b.innerHTML=r.map(function(x){var w=x.updated_at||x.created_at,l=x.updated_at?'Profile updated':'Account created';var d=new Date(w);var stamp=!isNaN(d.getTime())?dashboardDateTime(d):String(w);return '<div class="activity-item"><div class="activity-main"><div class="activity-title"><strong>'+esc(displayName(x))+'</strong><span class="activity-separator">—</span><span class="activity-action">'+esc(l)+' · '+esc(roleLabel(roleOf(x)))+'</span></div></div><time class="activity-time" datetime="'+esc(!isNaN(d.getTime())?d.toISOString():"")+'">'+esc(stamp)+'</time></div>';}).join('');}
   async function loadDashboardAttendance(){await detectAttendance();if(ATT.error){$("dashboardAttendanceState").textContent='Attendance service is not available to this account.';return{ok:false};}var q=sb.from(ATT.table).select('*').limit(1000);if(ATT.dateKey)q=q.eq(ATT.dateKey,localDateIso()).order(ATT.dateKey,{ascending:false});var r=await q;if(r.error){$("dashboardAttendanceState").textContent="Today's attendance could not be loaded.";return{ok:false};}DASH.attendanceRows=r.data||[];var i=0,o=0,m=0;DASH.attendanceRows.forEach(function(x){var f=attFlags(x);if(f.in)i++;if(f.out)o++;if(f.in&&!f.out)m++;});$("attendanceSummary").innerHTML='<div><span>Clock-ins</span><strong>'+i+'</strong></div><div><span>Clock-outs</span><strong>'+o+'</strong></div><div><span>Missing clock-outs</span><strong>'+m+'</strong></div>';$("dashboardAttendanceState").textContent=DASH.attendanceRows.length?DASH.attendanceRows.length+' attendance record'+(DASH.attendanceRows.length===1?'':'s')+' found today.':'No attendance records found for today.';renderRecentAttendance(DASH.attendanceRows);return{ok:true};}
-  async function runDashboardChecks(){
-    /* Deprecated: System Checks were removed from the dashboard. Keep this
-       function harmless for older markup that may still contain a retry button. */
-    return {ok:true, skipped:true};
-  }
-  async function loadDashboard(force){if(DASH.loading)return;DASH.loading=true;loader(true);try{if(force)await loadUsers(true);else if(!USERS.loaded)await loadUsers(false);renderDashboardStats();renderRecentProfiles();await loadDashboardAttendance();}catch(e){var st=$("dashboardAttendanceState");if(st)st.textContent='Some dashboard information could not be loaded. Please retry.';}finally{DASH.loading=false;loader(false);}}
+  async function runDashboardChecks(){$("systemStatusList").innerHTML='<div class="service-row"><span>Authentication</span>'+dashStatus('Checking…','warn')+'</div><div class="service-row"><span>Supabase</span>'+dashStatus('Checking…','warn')+'</div><div class="service-row"><span>Database queries</span>'+dashStatus('Checking…','warn')+'</div>';var aok=!!(ME.user&&ME.allowed),sok=false,dok=false;try{var p=await sb.from('profiles').select('id').eq('id',ME.user.id).maybeSingle();sok=!p.error;dok=sok;}catch(e){}var a=await loadDashboardAttendance();dok=dok&&a.ok;$("systemStatusList").innerHTML='<div class="service-row"><span>Authentication</span>'+dashStatus(aok?'Connected':'Unavailable',aok?'ok':'bad')+'</div><div class="service-row"><span>Supabase</span>'+dashStatus(sok?'Connected':'Unavailable',sok?'ok':'bad')+'</div><div class="service-row"><span>Database queries</span>'+dashStatus(dok?'Available':'Partial / unavailable',dok?'ok':'warn')+'</div>';}
+  async function loadDashboard(force){if(DASH.loading)return;DASH.loading=true;loader(true);try{if(force)await loadUsers(true);else if(!USERS.loaded)await loadUsers(false);renderDashboardStats();renderRecentProfiles();await runDashboardChecks();}catch(e){$("dashboardAttendanceState").textContent='Some dashboard information could not be loaded. Please retry.';}finally{DASH.loading=false;loader(false);}}
   function removeDashboardQuickActions(){
     /* Remove ONLY the Quick Actions section. Leave all other dashboard markup and functionality unchanged. */
     var headings = document.querySelectorAll("#tab-overview h2, #tab-overview h3, #tab-overview .section-head");
@@ -2229,13 +2034,7 @@
       else el.remove();
     });
   }
-  function removeDashboardSystemStatus(){
-    var list=$("systemStatusList");
-    if(!list) return;
-    var panel=list.closest(".panel");
-    if(panel) panel.remove(); else list.remove();
-  }
-  function initDashboard(){var root=$("tab-overview");if(!root||root.getAttribute('data-ready')==='1')return;root.setAttribute('data-ready','1');removeDashboardQuickActions();removeDashboardSystemStatus();var refresh=$("dashboardRefresh");if(refresh)refresh.addEventListener('click',function(){loadDashboard(true);});var retry=$("dashboardRetry");if(retry)retry.addEventListener('click',function(){runDashboardChecks();});root.addEventListener('click',function(e){var b=e.target.closest('[data-goto]');if(!b)return;var t=document.querySelector('.nav button[data-tab="'+b.getAttribute('data-goto')+'"]');if(t)t.click();});}
+  function initDashboard(){var root=$("tab-overview");if(!root||root.getAttribute('data-ready')==='1')return;root.setAttribute('data-ready','1');removeDashboardQuickActions();var refresh=$("dashboardRefresh");if(refresh)refresh.addEventListener('click',function(){loadDashboard(true);});var retry=$("dashboardRetry");if(retry)retry.addEventListener('click',function(){runDashboardChecks();});root.addEventListener('click',function(e){var b=e.target.closest('[data-goto]');if(!b)return;var t=document.querySelector('.nav button[data-tab="'+b.getAttribute('data-goto')+'"]');if(t)t.click();});}
 
   /* ------------------------- portal render ------------------------- */
   async function renderPortal(user, access) {
@@ -2284,10 +2083,6 @@
     initAttendance();
     initSystem();
     initSettings();
-    // Start the ticket count immediately so the Support Tickets badge is populated
-    // during the initial portal load rather than waiting for a later refresh.
-    loadSupportTicketBadge();
-    initSupportTickets();
     loadDashboard(false);
 
     only("portalView");
@@ -2295,187 +2090,10 @@
     if (head) document.documentElement.style.setProperty("--header-h", head.offsetHeight + "px");
   }
 
-
-  /* ------------------------- Support Tickets ------------------------- */
-  var SUPPORT_TICKET_BUCKET = "support-ticket-attachments";
-  var SUPPORT_TICKET_TYPES = ["Technical Issue","Login/Access Problem","Attendance Issue","Account/Profile Issue","System Error","Feature Request","Other"];
-  var SUPPORT_TICKET_PRIORITIES = ["Low","Medium","High","Urgent"];
-  var SUPPORT_TICKET_STATUSES = ["Open","In Progress","Resolved","Closed"];
-  var SUPPORT_TICKETS = { rows: [], active: null, loaded: false, loading: false };
-
-  function supportTicketNum(t){return t.ticket_number || "TKT-" + String(t.id||"").slice(0,8).toUpperCase();}
-  function supportTicketDate(t){var d=new Date(t||"");return isNaN(d)?"—":d.toLocaleString("en-GB",{day:"numeric",month:"short",year:"numeric",hour:"numeric",minute:"2-digit"});}
-  function supportTicketStatusClass(s){return "support-status support-status-"+String(s||"Open").toLowerCase().replace(/\s+/g,"-");}
-  function supportTicketPriorityClass(s){return "support-priority support-priority-"+String(s||"Medium").toLowerCase();}
-  function supportTicketPerson(id){var x=(USERS.rows||[]).find(function(r){return String(r.id||r.user_id)===String(id);});return x||{full_name:"Staff member",email:"",avatar_url:""};}
-  function supportTicketName(id){var x=supportTicketPerson(id);return displayName(x);}
-  function supportTicketAvatar(id){var x=supportTicketPerson(id);var name=displayName(x);var url=avatarUrl(x);return url?'<div class="avatar"><img src="'+esc(url)+'" alt="'+esc(name)+'" /></div>':'<div class="avatar">'+esc(initials(name))+'</div>';}
-
-  async function loadSupportTickets(){
-    if(SUPPORT_TICKETS.loading)return;
-    SUPPORT_TICKETS.loading=true; var state=$("supportTicketsState"); if(state)state.textContent="Loading tickets…";
-    try{
-      if(!USERS.loaded) await loadUsers(false);
-      var r=await sb.from("support_tickets").select("id,ticket_number,user_id,issue_type,subject,description,priority,status,assigned_to,created_at,updated_at,resolved_at").order("updated_at",{ascending:false});
-      if(r.error)throw r.error;
-      SUPPORT_TICKETS.rows=r.data||[]; SUPPORT_TICKETS.loaded=true;
-      renderSupportTickets(); await loadSupportTicketBadge();
-    }catch(e){if(state)state.textContent="Tickets could not be loaded. Run support-tickets.sql if this is the first deployment.";toast(e.message||"Could not load support tickets.","bad");}
-    finally{SUPPORT_TICKETS.loading=false;}
-  }
-
-  function renderSupportTickets(){
-    var list=$("supportTicketsList"),state=$("supportTicketsState"); if(!list)return;
-    var rows=SUPPORT_TICKETS.rows||[];
-    if(state)state.textContent=rows.length?rows.length+" ticket"+(rows.length===1?"":"s")+" visible to your support role.":"No support tickets yet.";
-    list.innerHTML=rows.length?'<div class="support-admin-ticket-list">'+rows.map(function(t){
-      return '<button type="button" class="support-admin-ticket-card" data-support-ticket="'+esc(t.id)+'"><div class="support-admin-ticket-avatar">'+supportTicketAvatar(t.user_id)+'</div><div class="support-admin-ticket-main"><div class="support-admin-ticket-top"><strong>'+esc(supportTicketNum(t))+'</strong><span class="'+supportTicketStatusClass(t.status)+'">'+esc(t.status)+'</span></div><h3>'+esc(t.subject)+'</h3><div class="support-admin-ticket-meta"><span>'+esc(supportTicketName(t.user_id))+'</span><span>'+esc(t.issue_type)+'</span><span class="'+supportTicketPriorityClass(t.priority)+'">'+esc(t.priority)+'</span><time>'+esc(supportTicketDate(t.updated_at||t.created_at))+'</time></div></div></button>';
-    }).join('')+'</div>':'<div class="settings-empty"><h3>No tickets</h3><p>New staff and administrator support requests will appear here.</p></div>';
-    Array.prototype.forEach.call(list.querySelectorAll("[data-support-ticket]"),function(b){b.addEventListener("click",function(){openSupportTicketAdmin(b.getAttribute("data-support-ticket"));});});
-  }
-
-  async function loadSupportTicketBadge(){
-    var badge=$("supportTicketNavBadge"); if(!badge)return;
-    try{
-      var r=await sb.from("support_tickets").select("id",{count:"exact",head:true});
-      if(!r.error && Number(r.count||0)>0){
-        var count=Number(r.count||0);
-        badge.hidden=false;
-        badge.textContent=count>99?"99+":String(count);
-      }else{
-        badge.hidden=true;
-      }
-    }catch(e){
-      // Keep the badge stable if the count request temporarily fails; the ticket list
-      // will update it again after loading.
-    }
-  }
-
-  function supportTicketCreateHtml(){
-    return '<div class="ticket-admin-modal"><p class="eyebrow">Support / Help</p><h2>Submit a Support Ticket</h2><p class="dateline">Admins and IT Support can submit issues here too.</p><form id="supportAdminCreateForm" class="support-ticket-form">'+
-      '<div class="field"><label>Issue type</label><select id="supportAdminType"><option value="">Select issue type</option>'+SUPPORT_TICKET_TYPES.map(function(x){return '<option>'+esc(x)+'</option>';}).join('')+'</select></div>'+
-      '<div class="field"><label>Subject</label><input id="supportAdminSubject" maxlength="160" placeholder="Brief description" /></div>'+
-      '<div class="field"><label>Description</label><textarea id="supportAdminDescription" rows="6" maxlength="8000" placeholder="Explain the problem"></textarea></div>'+
-      '<div class="field"><label>Priority</label><select id="supportAdminPriority">'+SUPPORT_TICKET_PRIORITIES.map(function(x){return '<option'+(x==='Medium'?' selected':'')+'>'+esc(x)+'</option>';}).join('')+'</select></div>'+
-      '<div class="form-foot"><button class="btn btn-primary btn-block" type="submit">Submit Ticket</button></div></form></div>';
-  }
-
-  async function openSupportTicketAdmin(id){
-    var t=(SUPPORT_TICKETS.rows||[]).find(function(x){return String(x.id)===String(id);}); if(!t)return;
-    SUPPORT_TICKETS.active=t;
-    try { await sb.from("support_ticket_notifications").update({read_at:new Date().toISOString()}).eq("ticket_id",t.id).eq("user_id",ME.user.id).is("read_at",null); } catch(ignore) {}
-    await loadSupportTicketBadge();
-    renderSupportTicketAdminModal(t);
-  }
-
-  async function renderSupportTicketAdminModal(t){
-    var msgs=await sb.from("support_ticket_messages").select("id,sender_id,body,is_internal,created_at").eq("ticket_id",t.id).order("created_at",{ascending:true});
-    if(msgs.error){toast(msgs.error.message,"bad");return;}
-    var files=await sb.from("support_ticket_attachments").select("id,file_name,file_path,content_type,file_size,created_at").eq("ticket_id",t.id).order("created_at",{ascending:true});
-    var assignedName=t.assigned_to?supportTicketName(t.assigned_to):"Unassigned";
-    var body='<div class="ticket-admin-modal"><div class="ticket-admin-head"><div><p class="eyebrow">'+esc(supportTicketNum(t))+'</p><h2>'+esc(t.subject)+'</h2><p class="dateline">Submitted by '+esc(supportTicketName(t.user_id))+' · '+esc(supportTicketDate(t.created_at))+'</p></div><span class="'+supportTicketStatusClass(t.status)+'">'+esc(t.status)+'</span></div>'+
-      '<div class="ticket-admin-meta"><span>'+esc(t.issue_type)+'</span><span class="'+supportTicketPriorityClass(t.priority)+'">'+esc(t.priority)+'</span><span>Assigned: '+esc(assignedName)+'</span></div>'+
-      '<div class="support-ticket-description"><strong>Issue</strong><p>'+esc(t.description).replace(/\n/g,'<br>')+'</p></div>'+
-      '<div class="ticket-admin-controls"><div class="field"><label>Status</label><select id="ticketAdminStatus">'+SUPPORT_TICKET_STATUSES.map(function(x){return '<option'+(x===t.status?' selected':'')+'>'+esc(x)+'</option>';}).join('')+'</select></div><div class="field"><label>Priority</label><select id="ticketAdminPriority">'+SUPPORT_TICKET_PRIORITIES.map(function(x){return '<option'+(x===t.priority?' selected':'')+'>'+esc(x)+'</option>';}).join('')+'</select></div><div class="field"><label>Assign to IT</label><select id="ticketAdminAssignee"><option value="">Unassigned</option>'+(USERS.rows||[]).filter(function(x){return roleOf(x)==='admin'||roleOf(x)==='it_support';}).map(function(x){var id=x.id||x.user_id;return '<option value="'+esc(id)+'"'+(String(id)===String(t.assigned_to)?' selected':'')+'>'+esc(displayName(x))+'</option>';}).join('')+'</select></div><button class="btn btn-dark btn-sm" id="ticketAdminSave">Save changes</button></div>'+
-      '<div class="ticket-admin-thread">'+((msgs.data||[]).length?(msgs.data||[]).map(function(m){return '<div class="ticket-admin-message '+(m.is_internal?'internal ':'')+(String(m.sender_id)===String(ME.user.id)?'mine':'')+'"><div><strong>'+esc(supportTicketName(m.sender_id))+'</strong><span>'+esc(m.is_internal?'Internal note':'Reply')+'</span></div><p>'+esc(m.body).replace(/\n/g,'<br>')+'</p><time>'+esc(supportTicketDate(m.created_at))+'</time></div>';}).join(''):'<p class="settings-empty">No replies yet.</p>')+'</div>'+
-      ((files.data||[]).length?'<div class="ticket-admin-files"><strong>Attachments</strong><div>'+files.data.map(function(f){return '<button type="button" class="link-muted" data-ticket-file="'+esc(f.file_path)+'">'+esc(f.file_name)+'</button>';}).join('')+'</div></div>':'')+
-      '<form id="ticketAdminReplyForm" class="ticket-admin-reply"><div class="field"><label>Reply to user</label><textarea id="ticketAdminReply" rows="4" maxlength="8000" placeholder="Write a response…"></textarea></div><div class="field"><label class="check"><input id="ticketAdminInternal" type="checkbox" /> Internal note (user will not see this)</label></div><button class="btn btn-primary" type="submit">Send</button></form></div>';
-    showSupportModal(body);
-    var saveBtn = $("ticketAdminSave");
-    if (saveBtn) saveBtn.addEventListener("click", async function(){
-      var b=this;
-      var statusEl=$("ticketAdminStatus"), priorityEl=$("ticketAdminPriority"), assigneeEl=$("ticketAdminAssignee");
-      if (!statusEl || !priorityEl || !assigneeEl) { toast("Ticket controls could not be loaded. Please reopen the ticket.","bad"); return; }
-      setBtnLoading(b,true);
-      try {
-        var patch={status:statusEl.value,priority:priorityEl.value,assigned_to:assigneeEl.value||null};
-        var r=await sb.from("support_tickets").update(patch).eq("id",t.id);
-        if(r.error) throw r.error;
-        t.status=patch.status; t.priority=patch.priority; t.assigned_to=patch.assigned_to;
-        await loadSupportTickets();
-        // Keep the ticket card/modal open after saving changes.
-        var statusBadge = document.querySelector("#supportTicketModalBody .ticket-admin-head > span");
-        if (statusBadge) {
-          statusBadge.className = supportTicketStatusClass(t.status);
-          statusBadge.textContent = t.status;
-        }
-        var meta = document.querySelector("#supportTicketModalBody .ticket-admin-meta");
-        if (meta) {
-          var metaSpans = meta.querySelectorAll("span");
-          if (metaSpans[1]) {
-            metaSpans[1].className = supportTicketPriorityClass(t.priority);
-            metaSpans[1].textContent = t.priority;
-          }
-          if (metaSpans[2]) metaSpans[2].textContent = "Assigned: " + (t.assigned_to ? supportTicketName(t.assigned_to) : "Unassigned");
-        }
-        toast("Ticket updated. The ticket remains open.","good");
-      } catch(e) {
-        toast(e.message||"Could not update ticket. Check the Supabase support-ticket RLS policies.","bad");
-      } finally { setBtnLoading(b,false); }
-    });
-
-    var replyForm=$("ticketAdminReplyForm");
-    if (replyForm) replyForm.addEventListener("submit",async function(e){
-      e.preventDefault();
-      var replyEl=$("ticketAdminReply"), internalEl=$("ticketAdminInternal");
-      var text=(replyEl && replyEl.value||"").trim();
-      if(!text){toast("Write a reply before sending.","bad");return;}
-      var b=this.querySelector('button[type="submit"]');
-      setBtnLoading(b,true);
-      try {
-        var r=await sb.from("support_ticket_messages").insert({ticket_id:t.id,sender_id:ME.user.id,body:text,is_internal:!!(internalEl&&internalEl.checked)});
-        if(r.error) throw r.error;
-        closeSupportModal();
-        await loadSupportTickets();
-        await openSupportTicketAdmin(t.id);
-        toast("Reply sent.","good");
-      } catch(e) {
-        toast(e.message||"Could not send reply. Check the support-ticket message RLS/notification trigger.","bad");
-      } finally { setBtnLoading(b,false); }
-    });
-    Array.prototype.forEach.call(document.querySelectorAll('[data-ticket-file]'),function(b){b.addEventListener('click',async function(){try{var r=await sb.storage.from(SUPPORT_TICKET_BUCKET).createSignedUrl(b.getAttribute('data-ticket-file'),300);if(r.error)throw r.error;window.open(r.data.signedUrl,'_blank','noopener');}catch(e){toast(e.message||'Attachment could not be opened.','bad');}});});
-  }
-
-  function showSupportModal(html){
-    var wrap=document.createElement('div');wrap.className='modal-backdrop support-ticket-modal-backdrop';wrap.id='supportTicketModal';wrap.innerHTML='<div class="modal modal-wide" role="dialog" aria-modal="true"><div id="supportTicketModalBody">'+html+'</div><div class="modal-actions"><button class="btn btn-ghost" type="button" id="supportTicketModalClose">Close</button></div></div>';
-    document.body.appendChild(wrap);wrap.querySelector('#supportTicketModalClose').addEventListener('click',closeSupportModal);wrap.addEventListener('click',function(e){if(e.target===wrap)closeSupportModal();});
-  }
-  function closeSupportModal(){var m=$("supportTicketModal");if(m)m.remove();}
-
-  function initSupportTickets(){
-    var root=$("tab-tickets");if(!root||root.getAttribute('data-ready')==='1')return;root.setAttribute('data-ready','1');
-    if(!document.getElementById("support-ticket-spacing-fix")){
-      var style=document.createElement("style");
-      style.id="support-ticket-spacing-fix";
-      style.textContent=""+
-        "#tab-tickets .section-head-actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}"+
-        "#tab-tickets .ticket-admin-meta{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:16px 0 20px;}"+
-        "#tab-tickets .ticket-admin-controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:end;margin-top:20px;}"+
-        "#tab-tickets .ticket-admin-controls .btn{margin-top:4px;}"+
-        "#tab-tickets .ticket-admin-reply{margin-top:20px;padding-top:18px;border-top:1px solid var(--rule);}"+
-        "#tab-tickets .ticket-admin-reply .field + .field{margin-top:14px;}"+
-        "#tab-tickets .ticket-admin-reply .check{display:flex;align-items:center;gap:10px;}"+
-        "#tab-tickets .ticket-admin-reply button[type=submit]{margin-top:10px;}"+
-        "@media(max-width:760px){#tab-tickets .section-head-actions{width:100%;gap:12px;}#tab-tickets .section-head-actions .btn{flex:1 1 140px;}#tab-tickets .ticket-admin-meta{gap:10px;margin:14px 0 18px;}#tab-tickets .ticket-admin-controls{grid-template-columns:1fr;gap:12px;}#tab-tickets .ticket-admin-reply{margin-top:16px;padding-top:16px;}}";
-      document.head.appendChild(style);
-    }
-    var refresh=$("supportTicketsRefresh");if(refresh)refresh.addEventListener('click',function(){loadSupportTickets();});
-    var newBtn=$("supportTicketNewBtn");if(newBtn)newBtn.addEventListener('click',function(){showSupportModal(supportTicketCreateHtml());var f=$("supportAdminCreateForm");f.addEventListener('submit',async function(e){e.preventDefault();var type=$("supportAdminType").value,subject=$("supportAdminSubject").value.trim(),description=$("supportAdminDescription").value.trim(),priority=$("supportAdminPriority").value;if(!type||!subject||!description){toast('Complete the required fields.','bad');return;}var b=f.querySelector('button[type=submit]');setBtnLoading(b,true);try{var r=await sb.from('support_tickets').insert({user_id:ME.user.id,issue_type:type,subject:subject,description:description,priority:priority});if(r.error)throw r.error;closeSupportModal();await loadSupportTickets();toast('Support ticket created.','good');}catch(e){toast(e.message||'Could not create ticket.','bad');}finally{setBtnLoading(b,false);}});});
-    loadSupportTickets();
-  }
-
   /* ------------------------- gate ------------------------- */
   async function gate() {
     loader(true);
-    var sessionRes;
-    try {
-      sessionRes = await withTimeout(sb.auth.getSession(), 8000, "Session check timed out. Please refresh and try again.");
-    } catch (e) {
-      loader(false);
-      message(e.message || "Session check failed. Please refresh and try again.", "error");
-      only("loginView");
-      return;
-    }
+    var sessionRes = await sb.auth.getSession();
     var session = sessionRes.data && sessionRes.data.session;
     if (!session) {
       ME = { user: null, role: null, allowed: false };
@@ -2485,24 +2103,7 @@
     }
 
     var user = session.user;
-    /* The profiles table in this installation does not expose the optional
-       account-status columns used by an older build. Query only the stable
-       columns so the access gate cannot fail with HTTP 400. */
-    var profileState = { data: null, error: null };
-    console.info("Tech-Support Role Management integrated into support.js");
-    if (profileState.error) {
-      console.warn("Profile role lookup warning:", profileState.error.message);
-    }
-
-    var access;
-    try {
-      access = await withTimeout(resolveAccess(user), 16000, "Access verification timed out. Please refresh and try again.");
-    } catch (e) {
-      loader(false);
-      message(e.message || "Access verification failed. Please refresh and try again.", "error");
-      only("loginView");
-      return;
-    }
+    var access = await resolveAccess(user);
     loader(false);
 
     if (!access.allowed) {
@@ -2516,16 +2117,7 @@
       return;
     }
 
-    try {
-      await renderPortal(user, access);
-    } catch (e) {
-      console.error("Tech Support portal initialization failed:", e);
-      var boot = $("boot");
-      if (boot) {
-        boot.innerHTML = '<div class="auth-card" style="max-width:620px;margin:40px auto;padding:28px"><h2>Tech Support could not finish loading</h2><p>There was a problem initialising the portal. Please reload the page.</p><p class="hint">' + esc(e && e.message ? e.message : "Unknown initialisation error") + '</p></div>';
-        boot.hidden = false;
-      }
-    }
+    await renderPortal(user, access);
   }
 
 
@@ -2637,7 +2229,7 @@
     /* ------------------------- persistent portal section ------------------------- */
     var PORTAL_SECTION_KEY = "tech_support_active_section";
     function validPortalSection(name) {
-      return ["overview", "users", "attendance", "system", "leave", "settings", "tickets", "checks"].indexOf(name) !== -1;
+      return ["overview", "users", "attendance", "system", "settings", "checks"].indexOf(name) !== -1;
     }
     function getPortalSection() {
       var hash = String(location.hash || "").replace(/^#\/?/, "").toLowerCase();
@@ -2666,8 +2258,6 @@
         if (panel) panel.hidden = b !== btn;
       });
       if (!options.skipPersist) setPortalSection(name, !!options.replace);
-      if (name === "leave") renderSupportLeave();
-      if (name === "tickets") loadSupportTickets();
       if (options.closeNav && typeof closeNav === "function") closeNav();
     }
 
@@ -2718,7 +2308,6 @@
       });
     }
     if (backdrop) backdrop.addEventListener("click", closeNav);
-    ensureLeavePortalTab();
     activatePortalSection(getPortalSection(), { skipPersist: true });
     window.addEventListener("popstate", function () {
       activatePortalSection(getPortalSection(), { skipPersist: true, closeNav: true });
