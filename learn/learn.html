@@ -38,20 +38,15 @@
   <div class="nav-backdrop" id="navBackdrop" hidden></div>
 
   <main id="view">
-    <section class="learn-coming-soon" aria-labelledby="learnComingSoonTitle">
-      <div class="learn-coming-soon-card">
-        <div class="learn-coming-soon-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/>
-            <path d="M4 5.5v15"/>
-            <path d="M8 7h8M8 10h8"/>
-          </svg>
+    <div class="page learn-coming-soon" aria-labelledby="learnComingTitle">
+      <section class="section learn-coming-card">
+        <div class="learn-coming-inner">
+          <p class="eyebrow">Learning</p>
+          <h1 id="learnComingTitle">Coming Soon</h1>
+          <p>Technical &amp; Operations learning content is currently being prepared.</p>
         </div>
-        <p class="eyebrow">Learning</p>
-        <h1 id="learnComingSoonTitle">Coming Soon</h1>
-        <p class="learn-coming-soon-copy">Technical &amp; Operations learning content is currently being prepared.</p>
-      </div>
-    </section>
+      </section>
+    </div>
   </main>
 
   <section class="faq" id="faqSection" hidden>
@@ -120,6 +115,34 @@
 
   <div class="toasts" id="toasts"></div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- One source of truth: Learn reuses the existing application logic. -->
+  <script src="../script.js"></script>
+  <script>
+    (function () {
+      "use strict";
+      var comingSoon = '<div class="page learn-coming-soon" aria-labelledby="learnComingTitle">' +
+        '<section class="section learn-coming-card"><div class="learn-coming-inner">' +
+        '<p class="eyebrow">Learning</p>' +
+        '<h1 id="learnComingTitle">Coming Soon</h1>' +
+        '<p>Technical &amp; Operations learning content is currently being prepared.</p>' +
+        '</div></section></div>';
 
+      function showComingSoon() {
+        var view = document.getElementById("view");
+        if (!view || view.getAttribute("data-learn-coming-soon") === "1") return;
+        view.innerHTML = comingSoon;
+        view.setAttribute("data-learn-coming-soon", "1");
+      }
+
+      var view = document.getElementById("view");
+      if (view) {
+        new MutationObserver(function () {
+          if (view.getAttribute("data-learn-coming-soon") !== "1") showComingSoon();
+        }).observe(view, { childList: true });
+      }
+      showComingSoon();
+    })();
+  </script>
 </body>
 </html>
