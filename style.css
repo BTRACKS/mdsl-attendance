@@ -75,8 +75,15 @@ img{max-width:100%;display:block}
   text-transform:uppercase;color:var(--ink-4)
 }
 .nav{
-  display:flex;gap:2px;align-items:center;margin:0;flex:1 1 auto;min-width:0;max-width:none;flex-wrap:nowrap;justify-content:center;
+  display:flex;gap:2px;align-items:center;margin:0 0 0 auto;flex:0 1 auto;min-width:0;width:max-content;max-width:calc(100% - 8px);flex-wrap:nowrap;justify-content:flex-start;
   background:var(--paper-2);border:1px solid var(--rule);border-radius:var(--radius-pill);padding:4px;overflow:hidden
+}
+/* Keep the desktop navigation compact: it should hug its contents instead of
+   stretching across the header and forcing every label to look undersized. */
+@media (min-width:1181px){
+  .masthead-inner{justify-content:flex-end}
+  .nav{width:max-content;flex:0 1 auto}
+  .masthead-right{flex:0 0 auto;margin-left:0}
 }
 .nav a{
   display:inline-flex;align-items:center;gap:8px;position:relative;
