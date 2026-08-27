@@ -4206,7 +4206,11 @@
       return;
     } else {
       if (hash !== "#/dashboard") { location.hash = "#/dashboard"; return; }
-      view.innerHTML = dashboardView(u);
+      /* Keep the shared Dashboard route role-aware. Administration users can
+         reach #/dashboard from the sidebar or a direct URL, so they must get
+         the Administration dashboard rather than the staff/intern dashboard.
+         The Learn implementation itself is untouched. */
+      view.innerHTML = normalizeRole(u.role) === "admin" ? adminOverview() : dashboardView(u);
     }
     renderChrome();
     if (hash === "#/admin/learning") bindAdminLearning(); else bindApp();
