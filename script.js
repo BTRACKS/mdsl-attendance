@@ -91,6 +91,9 @@
     learningTopics: [], learningLessons: [], learningLessonBlocks: [], learningQuizzes: [], learningProgress: [], learningAttempts: [], learningQuestions: [] };
   var authUser = null;     // the raw Supabase auth user (has .id, .email)
   var currentUser = null;  // the matching row from db.users (profile + role)
+  /* Prevent route decisions while Supabase restores an existing session. */
+  var authReady = false;
+  var authRestorePromise = null;
   var dataError = null;
   var aboutCreatorProfiles = {};
 
@@ -261,9 +264,12 @@
 
   async function refreshSessionUser() {
     var sessionRes = await supabaseClient.auth.getSession();
-    authUser = (sessionRes.data && sessionRes.data.session) ? sessionRes.data.session.user : null;
-    currentUser = null;
-    if (!authUser) return;
+    var restoredAuthUser = (sessionRes.data && sessionRes.data.session) ? sessionRes.data.session.user : null;
+    authUser = restoredAuthUser;
+    /* Keep the last valid profile while resolving the same session. Clearing
+       currentUser here created a brief logged-out state during navigation. */
+    if (!restoredAuthUser) { currentUser = null; return; }
+    var resolvedUser = null;
 
     /* The role changed by Tech Support is stored in the portal role tables.
        Resolve those tables directly first and give Administration/admin
@@ -299,13 +305,15 @@
 
     /* Final legacy fallback only. */
     var profileRes = await supabaseClient.from("profiles").select("*").eq("id", authUser.id).maybeSingle();
-    if (!profileRes.error && profileRes.data) currentUser = mapProfile(profileRes.data);
-    else currentUser = db.users.find(function (u) { return u.id === authUser.id; }) || null;
+    if (!profileRes.error && profileRes.data) resolvedUser = mapProfile(profileRes.data);
+    else resolvedUser = db.users.find(function (u) { return u.id === authUser.id; }) || null;
 
-    if (!currentUser) {
-      currentUser = { id: authUser.id, email: authUser.email || "", role: liveRole || "staff" };
+    if (!resolvedUser) {
+      resolvedUser = { id: authUser.id, email: authUser.email || "", role: liveRole || "staff" };
     }
-    if (liveRole) currentUser.role = liveRole;
+    if (liveRole) resolvedUser.role = liveRole;
+    /* Commit only after all profile/role lookups have completed. */
+    currentUser = resolvedUser;
 
     var cached = db.users.find(function (u) { return u.id === authUser.id; });
     if (cached) {
@@ -4168,6 +4176,8 @@
   function render() {
     var __scrollY = window.scrollY || window.pageYOffset || 0;
     var __restoreScroll = function () { window.requestAnimationFrame(function () { window.scrollTo(0, __scrollY); }); };
+    /* Do not interpret an in-progress auth restoration as a real logout. */
+    if (!authReady) { el("view").innerHTML = loadingView(); return; }
     var u = session();
     var hash = location.hash || defaultHash(u);
     var view = el("view");
@@ -4520,9 +4530,13 @@
   async function init() {
     el("view").innerHTML = loadingView();
     var initialHash = location.hash || "";
-    if (initialHash === "#/messages") {
-      var authRes = await supabaseClient.auth.getSession();
+    /* Bootstrap Auth once before any route can decide whether Sign In is required. */
+    authRestorePromise = supabaseClient.auth.getSession().then(function (authRes) {
       authUser = (authRes.data && authRes.data.session) ? authRes.data.session.user : null;
+      return authUser;
+    });
+    await authRestorePromise;
+    if (initialHash === "#/messages") {
       if (authUser) {
         var profileRes = await supabaseClient.from("profiles").select("*").eq("id", authUser.id).maybeSingle();
         if (!profileRes.error && profileRes.data) {
@@ -4544,6 +4558,7 @@
             return;
           }
           await initMessaging();
+          authReady = true;
           render();
           /* Attendance/HSE/profile refresh continues in the background and does not block Messages. */
           refreshData().then(function(){
@@ -4563,14 +4578,24 @@
     await refreshSessionUser();
     if (authUser && !(await enforceCurrentAccountStatus(false))) return;
     await initMessaging();
+    authReady = true;
     render();
   }
 
-  supabaseClient.auth.onAuthStateChange(function (event) {
-    if (event === "SIGNED_OUT") { authUser = null; currentUser = null; }
+  supabaseClient.auth.onAuthStateChange(function (event, session) {
+    if (event === "SIGNED_OUT") {
+      authUser = null; currentUser = null; authReady = true; return;
+    }
+    /* Token refresh/sign-in events must not clear the in-memory profile. */
+    if (session && session.user) authUser = session.user;
   });
 
-  if (PAGE === "app" || PAGE === "learn") window.addEventListener("hashchange", render);
+  if (PAGE === "app" || PAGE === "learn") {
+    window.addEventListener("hashchange", async function () {
+      if (authRestorePromise) await authRestorePromise;
+      render();
+    });
+  }
   /* Re-check frequently enough that an administrator's deactivation is
      enforced promptly for users who are already signed in. */
   setInterval(async function () {
