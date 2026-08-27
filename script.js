@@ -607,7 +607,7 @@
       links = [["#/login", "Sign in"], ["#/signup", "Register"]];
     } else {
       if (normalizeRole(u.role) === "admin") {
-        links = [["#/admin", "Overview"], ["#/admin/attendance", "Attendance"], ["#/admin/hse", "HSE"], ["#/admin/learning", "Learning Management"], ["#/dashboard", "Dashboard"], ["#/messages", "Messages"]];
+        links = [["#/admin", "Overview"], ["#/admin/attendance", "Attendance Management"], ["#/admin/hse", "HSE Attendance"], ["#/admin/learning", "Learning Management"], ["#/dashboard", "Dashboard"], ["#/messages", "Messages"]];
       } else {
         links = [["#/dashboard", "Dashboard"], ["#/history", "Attendance History"], ["#/leave", "Leave"], ["#/messages", "Messages"]];
         if (isIntern(u)) links.splice(1, 0, ["#/learning", "Learning / Training"]);
