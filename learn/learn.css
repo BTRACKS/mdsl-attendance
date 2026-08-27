@@ -1,2 +1,231 @@
 /* Dedicated Learn entry point. Keep the shared application stylesheet as the single source of visual truth. */
 @import url("../style.css");
+
+
+/* ==========================================================================
+   LEARN PAGE — MOBILE RESPONSIVENESS ONLY
+   These rules are scoped to the Learn entry point and only apply below
+   the existing mobile breakpoint. Desktop styles remain unchanged.
+   ========================================================================== */
+
+@media (max-width: 760px) {
+  html,
+  body[data-page="learn"] {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  body[data-page="learn"] #view,
+  body[data-page="learn"] #view > .page,
+  body[data-page="learn"] .learning-page {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  body[data-page="learn"] #view > .page {
+    margin-left: 0;
+    margin-right: 0;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  /* Prevent flex/grid children and generated learning content from
+     establishing an intrinsic width larger than the viewport. */
+  body[data-page="learn"] .learning-page,
+  body[data-page="learn"] .learning-page > *,
+  body[data-page="learn"] .learning-page .learning-section,
+  body[data-page="learn"] .learning-page .section,
+  body[data-page="learn"] .learning-page .learning-grid,
+  body[data-page="learn"] .learning-page .learning-detail-layout,
+  body[data-page="learn"] .learning-page .learning-admin-layout,
+  body[data-page="learn"] .learning-page .learning-topic-card,
+  body[data-page="learn"] .learning-page .learning-topic-hero,
+  body[data-page="learn"] .learning-page .learning-hero,
+  body[data-page="learn"] .learning-page .learning-lesson,
+  body[data-page="learn"] .learning-page .learning-quiz,
+  body[data-page="learn"] .learning-page .learning-sidebar {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  body[data-page="learn"] .learning-page h1,
+  body[data-page="learn"] .learning-page h2,
+  body[data-page="learn"] .learning-page h3,
+  body[data-page="learn"] .learning-page p,
+  body[data-page="learn"] .learning-page span,
+  body[data-page="learn"] .learning-page label,
+  body[data-page="learn"] .learning-page legend,
+  body[data-page="learn"] .learning-page strong,
+  body[data-page="learn"] .learning-page small,
+  body[data-page="learn"] .learning-page a {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  body[data-page="learn"] .learning-page img,
+  body[data-page="learn"] .learning-page svg,
+  body[data-page="learn"] .learning-page video,
+  body[data-page="learn"] .learning-page canvas,
+  body[data-page="learn"] .learning-page iframe {
+    max-width: 100%;
+    height: auto;
+  }
+
+  body[data-page="learn"] .learning-page input,
+  body[data-page="learn"] .learning-page select,
+  body[data-page="learn"] .learning-page textarea {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  body[data-page="learn"] .learning-page button.btn {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  body[data-page="learn"] .learning-topic-footer {
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+
+  body[data-page="learn"] .learning-topic-footer-actions {
+    min-width: 0;
+    max-width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  body[data-page="learn"] .learning-topic-footer-actions .btn {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  body[data-page="learn"] .learning-next-row {
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+
+  body[data-page="learn"] .learning-next-row > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  body[data-page="learn"] .learning-next-row .btn {
+    max-width: 100%;
+  }
+
+  body[data-page="learn"] .learning-path-item {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  body[data-page="learn"] .learning-path-item strong,
+  body[data-page="learn"] .learning-path-item small {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  body[data-page="learn"] .learning-option {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  body[data-page="learn"] .learning-option span {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  body[data-page="learn"] .learning-admin-row,
+  body[data-page="learn"] .learning-admin-question,
+  body[data-page="learn"] .learning-admin-actions {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  body[data-page="learn"] .learning-admin-row-main,
+  body[data-page="learn"] .learning-admin-row-actions,
+  body[data-page="learn"] .learning-admin-question > div {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  /* Long lesson content, pasted URLs, code-like strings, etc. must wrap
+     instead of creating a wider document. */
+  body[data-page="learn"] .learning-richtext,
+  body[data-page="learn"] .learning-copy-block,
+  body[data-page="learn"] .learning-introduction,
+  body[data-page="learn"] .learning-empty,
+  body[data-page="learn"] .learning-quiz-loading,
+  body[data-page="learn"] .learning-quiz-empty,
+  body[data-page="learn"] .learning-quiz-error {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  body[data-page="learn"] .learning-richtext pre,
+  body[data-page="learn"] .learning-richtext code {
+    max-width: 100%;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  /* If learning content contains a table, keep it inside the viewport rather
+     than allowing the table's intrinsic width to expand the page. */
+  body[data-page="learn"] .learning-richtext table {
+    width: 100%;
+    max-width: 100%;
+    table-layout: fixed;
+  }
+
+  body[data-page="learn"] .learning-richtext th,
+  body[data-page="learn"] .learning-richtext td {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+}
+
+@media (max-width: 520px) {
+  body[data-page="learn"] #view > .page {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  body[data-page="learn"] .learning-topic-hero {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  body[data-page="learn"] .learning-hero {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  body[data-page="learn"] .learning-topic-footer-actions {
+    width: 100%;
+  }
+
+  body[data-page="learn"] .learning-topic-footer-actions .btn {
+    flex: 1 1 auto;
+  }
+
+  body[data-page="learn"] .learning-next-row {
+    width: 100%;
+  }
+
+  body[data-page="learn"] .learning-next-row .btn {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+}
