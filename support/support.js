@@ -557,11 +557,10 @@
   }
 
   /* ------------------------- Phase 3: role management -------------------------
-     The UI below is a convenience layer only. Every role change is executed by
-     public.set_user_role(), a security-definer function that re-checks the
-     caller is an administrator, refuses to strip the last administrator, and
-     is the only path permitted by the row level security policies on
-     public.user_roles. Hiding a button here protects nothing on its own. */
+     Role management is available to authorized IT Support and administrators.
+     The UI is only a convenience layer: the database RPC re-checks the caller
+     and performs the actual write. Changes are reloaded from the database
+     immediately so every portal view sees the new role. */
   var ROLES = {};          /* user_id -> role, as stored in the database */
   var ADMIN_COUNT = 0;     /* administrators currently on record */
   var PENDING = null;      /* role change awaiting confirmation */
@@ -571,6 +570,7 @@
     return ROLES[id] || pick(row, ROLE_KEYS) || "staff";
   }
   function roleLabel(r) { return ROLE_LABEL[r] || r || "Staff"; }
+  function canManageRoles() { return ME.role === "admin" || ME.role === "it_support"; }
   function isAdmin() { return ME.role === "admin"; }
 
   async function loadRoles() {
@@ -601,16 +601,16 @@
     kv("kvUserRole", [
       ["Current portal role", roleLabel(current)],
       ["Portal access", ALLOWED_ROLES.indexOf(current) !== -1 ? "Granted" : "Not granted"],
-      ["Changed by", "Administrators only"]
+      ["Changed by", canManageRoles() ? "IT Support / Administrators" : "Administrators only"]
     ]);
 
     var form = $("roleForm");
     var note = $("roleNote");
     var sel = $("roleSelect");
 
-    if (!isAdmin()) {
+    if (!canManageRoles()) {
       form.hidden = true;
-      note.textContent = "Only an administrator can change portal roles. Your account has read-only access to this section.";
+      note.textContent = "Only authorized IT Support or an administrator can change portal roles. Your account has read-only access to this section.";
       return;
     }
     if (!id) {
@@ -630,7 +630,7 @@
     } else if (self) {
       note.textContent = "You are editing your own account. Reducing your role will immediately limit your access to this portal.";
     } else {
-      note.textContent = "Changing a role takes effect immediately for " + name + ". You will be asked to confirm first.";
+      note.textContent = canManageRoles() ? "Changing a role takes effect immediately for " + name + ". You will be asked to confirm first." : "Role management is available only to authorized IT Support and administrators.";
     }
   }
 
@@ -662,7 +662,8 @@
     busy(btn, true);
     loader(true);
 
-    var res = await sb.rpc("set_user_role", { target_user: job.userId, new_role: job.to });
+    var roleRpc = ME.role === "it_support" ? "it_support_set_user_role" : "set_user_role";
+    var res = await sb.rpc(roleRpc, { target_user: job.userId, new_role: job.to });
 
     busy(btn, false);
     loader(false);
@@ -703,7 +704,7 @@
       var to = sel.value;
       if (!id) return;
       if (to === from) { toast("That is already " + name + "'s role."); return; }
-      if (!isAdmin()) { toast("Only an administrator can change portal roles.", "bad"); return; }
+      if (!canManageRoles()) { toast("Only authorized IT Support or an administrator can change portal roles.", "bad"); return; }
       if (ME.user && id === ME.user.id && from === "admin" && ADMIN_COUNT <= 1) {
         toast("You are the last administrator. Promote another user first.", "bad");
         return;
