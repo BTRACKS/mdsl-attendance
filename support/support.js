@@ -111,43 +111,49 @@
   async function resolveAccess(user) {
     var result = { role: null, allowed: false, source: "none", error: null };
 
-    // 1. Preferred: a single security-definer function.
+    // Prefer the stable profiles.role column used by E-Attendance.
+    // This avoids blocking the portal on optional/missing portal RPCs or role tables.
+    try {
+      var prof = await withTimeout(
+        sb.from("profiles").select("role").eq("id", user.id).maybeSingle(),
+        6000,
+        "Profile role lookup timed out."
+      );
+      if (!prof.error && prof.data) {
+        result.role = String(prof.data.role || "staff").toLowerCase();
+        result.source = "profiles.role";
+        result.allowed = ALLOWED_ROLES.indexOf(result.role) !== -1;
+        if (result.allowed) return result;
+      } else if (prof.error) {
+        result.error = prof.error.message;
+      }
+    } catch (e) { result.error = e.message; }
+
+    // Fallback to the portal role RPC when it exists.
     try {
       var rpc = await withTimeout(sb.rpc("portal_role"), 5000, "Portal role check timed out.");
       if (!rpc.error && rpc.data) {
-        result.role = String(rpc.data);
+        result.role = String(rpc.data).toLowerCase();
         result.source = "portal_role() RPC";
         result.allowed = ALLOWED_ROLES.indexOf(result.role) !== -1;
         return result;
       }
-    } catch (e) { /* function not deployed yet — fall through */ }
+    } catch (e) {}
 
-    // 2. Dedicated roles table (user_roles, falling back to legacy support_roles).
+    // Final fallback to the role tables.
     try {
       var rolesRes = await withTimeout(sb.from("user_roles").select("role").eq("user_id", user.id), 5000, "Role lookup timed out.");
       if (rolesRes.error || !rolesRes.data || !rolesRes.data.length) {
         rolesRes = await withTimeout(sb.from("support_roles").select("role").eq("user_id", user.id), 5000, "Support role lookup timed out.");
       }
       if (!rolesRes.error && rolesRes.data && rolesRes.data.length) {
-        var roles = rolesRes.data.map(function (r) { return r.role; });
+        var roles = rolesRes.data.map(function (r) { return String(r.role || "").toLowerCase(); });
         result.role = roles.indexOf("admin") !== -1 ? "admin" : roles[0];
-        result.source = "user_roles table";
+        result.source = "role table";
         result.allowed = roles.some(function (r) { return ALLOWED_ROLES.indexOf(r) !== -1; });
         return result;
       }
       if (rolesRes.error) result.error = rolesRes.error.message;
-    } catch (e) { result.error = e.message; }
-
-    // 3. Fallback to the existing attendance profile role (admins only).
-    try {
-      var prof = await withTimeout(sb.from("profiles").select("role").eq("id", user.id).maybeSingle(), 5000, "Profile role lookup timed out.");
-      if (!prof.error && prof.data) {
-        result.role = prof.data.role || "staff";
-        result.source = "profiles.role (legacy)";
-        result.allowed = result.role === "admin";
-        return result;
-      }
-      if (prof.error) result.error = prof.error.message;
     } catch (e) { result.error = e.message; }
 
     return result;
@@ -2461,7 +2467,15 @@
   /* ------------------------- gate ------------------------- */
   async function gate() {
     loader(true);
-    var sessionRes = await sb.auth.getSession();
+    var sessionRes;
+    try {
+      sessionRes = await withTimeout(sb.auth.getSession(), 8000, "Session check timed out. Please refresh and try again.");
+    } catch (e) {
+      loader(false);
+      message(e.message || "Session check failed. Please refresh and try again.", "error");
+      only("loginView");
+      return;
+    }
     var session = sessionRes.data && sessionRes.data.session;
     if (!session) {
       ME = { user: null, role: null, allowed: false };
@@ -2475,7 +2489,7 @@
        account-status columns used by an older build. Query only the stable
        columns so the access gate cannot fail with HTTP 400. */
     var profileState = { data: null, error: null };
-    console.info("Tech-Support Role Management v4 loaded");
+    console.info("Tech-Support Role Management integrated into support.js");
     if (profileState.error) {
       console.warn("Profile role lookup warning:", profileState.error.message);
     }
