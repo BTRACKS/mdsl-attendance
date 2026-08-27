@@ -847,7 +847,7 @@
       '<section class="section"><div class="section-head"><h2>Recent Records</h2><span><a class="link-muted" href="#/history">View full history</a></span></div>' +
       historyTable(u, 5) + "</section>" +
 
-      '<section class="section dashboard-learning-card"><div class="dashboard-learning-content"><div class="dashboard-learning-icon" aria-hidden="true">' + ICON.cap + '</div><div class="dashboard-learning-copy"><p class="eyebrow">Learn</p><h2>Continue your learning</h2><p>Continue your learning, explore lessons, and complete quizzes.</p></div><a class="btn btn-primary" href="learn/learn.html">Go to Learning <span aria-hidden="true">→</span></a></div></section>' +
+      '<section class="section dashboard-learning-card"><div class="dashboard-learning-content"><div class="dashboard-learning-icon" aria-hidden="true">' + ICON.cap + '</div><div class="dashboard-learning-copy"><p class="eyebrow">Learn</p><h2>Continue your learning</h2><p>Explore lessons, build your technical knowledge, and complete quizzes.</p></div><a class="btn btn-primary" href="learn/learn.html">Go to Learning <span aria-hidden="true">→</span></a></div></section>' +
 
       "</div>" + profilePanel(u) + "</div></div>";
   }
@@ -1677,7 +1677,7 @@
       (!dayState.open ? '<p class="dateline">' + esc(dayState.kind === 'weekend' ? 'Weekend — attendance is not required today, so no staff are marked missing.' : 'Public holiday (' + dayState.reason + ') — attendance is not required today, so no staff are marked missing.') + '</p>' :
         (missing.length ? staffList(missing) : '<p class="dateline">All staff have submitted attendance.</p>')) +
       '</div></div></aside></div>' +
-      '<section class="section dashboard-learning-card"><div class="dashboard-learning-content"><div class="dashboard-learning-icon" aria-hidden="true">' + ICON.cap + '</div><div class="dashboard-learning-copy"><p class="eyebrow">Learn</p><h2>Manage learning</h2><p>Continue your learning administration, organize lessons, and manage quizzes.</p></div><a class="btn btn-primary" href="learn/learn.html">Go to Learning <span aria-hidden="true">→</span></a></div></section>' +
+      '<section class="section dashboard-learning-card"><div class="dashboard-learning-content"><div class="dashboard-learning-icon" aria-hidden="true">' + ICON.cap + '</div><div class="dashboard-learning-copy"><p class="eyebrow">Learn</p><h2>Learning Management</h2><p>Manage technical and operations learning content.</p></div><a class="btn btn-primary" href="learn/learn.html">Go to Learning <span aria-hidden="true">→</span></a></div></section>' +
       '</div>';
   }
 
@@ -3808,10 +3808,10 @@
     var groups = ["Marine Navigation", "Marine Communication", "Marine Electronic Equipment"].map(function(category){
       var list = topics.filter(function(t){ return t.category === category; });
       if (!list.length) return "";
-      return '<section class="learning-section"><div class="learning-section-head"><div><p class="eyebrow">Training pathway</p><h2>' + esc(category) + '</h2></div><span>' + list.length + ' module' + (list.length === 1 ? '' : 's') + '</span></div><div class="learning-grid">' + list.map(function(t){ return learningCard(t, topics.indexOf(t)); }).join("") + '</div></section>';
+      return '<section class="learning-section"><div class="learning-section-head"><div><p class="eyebrow">Technical &amp; Operations Learning</p><h2>' + esc(category) + '</h2></div><span>' + list.length + ' module' + (list.length === 1 ? '' : 's') + '</span></div><div class="learning-grid">' + list.map(function(t){ return learningCard(t, topics.indexOf(t)); }).join("") + '</div></section>';
     }).join("");
-    return '<div class="page learning-page"><div class="page-head learning-hero"><div><p class="eyebrow">Intern Learning / Training</p><h1>Build your marine knowledge, step by step.</h1><p class="learning-hero-copy">Work through each module, complete the lesson and pass its quiz to unlock the next stage.</p></div><div class="learning-overall"><div class="learning-overall-number">' + overall + '%</div><span>Overall Progress</span><div class="learning-progress-track"><i style="width:' + overall + '%"></i></div></div></div>' +
-      (topics.length ? groups : '<section class="section"><div class="learning-empty"><div class="learning-empty-icon">' + ICON.cap + '</div><h2>No training has been published yet</h2><p>Your administrator will publish learning modules here when they are ready.</p></div></section>') + '</div>';
+    return '<div class="page learning-page"><div class="page-head learning-hero"><div><p class="eyebrow">Technical &amp; Operations Learning</p><h1>Build your technical knowledge, step by step.</h1><p class="learning-hero-copy">Work through each module, complete the lesson and pass its quiz to unlock the next stage.</p></div><div class="learning-overall"><div class="learning-overall-number">' + overall + '%</div><span>Overall Progress</span><div class="learning-progress-track"><i style="width:' + overall + '%"></i></div></div></div>' +
+      (topics.length ? groups : '<section class="section"><div class="learning-empty"><div class="learning-empty-icon">' + ICON.cap + '</div><h2>No training has been published yet</h2><p>Your administrator will publish Technical &amp; Operations learning modules here when they are ready.</p></div></section>') + '</div>';
   }
 
   function learningTopicView(u, topicId) {
@@ -3909,7 +3909,7 @@
     var lesson = editing ? learningLesson(editing.id) || {} : {};
     var quiz = quizTopic ? learningQuiz(quizTopic.id) : null;
     var blocks = learningAdminInitialBlocks(editing);
-    return '<div class="page learning-page"><div class="page-head learning-hero"><div><p class="eyebrow">Administration</p><h1>Learning Management</h1><p class="learning-hero-copy">Create, organize, publish and maintain the intern training pathway without editing application code.</p></div><div class="learning-admin-summary"><strong>' + topics.filter(function(t){return t.published&&!t.archived;}).length + '</strong><span>Published modules</span></div></div>' +
+    return '<div class="page learning-page"><div class="page-head learning-hero"><div><p class="eyebrow">Administration</p><h1>Learning Management</h1><p class="learning-hero-copy">Manage Technical &amp; Operations learning content, lessons and quizzes.</p></div><div class="learning-admin-summary"><strong>' + topics.filter(function(t){return t.published&&!t.archived;}).length + '</strong><span>Published modules</span></div></div>' +
       '<div class="learning-admin-layout"><section class="section"><div class="section-head"><div><p class="eyebrow">Course builder</p><h2>' + (editing ? 'Edit topic' : 'Create topic') + '</h2></div>' + (editing ? '<button class="btn btn-ghost btn-sm" id="learningCancelEdit" type="button">New topic</button>' : '') + '</div>' +
       '<form id="learningTopicForm" class="learning-admin-form"><input type="hidden" name="id" value="' + esc(editing ? editing.id : '') + '" /><input type="hidden" name="employment_type" value="Intern" />' +
       '<div class="form-grid"><div class="field"><label>Topic title</label><input name="title" required value="' + esc(editing ? editing.title : '') + '" placeholder="e.g. Radar" /></div>' +

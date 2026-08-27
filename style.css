@@ -980,8 +980,22 @@ body.maintenance-page{background:var(--gradient-hero);min-height:100vh}
 .dashboard-learning-copy p:not(.eyebrow){margin-top:6px;font-size:13.5px;color:var(--ink-3);max-width:62ch}
 .dashboard-learning-content>.btn{flex:0 0 auto;white-space:nowrap}
 @media (max-width:760px){
-  .dashboard-learning-content{align-items:flex-start;flex-wrap:wrap}
-  .dashboard-learning-content>.btn{width:100%;margin-top:2px}
+  .dashboard-learning-card{width:100%;max-width:100%;box-sizing:border-box;overflow:hidden}
+  .dashboard-learning-content{width:100%;max-width:100%;box-sizing:border-box;align-items:flex-start;flex-wrap:wrap;gap:14px}
+  .dashboard-learning-copy{min-width:0;max-width:100%;overflow-wrap:anywhere}
+  .dashboard-learning-copy h2{font-size:18px;line-height:1.25}
+  .dashboard-learning-copy p:not(.eyebrow){font-size:13px;line-height:1.5;max-width:none}
+  .dashboard-learning-content>.btn{width:100%;max-width:100%;box-sizing:border-box;margin-top:0}
+}
+@media (max-width:520px){
+  .dashboard-learning-card{padding:16px}
+  .dashboard-learning-content{gap:12px}
+  .dashboard-learning-icon{width:42px;height:42px;flex-basis:42px;border-radius:12px}
+  .dashboard-learning-icon svg{width:21px;height:21px}
+  .dashboard-learning-copy{flex:1 1 calc(100% - 54px)}
+  .dashboard-learning-copy .eyebrow{font-size:10px;margin-bottom:5px}
+  .dashboard-learning-copy h2{font-size:17px}
+  .dashboard-learning-copy p:not(.eyebrow){font-size:12.5px;line-height:1.45}
 }
 
 /* ---------- Dashboard Leave card ---------- */
@@ -1455,7 +1469,9 @@ body.maintenance-page{background:var(--gradient-hero);min-height:100vh}
   .learning-admin-layout{grid-template-columns:1fr}
 }
 @media(max-width:760px){
-  .learning-hero,.learning-topic-hero{grid-template-columns:1fr;gap:18px}
+  .learning-page{width:100%;max-width:100%;box-sizing:border-box;overflow-x:hidden}
+  .learning-hero,.learning-topic-hero{grid-template-columns:1fr;gap:18px;min-width:0}
+  .learning-hero > *, .learning-topic-hero > *{min-width:0;max-width:100%}
   .learning-detail-layout{grid-template-columns:1fr}
   .learning-sidebar{order:2}
   .learning-grid{grid-template-columns:1fr}
