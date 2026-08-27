@@ -2471,25 +2471,16 @@
     }
 
     var user = session.user;
+    /* The profiles table in this installation does not expose the optional
+       account-status columns used by an older build. Query only the stable
+       columns so the access gate cannot fail with HTTP 400. */
     var profileState = await sb.from("profiles")
-      .select("id,status,account_status,is_active,active")
+      .select("id,role")
       .eq("id", user.id).maybeSingle();
-    if (!profileState.error && profileState.data) {
-      var p = profileState.data;
-      var v = p.is_active !== null && p.is_active !== undefined ? p.is_active :
-        (p.active !== null && p.active !== undefined ? p.active :
-        (p.account_status !== null && p.account_status !== undefined ? p.account_status : p.status));
-      var active = v == null || ["active","enabled","true","yes","1"].indexOf(String(v).toLowerCase()) !== -1;
-      if (!active) {
-        await sb.auth.signOut();
-        $("loginMsg").hidden = false;
-        $("loginMsg").className = "alert alert-error";
-        $("loginMsg").innerHTML = "<strong>Account Deactivated</strong><br>Your staff account has been deactivated and you cannot access the system at this time.<br>If you believe this was done by mistake, please contact the <strong>IT Support Department</strong> to rectify the issue.";
-        only("loginView");
-        loader(false);
-        return;
-      }
+    if (profileState.error) {
+      console.warn("Profile role lookup warning:", profileState.error.message);
     }
+
     var access;
     try {
       access = await withTimeout(resolveAccess(user), 16000, "Access verification timed out. Please refresh and try again.");
