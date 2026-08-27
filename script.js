@@ -231,7 +231,7 @@
               if (Array.isArray(adminHseRes.data.attendance)) db.attendance = adminHseRes.data.attendance.map(mapAttendance);
               if (Array.isArray(adminHseRes.data.leaves)) db.leaves = adminHseRes.data.leaves.map(mapLeave);
               if (Array.isArray(adminHseRes.data.hse)) db.hse = adminHseRes.data.hse.map(mapHse);
-              if (adminHseRes.data.hse_settings) db.hseSettings = adminHseRes.data.hse_settings;
+              if (adminHseRes.data.hse_settings) db.hseSettings = Object.assign({}, db.hseSettings || {}, adminHseRes.data.hse_settings);
             } else if (adminHseRes.error) {
               console.error("Admin attendance/HSE RPC:", adminHseRes.error);
             }
@@ -1293,7 +1293,7 @@
     ctx.restore();
   }
 
-  function pdfPageCanvas(rows, pageIndex, pageTotal, logoImg, authorisedName, generationDate, hseTopic, meetingDate) {
+  function pdfPageCanvas(rows, pageIndex, pageTotal, logoImg, authorisedName, generationDate, hseTopic, meetingDate, hseSpeaker, hseCompactTable) {
     var W = 1240, H = 1754, canvas = document.createElement("canvas");
     canvas.width = W; canvas.height = H;
     var ctx = canvas.getContext("2d");
@@ -1340,8 +1340,11 @@
        Meeting Date, Authorised Person and Signature. */
     var sectionGap = 80;
     var topicY = dividerY + 40;
-    var meetingY = topicY + sectionGap;
-    var authY = hseTopic ? meetingY + sectionGap : topicY;
+    var speakerY = topicY + sectionGap;
+    var infoLastY = hseTopic ? topicY : null;
+    if (hseSpeaker) infoLastY = speakerY;
+    var meetingY = infoLastY != null ? infoLastY + sectionGap : topicY + sectionGap;
+    var authY = infoLastY != null ? meetingY + sectionGap : topicY;
     var signY = authY + sectionGap;
 
     if (hseTopic) {
@@ -1349,7 +1352,16 @@
       ctx.fillText("HSE TOPIC", margin, topicY);
       ctx.fillStyle = BLACK; ctx.font = "700 20px " + FONT;
       ctx.fillText(pdfUpper(hseTopic), margin, topicY + 24);
+    }
 
+    if (hseSpeaker) {
+      ctx.fillStyle = INK_3; ctx.font = "600 12px " + FONT;
+      ctx.fillText("SPEAKER", margin, speakerY);
+      ctx.fillStyle = BLACK; ctx.font = "700 20px " + FONT;
+      ctx.fillText(pdfUpper(hseSpeaker), margin, speakerY + 24);
+    }
+
+    if (hseTopic || hseSpeaker) {
       ctx.fillStyle = INK_3; ctx.font = "600 12px " + FONT;
       ctx.fillText("MEETING DATE", margin, meetingY);
       ctx.fillStyle = BLACK; ctx.font = "700 20px " + FONT;
@@ -1371,7 +1383,16 @@
     ctx.fillText("ATTENDANCE RECORD", margin, labelY);
 
     var tableX = margin, tableY = labelY + 30;
-    var col1 = Math.round(tableW * 0.40), col2 = Math.round(tableW * 0.30), col3 = tableW - col1 - col2;
+    var col1, col2, col3;
+    if (hseCompactTable) {
+      col1 = Math.round(tableW * 0.70);
+      col2 = tableW - col1;
+      col3 = 0;
+    } else {
+      col1 = Math.round(tableW * 0.40);
+      col2 = Math.round(tableW * 0.30);
+      col3 = tableW - col1 - col2;
+    }
     var headerH = 54, rowH = 46;
     var tableH = headerH + rows.length * rowH;
 
@@ -1380,8 +1401,12 @@
     ctx.fillRect(tableX, tableY, tableW, headerH);
     ctx.fillStyle = "#ffffff"; ctx.font = "700 15px " + FONT;
     pdfCenteredText(ctx, "STAFF NAME", tableX + col1 / 2, tableY + 18, col1 - 30, 17, 1);
-    pdfCenteredText(ctx, "DATE", tableX + col1 + col2 / 2, tableY + 18, col2 - 30, 17, 1);
-    pdfCenteredText(ctx, "STATUS", tableX + col1 + col2 + col3 / 2, tableY + 18, col3 - 30, 17, 1);
+    if (hseCompactTable) {
+      pdfCenteredText(ctx, "STATUS", tableX + col1 + col2 / 2, tableY + 18, col2 - 30, 17, 1);
+    } else {
+      pdfCenteredText(ctx, "DATE", tableX + col1 + col2 / 2, tableY + 18, col2 - 30, 17, 1);
+      pdfCenteredText(ctx, "STATUS", tableX + col1 + col2 + col3 / 2, tableY + 18, col3 - 30, 17, 1);
+    }
 
     /* Rows: subtle zebra + light rules */
     rows.forEach(function (r, i) {
@@ -1397,9 +1422,13 @@
       pdfCenteredText(ctx, r.name, tableX + col1 / 2, y, col1 - 28, 16, 2);
       ctx.font = "500 14px " + FONT;
       ctx.fillStyle = INK_2;
-      pdfCenteredText(ctx, r.date, tableX + col1 + col2 / 2, y, col2 - 28, 16, 2);
-      ctx.fillStyle = INK_2;
-      pdfCenteredText(ctx, r.status, tableX + col1 + col2 + col3 / 2, y, col3 - 28, 16, 2);
+      if (hseCompactTable) {
+        pdfCenteredText(ctx, r.status, tableX + col1 + col2 / 2, y, col2 - 28, 16, 2);
+      } else {
+        pdfCenteredText(ctx, r.date, tableX + col1 + col2 / 2, y, col2 - 28, 16, 2);
+        ctx.fillStyle = INK_2;
+        pdfCenteredText(ctx, r.status, tableX + col1 + col2 + col3 / 2, y, col3 - 28, 16, 2);
+      }
     });
 
     /* Outer table frame + column dividers */
@@ -1407,7 +1436,9 @@
     ctx.strokeRect(tableX + 0.5, tableY + 0.5, tableW - 1, tableH - 1);
     ctx.beginPath();
     ctx.moveTo(tableX + col1 + 0.5, tableY + headerH); ctx.lineTo(tableX + col1 + 0.5, tableY + tableH);
-    ctx.moveTo(tableX + col1 + col2 + 0.5, tableY + headerH); ctx.lineTo(tableX + col1 + col2 + 0.5, tableY + tableH);
+    if (!hseCompactTable) {
+      ctx.moveTo(tableX + col1 + col2 + 0.5, tableY + headerH); ctx.lineTo(tableX + col1 + col2 + 0.5, tableY + tableH);
+    }
     ctx.stroke();
 
     /* ---------------- FOOTER — black container, white text ---------------- */
@@ -1874,7 +1905,8 @@
     return {
       open_time: s.open_time || HSE_DEFAULTS.open_time,
       close_time: s.close_time || HSE_DEFAULTS.close_time,
-      topic: s.topic || ""
+      topic: s.topic || "",
+      speaker_id: s.speaker_id || ""
     };
   }
 
@@ -1912,6 +1944,23 @@
     if (!m) return hhmm || "";
     var h = +m[1], mer = h >= 12 ? "PM" : "AM";
     return (h % 12 || 12) + ":" + m[2] + " " + mer;
+  }
+
+  function hseSpeakerName(settings) {
+    var id = settings && settings.speaker_id;
+    if (!id) return "";
+    var speaker = db.users.find(function (u) { return u && u.id === id; });
+    return speaker ? profileDisplayName(speaker) : "";
+  }
+
+  function hseSpeakerOptions(selectedId) {
+    return db.users.filter(function (u) { return !!u; })
+      .slice().sort(function (a, b) {
+        return profileDisplayName(a).toLowerCase().localeCompare(profileDisplayName(b).toLowerCase());
+      }).map(function (u) {
+        var id = String(u.id || "");
+        return '<option value="' + esc(id) + '"' + (id === String(selectedId || "") ? ' selected' : '') + '>' + esc(profileDisplayName(u)) + '</option>';
+      }).join("");
   }
 
   /* Current state of today's HSE session */
@@ -2060,6 +2109,7 @@
       '<div class="field"><label for="hseOpen">Window opens</label><input type="time" id="hseOpen" value="' + esc(s.open_time) + '" /></div>' +
       '<div class="field"><label for="hseClose">Window closes</label><input type="time" id="hseClose" value="' + esc(s.close_time) + '" /></div>' +
       '<div class="field"><label for="hseTopic">HSE topic (optional)</label><input type="text" id="hseTopic" value="' + esc(s.topic) + '" placeholder="e.g. Fire Safety Drill" /></div>' +
+      '<div class="field"><label for="hseSpeaker">Speaker</label><select id="hseSpeaker"><option value="">Select a speaker</option>' + hseSpeakerOptions(s.speaker_id) + '</select></div>' +
       '<button class="btn btn-dark btn-block" type="submit">Save settings</button>' +
       "</form></div></div>" +
       '<div class="panel" style="margin-top:20px"><div class="panel-head">' + ICON.alert + "Not Checked In</div><div class=\"panel-body\">" +
@@ -2119,10 +2169,12 @@
         : (authUser && authUser.email ? authUser.email : "ADMINISTRATOR");
       var generationDate = pdfFormatGenerationDate(new Date());
 
-      /* HSE PDF rows intentionally contain only Staff Name, Date and Status. */
-        var hseTopic = recs.reduce(function (topic, r) {
+      /* HSE PDF rows intentionally contain only Staff Name and Status. */
+      var settings = hseSettings();
+      var hseTopic = recs.reduce(function (topic, r) {
         return topic || String(r.topic || "").trim();
-      }, "") || String(hseSettings().topic || "").trim() || "HSE ATTENDANCE SESSION";
+      }, "") || String(settings.topic || "").trim() || "HSE ATTENDANCE SESSION";
+      var hseSpeaker = hseSpeakerName(settings);
 
       var rows = recs.map(function (r) {
         return {
@@ -2140,7 +2192,7 @@
       var total = pages.length;
       var jpgs = pages.map(function (p, idx) {
         return jpegDataUrlToBytes(
-          pdfPageCanvas(p.rows, idx + 1, total, logo, authorisedName, generationDate, hseTopic, prettyDate(key))
+          pdfPageCanvas(p.rows, idx + 1, total, logo, authorisedName, generationDate, hseTopic, prettyDate(key), hseSpeaker, true)
             .toDataURL("image/jpeg", 0.90)
         );
       });
@@ -2187,7 +2239,7 @@
       setBtnLoading(btn, true);
       try {
         var res = await supabaseClient.from("hse_settings")
-          .upsert({ id: 1, open_time: open, close_time: close, topic: el("hseTopic").value.trim() || null });
+          .upsert({ id: 1, open_time: open, close_time: close, topic: el("hseTopic").value.trim() || null, speaker_id: el("hseSpeaker").value || null });
         if (res.error) { toast(res.error.message, "error"); return; }
         await refreshData();
         toast("HSE settings saved.");
