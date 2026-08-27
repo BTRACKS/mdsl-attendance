@@ -76,7 +76,8 @@
      Views read synchronously from this cache; actions that change data
      (sign up, sign in, submit attendance) await refreshData() before
      re-rendering, so the UI code below stays largely unchanged. */
-  var db = { users: [], attendance: [], leaves: [], staffCount: null, hse: [], hseSettings: null, overview: null, overviewError: null };
+  var db = { users: [], attendance: [], leaves: [], staffCount: null, hse: [], hseSettings: null, overview: null, overviewError: null,
+    learningTopics: [], learningLessons: [], learningQuizzes: [], learningProgress: [], learningAttempts: [], learningQuestions: [] };
   var authUser = null;     // the raw Supabase auth user (has .id, .email)
   var currentUser = null;  // the matching row from db.users (profile + role)
   var dataError = null;
@@ -152,6 +153,26 @@
       db.hse = (hseRes.error ? [] : (hseRes.data || [])).map(mapHse);
       var hseSetRes = await supabaseClient.from("hse_settings").select("*").limit(1);
       db.hseSettings = (!hseSetRes.error && hseSetRes.data && hseSetRes.data[0]) ? hseSetRes.data[0] : null;
+
+      // Intern Learning data is isolated from the core attendance refresh.
+      // Missing learning tables are non-fatal so the existing platform remains usable
+      // until the supplied Supabase migration has been applied.
+      try {
+        var learningTopicsRes = await supabaseClient.from("learning_topics").select("*").order("module_order", { ascending: true }).order("created_at", { ascending: true });
+        var learningLessonsRes = await supabaseClient.from("learning_lessons").select("*");
+        var learningQuizzesRes = await supabaseClient.from("learning_quizzes").select("*");
+        var learningProgressRes = await supabaseClient.from("learning_progress").select("*").eq("user_id", authUser ? authUser.id : "");
+        var learningAttemptsRes = await supabaseClient.from("learning_quiz_attempts").select("*").eq("user_id", authUser ? authUser.id : "").order("attempted_at", { ascending: false });
+        db.learningTopics = learningTopicsRes.error ? [] : (learningTopicsRes.data || []);
+        db.learningLessons = learningLessonsRes.error ? [] : (learningLessonsRes.data || []);
+        db.learningQuizzes = learningQuizzesRes.error ? [] : (learningQuizzesRes.data || []);
+        db.learningProgress = learningProgressRes.error ? [] : (learningProgressRes.data || []);
+        db.learningAttempts = learningAttemptsRes.error ? [] : (learningAttemptsRes.data || []);
+        db.learningQuestions = [];
+      } catch (learningErr) {
+        db.learningTopics = []; db.learningLessons = []; db.learningQuizzes = []; db.learningProgress = []; db.learningAttempts = []; db.learningQuestions = [];
+        console.warn("Learning module data:", learningErr);
+      }
 
       // The Admin Overview must never derive global statistics from the
       // session/RLS-dependent db.users array. Fetch its authoritative dataset
@@ -585,9 +606,12 @@
     if (!u) {
       links = [["#/login", "Sign in"], ["#/signup", "Register"]];
     } else {
-      links = normalizeRole(u.role) === "admin"
-        ? [["#/admin", "Overview"], ["#/admin/attendance", "Attendance Management"], ["#/admin/hse", "HSE Attendance"], ["#/dashboard", "My Dashboard"], ["#/messages", "Messages"], ["#/settings", "Settings"]]
-        : [["#/dashboard", "Dashboard"], ["#/history", "Attendance History"], ["#/leave", "Leave"], ["#/messages", "Messages"], ["#/settings", "Settings"]];
+      if (normalizeRole(u.role) === "admin") {
+        links = [["#/admin", "Overview"], ["#/admin/attendance", "Attendance Management"], ["#/admin/hse", "HSE Attendance"], ["#/admin/learning", "Learning Management"], ["#/dashboard", "My Dashboard"], ["#/messages", "Messages"], ["#/settings", "Settings"]];
+      } else {
+        links = [["#/dashboard", "Dashboard"], ["#/history", "Attendance History"], ["#/leave", "Leave"], ["#/messages", "Messages"], ["#/settings", "Settings"]];
+        if (isIntern(u)) links.splice(1, 0, ["#/learning", "Learning / Training"]);
+      }
 
     }
     var hash = PAGE === "about" ? "" : (location.hash || (u ? "#/dashboard" : "#/login"));
@@ -3663,6 +3687,261 @@
     if ("Notification" in window && Notification.permission === "default") { /* request only after the user opens Messages */ }
   }
 
+  /* =========================================================================
+     INTERN LEARNING / TRAINING
+     Content and progress are stored in Supabase. Intern access is derived from
+     the existing profiles.employment_type value; no second classification exists.
+     ========================================================================= */
+  function isIntern(u) {
+    return !!u && String(u.employmentType || "").trim().toLowerCase() === "intern";
+  }
+
+  function learningTopic(id) {
+    return (db.learningTopics || []).find(function (t) { return String(t.id) === String(id); }) || null;
+  }
+  function learningLesson(topicId) {
+    return (db.learningLessons || []).find(function (l) { return String(l.topic_id) === String(topicId); }) || null;
+  }
+  function learningQuiz(topicId) {
+    return (db.learningQuizzes || []).find(function (q) { return String(q.topic_id) === String(topicId) && q.published !== false; }) || null;
+  }
+  function learningProgress(topicId) {
+    return (db.learningProgress || []).find(function (p) { return String(p.topic_id) === String(topicId); }) || null;
+  }
+  function learningPercent(topicId) {
+    var p = learningProgress(topicId);
+    return p ? Math.max(0, Math.min(100, Number(p.progress_percent || 0))) : 0;
+  }
+  function learningCompleted(topicId) {
+    var p = learningProgress(topicId);
+    return !!(p && p.completed);
+  }
+  function learningPublishedTopics() {
+    return (db.learningTopics || []).filter(function (t) { return t.published && !t.archived; }).sort(function(a,b){ return Number(a.module_order||0)-Number(b.module_order||0); });
+  }
+  function learningOverallPercent() {
+    var topics = learningPublishedTopics();
+    if (!topics.length) return 0;
+    return Math.round(topics.reduce(function(sum,t){ return sum + learningPercent(t.id); },0) / topics.length);
+  }
+  function learningUnlocked(topicId) {
+    var topics = learningPublishedTopics();
+    var index = topics.findIndex(function(t){ return String(t.id) === String(topicId); });
+    if (index <= 0) return true;
+    return learningCompleted(topics[index - 1].id);
+  }
+  function learningCategoryClass(category) {
+    if (category === "Marine Navigation") return "learning-cat-navigation";
+    if (category === "Marine Communication") return "learning-cat-communication";
+    return "learning-cat-electronics";
+  }
+  function learningStatusTag(percent, completed) {
+    if (completed) return '<span class="tag tag-ok">Completed</span>';
+    if (percent > 0) return '<span class="tag tag-pending">In progress</span>';
+    return '<span class="tag tag-neutral">Not started</span>';
+  }
+  function learningTextHtml(text) {
+    return String(text || "").trim().split(/\n\s*\n/).filter(Boolean).map(function(block){
+      var lines = block.split(/\n/).map(function(x){ return esc(x.trim()); }).filter(Boolean);
+      if (!lines.length) return "";
+      return '<div class="learning-copy-block">' + lines.map(function(line, i){ return i === 0 && lines.length > 1 ? '<h3>' + line + '</h3>' : '<p>' + line + '</p>'; }).join("") + '</div>';
+    }).join("");
+  }
+  function learningCard(t, index) {
+    var pct = learningPercent(t.id), completed = learningCompleted(t.id), unlocked = learningUnlocked(t.id), quiz = learningQuiz(t.id);
+    var action = completed ? "Review Topic" : (pct ? "Continue Learning" : "Start Learning");
+    if (!unlocked) action = "Locked";
+    return '<article class="learning-topic-card ' + (unlocked ? "" : "is-locked") + '">' +
+      '<div class="learning-topic-top"><span class="learning-module">Module ' + esc(index + 1) + '</span>' + learningStatusTag(pct, completed) + '</div>' +
+      '<div class="learning-topic-icon ' + learningCategoryClass(t.category) + '">' + ICON.cap + '</div>' +
+      '<p class="learning-topic-category">' + esc(t.category) + '</p><h3>' + esc(t.title) + '</h3>' +
+      '<p class="learning-topic-description">' + esc(t.description || "") + '</p>' +
+      '<div class="learning-card-progress"><div><span>Progress</span><strong>' + pct + '%</strong></div><div class="learning-progress-track"><i style="width:' + pct + '%"></i></div></div>' +
+      '<div class="learning-topic-footer">' + (quiz ? '<span class="learning-quiz-mini">' + ICON.check + ' Quiz included</span>' : '<span class="learning-quiz-mini">Lesson</span>') +
+      (unlocked ? '<button class="btn btn-dark btn-sm" type="button" data-learning-open="' + esc(t.id) + '">' + action + '</button>' : '<span class="learning-locked-note">' + ICON.lock + ' Complete previous module</span>') + '</div>' +
+      '</article>';
+  }
+  function learningView(u) {
+    if (!isIntern(u)) { location.hash = "#/dashboard"; return ""; }
+    var topics = learningPublishedTopics(), overall = learningOverallPercent();
+    var groups = ["Marine Navigation", "Marine Communication", "Marine Electronic Equipment"].map(function(category){
+      var list = topics.filter(function(t){ return t.category === category; });
+      if (!list.length) return "";
+      return '<section class="learning-section"><div class="learning-section-head"><div><p class="eyebrow">Training pathway</p><h2>' + esc(category) + '</h2></div><span>' + list.length + ' module' + (list.length === 1 ? '' : 's') + '</span></div><div class="learning-grid">' + list.map(function(t){ return learningCard(t, topics.indexOf(t)); }).join("") + '</div></section>';
+    }).join("");
+    return '<div class="page learning-page"><div class="page-head learning-hero"><div><p class="eyebrow">Intern Learning / Training</p><h1>Build your marine knowledge, step by step.</h1><p class="learning-hero-copy">Work through each module, complete the lesson and pass its quiz to unlock the next stage.</p></div><div class="learning-overall"><div class="learning-overall-number">' + overall + '%</div><span>Overall Progress</span><div class="learning-progress-track"><i style="width:' + overall + '%"></i></div></div></div>' +
+      (topics.length ? groups : '<section class="section"><div class="learning-empty"><div class="learning-empty-icon">' + ICON.cap + '</div><h2>No training has been published yet</h2><p>Your administrator will publish learning modules here when they are ready.</p></div></section>') + '</div>';
+  }
+
+  function learningTopicView(u, topicId) {
+    if (!isIntern(u)) { location.hash = "#/dashboard"; return ""; }
+    var topics = learningPublishedTopics(), t = learningTopic(topicId);
+    if (!t || !t.published || t.archived) { toast("This learning topic is not available.", "error"); location.hash = "#/learning"; return ""; }
+    if (!learningUnlocked(topicId)) { toast("Complete the previous module before starting this one.", "error"); location.hash = "#/learning"; return ""; }
+    var lesson = learningLesson(topicId) || {}, quiz = learningQuiz(topicId), p = learningProgress(topicId), pct = learningPercent(topicId);
+    var idx = topics.findIndex(function(x){ return String(x.id) === String(topicId); });
+    var next = idx >= 0 ? topics[idx + 1] : null;
+    var prev = idx > 0 ? topics[idx - 1] : null;
+    return '<div class="page learning-page"><div class="learning-breadcrumb"><button type="button" class="link-muted" data-learning-back="1">Learning / Training</button><span>/</span><span>' + esc(t.title) + '</span></div>' +
+      '<div class="learning-topic-hero"><div><span class="learning-module">Module ' + (idx + 1) + '</span><p class="eyebrow">' + esc(t.category) + '</p><h1>' + esc(t.title) + '</h1><p>' + esc(t.description || "") + '</p></div><div class="learning-topic-hero-progress"><strong>' + pct + '%</strong><span>Topic progress</span><div class="learning-progress-track"><i style="width:' + pct + '%"></i></div></div></div>' +
+      '<div class="learning-detail-layout"><main>' +
+      '<section class="section learning-lesson"><div class="section-head"><h2>Lesson</h2>' + learningStatusTag(pct, learningCompleted(topicId)) + '</div>' +
+      (lesson.introduction ? '<div class="learning-introduction">' + esc(lesson.introduction) + '</div>' : '') +
+      (lesson.image_url ? '<figure class="learning-figure"><img src="' + esc(lesson.image_url) + '" alt="' + esc(lesson.image_alt || t.title) + '" loading="lazy" /><figcaption>' + esc(lesson.image_alt || "Learning illustration") + '</figcaption></figure>' : '') +
+      '<div class="learning-richtext">' + learningTextHtml(lesson.content || "Lesson content will be published here.") + '</div>' +
+      (!p || !p.lesson_completed ? '<button class="btn btn-primary" type="button" id="learningLessonComplete">Mark lesson complete</button>' : '<div class="learning-complete-callout">' + ICON.check + '<div><strong>Lesson complete</strong><span>Continue to the quiz when you are ready.</span></div></div>') +
+      '</section>' +
+      (quiz ? '<section class="section learning-quiz"><div class="section-head"><div><p class="eyebrow">Knowledge check</p><h2>' + esc(quiz.title || 'Topic Quiz') + '</h2></div><span>Pass mark ' + Number(quiz.passing_score || 70) + '%</span></div><div id="learningQuizMount"><div class="learning-quiz-loading">Loading quiz…</div></div></section>' : '<section class="section"><div class="learning-no-quiz"><h2>No quiz attached</h2><p>Complete the lesson to finish this module.</p></div></section>') +
+      '</main><aside class="learning-sidebar"><section class="section"><div class="section-head"><h2>Your pathway</h2></div><div class="learning-path-list">' + topics.map(function(x,i){ var xp=learningPercent(x.id), done=learningCompleted(x.id), unlock=learningUnlocked(x.id); return '<button type="button" class="learning-path-item ' + (String(x.id)===String(topicId)?'active ':'') + (unlock?'':'locked') + '" data-learning-open="' + esc(x.id) + '"><span class="learning-path-number">' + (i+1) + '</span><span><strong>' + esc(x.title) + '</strong><small>' + (done?'Complete':xp+'%') + '</small></span>' + (done?ICON.check:(unlock?'':' ')) + '</button>'; }).join("") + '</div></section></aside></div>' +
+      '<div class="learning-next-row">' + (prev ? '<button class="btn btn-ghost" type="button" data-learning-open="' + esc(prev.id) + '">← Previous</button>' : '<span></span>') + (next && learningCompleted(topicId) ? '<button class="btn btn-dark" type="button" data-learning-open="' + esc(next.id) + '">Next module →</button>' : '<button class="btn btn-ghost" type="button" data-learning-back="1">Back to learning</button>') + '</div></div>';
+  }
+
+  async function markLearningLessonComplete(topicId) {
+    var btn = el("learningLessonComplete"); if (btn) setBtnLoading(btn, true);
+    try {
+      var res = await supabaseClient.rpc("learning_mark_lesson_complete", { p_topic_id: topicId });
+      if (res.error) { toast(res.error.message || "Unable to save lesson progress.", "error"); return; }
+      await refreshData(); render();
+      toast("Lesson progress saved.");
+    } finally { if (btn) setBtnLoading(btn, false); }
+  }
+
+  async function loadLearningQuiz(topicId) {
+    var mount = el("learningQuizMount"); if (!mount) return;
+    var res = await supabaseClient.rpc("learning_get_quiz", { p_topic_id: topicId });
+    if (res.error) { mount.innerHTML = '<p class="learning-quiz-error">' + esc(res.error.message) + '</p>'; return; }
+    var payload = res.data || {}, quiz = payload.quiz, questions = payload.questions || [];
+    if (!quiz || !questions.length) { mount.innerHTML = '<p class="learning-quiz-empty">No quiz questions have been published for this topic yet.</p>'; return; }
+    var p = learningProgress(topicId);
+    if (!p || !p.lesson_completed) {
+      mount.innerHTML = '<div class="learning-quiz-empty">Complete the lesson above to unlock this quiz.</div>';
+      return;
+    }
+    mount.innerHTML = '<form id="learningQuizForm">' + questions.map(function(q,i){ return '<fieldset class="learning-question"><legend><span>Question ' + (i+1) + '</span>' + esc(q.question_text) + '</legend>' + (q.options || []).map(function(opt,j){ return '<label class="learning-option"><input type="radio" name="q_' + esc(q.id) + '" value="' + j + '" /> <span>' + esc(opt) + '</span></label>'; }).join("") + '</fieldset>'; }).join("") + '<button class="btn btn-primary" type="submit">Submit quiz</button></form>' + (p && p.last_score != null ? '<p class="learning-last-score">Latest score: <strong>' + Number(p.last_score) + '%</strong>' + (p.completed ? ' · Passed' : ' · Try again to reach the pass mark') + '</p>' : '');
+    var form = el("learningQuizForm");
+    if (form) form.addEventListener("submit", async function(e){
+      e.preventDefault();
+      var answers = {};
+      questions.forEach(function(q){ var checked = form.querySelector('input[name="q_' + q.id + '"]:checked'); if (checked) answers[q.id] = Number(checked.value); });
+      if (Object.keys(answers).length !== questions.length) { toast("Please answer every question before submitting.", "error"); return; }
+      var btn = form.querySelector('button[type="submit"]'); setBtnLoading(btn,true);
+      try {
+        var submit = await supabaseClient.rpc("learning_submit_quiz", { p_quiz_id: quiz.id, p_answers: answers });
+        if (submit.error) { toast(submit.error.message || "Quiz submission failed.", "error"); return; }
+        var result = submit.data || {};
+        await refreshData();
+        render();
+        toast(result.passed ? "Quiz passed — module completed." : "Quiz submitted. Review the lesson and try again.", result.passed ? undefined : "error");
+      } finally { setBtnLoading(btn,false); }
+    });
+  }
+
+  var learningAdminState = { editId: "", quizTopicId: "" };
+  function adminLearningView() {
+    var topics = (db.learningTopics || []).slice().sort(function(a,b){ return Number(a.module_order||0)-Number(b.module_order||0); });
+    var editing = learningTopic(learningAdminState.editId);
+    var quizTopic = learningTopic(learningAdminState.quizTopicId);
+    var lesson = editing ? learningLesson(editing.id) || {} : {};
+    var quiz = quizTopic ? learningQuiz(quizTopic.id) : null;
+    return '<div class="page learning-page"><div class="page-head learning-hero"><div><p class="eyebrow">Administration</p><h1>Learning Management</h1><p class="learning-hero-copy">Create, organize, publish and maintain the intern training pathway without editing application code.</p></div><div class="learning-admin-summary"><strong>' + topics.filter(function(t){return t.published&&!t.archived;}).length + '</strong><span>Published modules</span></div></div>' +
+      '<div class="learning-admin-layout"><section class="section"><div class="section-head"><div><p class="eyebrow">Course builder</p><h2>' + (editing ? 'Edit topic' : 'Create topic') + '</h2></div>' + (editing ? '<button class="btn btn-ghost btn-sm" id="learningCancelEdit" type="button">New topic</button>' : '') + '</div>' +
+      '<form id="learningTopicForm" class="learning-admin-form"><input type="hidden" name="id" value="' + esc(editing ? editing.id : '') + '" />' +
+      '<div class="form-grid"><div class="field"><label>Topic title</label><input name="title" required value="' + esc(editing ? editing.title : '') + '" placeholder="e.g. Radar" /></div>' +
+      '<div class="field"><label>Category</label><select name="category"><option' + (!editing||editing.category==='Marine Navigation'?' selected':'') + '>Marine Navigation</option><option' + (editing&&editing.category==='Marine Communication'?' selected':'') + '>Marine Communication</option><option' + (editing&&editing.category==='Marine Electronic Equipment'?' selected':'') + '>Marine Electronic Equipment</option></select></div>' +
+      '<div class="field"><label>Module order</label><input name="module_order" type="number" min="1" required value="' + esc(editing ? editing.module_order : (topics.length+1)) + '" /></div>' +
+      '<div class="field"><label>Cover / lesson image URL <span class="support-optional">optional</span></label><input name="image_url" type="url" value="' + esc(lesson.image_url || '') + '" placeholder="https://…" /></div>' +
+      '<div class="field full"><label>Short description</label><textarea name="description" rows="3" placeholder="What will the intern learn?">' + esc(editing ? editing.description : '') + '</textarea></div>' +
+      '<div class="field full"><label>Lesson introduction</label><textarea name="introduction" rows="3" placeholder="A concise introduction to the topic…">' + esc(lesson.introduction || '') + '</textarea></div>' +
+      '<div class="field full"><label>Lesson content</label><textarea name="content" rows="14" placeholder="Use blank lines to separate sections. The first line of each multi-line block becomes its heading.">' + esc(lesson.content || '') + '</textarea></div>' +
+      '<div class="field"><label>Image alt/caption <span class="support-optional">optional</span></label><input name="image_alt" value="' + esc(lesson.image_alt || '') + '" placeholder="Describe the diagram" /></div>' +
+      '<div class="field"><label>Publishing</label><label class="learning-switch"><input type="checkbox" name="published" ' + (editing ? (editing.published?'checked':'') : '') + ' /><span>Publish this topic to interns</span></label></div></div>' +
+      '<div class="learning-admin-actions"><button class="btn btn-primary" type="submit">' + (editing?'Save changes':'Create topic') + '</button>' + (editing ? '<button class="btn btn-ghost" type="button" id="learningArchiveBtn">' + (editing.archived?'Restore topic':'Archive topic') + '</button><button class="btn btn-ghost" type="button" id="learningDeleteBtn">Delete topic</button>' : '') + '</div></form></section>' +
+      '<section class="section"><div class="section-head"><div><p class="eyebrow">Curriculum</p><h2>Modules</h2></div><span>' + topics.length + ' total</span></div><div class="learning-admin-list">' + (topics.length ? topics.map(function(t,i){ var q=learningQuiz(t.id); return '<div class="learning-admin-row ' + (t.archived?'is-archived':'') + '"><div class="learning-admin-row-number">' + Number(t.module_order||i+1) + '</div><div class="learning-admin-row-main"><strong>' + esc(t.title) + '</strong><span>' + esc(t.category) + ' · ' + (t.published?'Published':'Draft') + (t.archived?' · Archived':'') + '</span></div><div class="learning-admin-row-actions"><button class="btn btn-ghost btn-sm" type="button" data-learning-admin-edit="' + esc(t.id) + '">Edit</button><button class="btn btn-dark btn-sm" type="button" data-learning-admin-quiz="' + esc(t.id) + '">Quiz' + (q?' · '+((db.learningQuestions||[]).filter(function(x){return String(x.quiz_id)===String(q.id)}).length || 'manage'):'') + '</button></div></div>'; }).join('') : '<div class="learning-empty"><h2>No modules yet</h2><p>Create the first training topic using the course builder.</p></div>') + '</div></section></div>' +
+      (quizTopic ? adminLearningQuizEditor(quizTopic, quiz) : '') + '</div>';
+  }
+
+  function adminLearningQuizEditor(topic, quiz) {
+    return '<section class="section learning-admin-quiz"><div class="section-head"><div><p class="eyebrow">Quiz builder</p><h2>' + esc(topic.title) + ' Quiz</h2></div><button class="btn btn-ghost btn-sm" id="learningCloseQuiz" type="button">Close</button></div>' +
+      '<form id="learningQuizSettingsForm" class="learning-admin-form"><div class="form-grid"><div class="field"><label>Quiz title</label><input name="title" value="' + esc(quiz ? quiz.title : topic.title+' Quiz') + '" /></div><div class="field"><label>Passing score (%)</label><input name="passing_score" type="number" min="1" max="100" value="' + Number(quiz ? quiz.passing_score : 70) + '" /></div></div><div class="learning-admin-actions"><button class="btn btn-primary" type="submit">Save quiz settings</button></div></form>' +
+      '<div class="learning-question-admin"><div class="section-head"><h3>Questions</h3><span>Add as many as needed</span></div><div id="learningAdminQuestions">' + (quiz ? '<div class="learning-quiz-loading">Loading questions…</div>' : '<p class="learning-quiz-empty">Save the quiz settings to create questions.</p>') + '</div>' +
+      '<form id="learningQuestionForm" class="learning-admin-form"><div class="field"><label>Question</label><textarea name="question_text" rows="3" required placeholder="Write the question…"></textarea></div><div class="learning-options-grid">' + [0,1,2,3].map(function(i){return '<div class="field"><label>Option ' + String.fromCharCode(65+i) + '</label><input name="option_'+i+'" required /></div>';}).join('') + '</div><div class="field"><label>Correct option</label><select name="correct_option"><option value="0">A</option><option value="1">B</option><option value="2">C</option><option value="3">D</option></select></div><button class="btn btn-dark" type="submit">Add question</button></form></div></section>';
+  }
+
+  async function loadAdminLearningQuestions(quizId) {
+    if (!quizId) return;
+    var res = await supabaseClient.from("learning_quiz_questions").select("*").eq("quiz_id", quizId).order("question_order", {ascending:true}).order("created_at", {ascending:true});
+    if (res.error) { toast(res.error.message, "error"); return; }
+    db.learningQuestions = res.data || [];
+    var mount = el("learningAdminQuestions"); if (!mount) return;
+    mount.innerHTML = db.learningQuestions.length ? db.learningQuestions.map(function(q,i){ return '<div class="learning-admin-question"><div><span>Question ' + (i+1) + '</span><strong>' + esc(q.question_text) + '</strong><small>Correct: ' + String.fromCharCode(65+Number(q.correct_option||0)) + '</small></div><div><button class="btn btn-ghost btn-sm" type="button" data-learning-question-edit="' + esc(q.id) + '">Edit</button><button class="btn btn-ghost btn-sm" type="button" data-learning-question-delete="' + esc(q.id) + '">Delete</button></div></div>'; }).join('') : '<p class="learning-quiz-empty">No questions yet. Add the first question below.</p>';
+  }
+
+  async function saveLearningTopic(form) {
+    var v = readForm(form, { title:req("Topic title"), category:req("Category"), module_order:req("Module order") }); if (!v) return;
+    var id = v.id || "";
+    var payload = { title:v.title, category:v.category, description:v.description||"", module_order:Number(v.module_order), published:!!form.published.checked, archived:(editing ? !!editing.archived : false) };
+    var topicRes = id ? await supabaseClient.from("learning_topics").update(payload).eq("id",id).select("*").single() : await supabaseClient.from("learning_topics").insert(Object.assign(payload,{created_by:authUser?authUser.id:null})).select("*").single();
+    if (topicRes.error) { toast(topicRes.error.message,"error"); return; }
+    var topic = topicRes.data;
+    var lessonPayload = { topic_id:topic.id, introduction:form.introduction.value.trim(), content:form.content.value.trim(), image_url:form.image_url.value.trim()||null, image_alt:form.image_alt.value.trim()||null };
+    var lessonRes = await supabaseClient.from("learning_lessons").upsert(lessonPayload,{onConflict:"topic_id"});
+    if (lessonRes.error) { toast(lessonRes.error.message,"error"); return; }
+    learningAdminState.editId=topic.id; await refreshData(); render(); toast(id?"Learning topic updated.":"Learning topic created.");
+  }
+
+  async function saveLearningQuiz(form) {
+    var topic = learningTopic(learningAdminState.quizTopicId); if (!topic) return;
+    var existing = learningQuiz(topic.id);
+    var payload = { topic_id:topic.id, title:form.title.value.trim() || topic.title+' Quiz', passing_score:Number(form.passing_score.value||70), published:true };
+    var res = existing ? await supabaseClient.from("learning_quizzes").update(payload).eq("id",existing.id).select("*").single() : await supabaseClient.from("learning_quizzes").insert(payload).select("*").single();
+    if (res.error) { toast(res.error.message,"error"); return; }
+    await refreshData(); render(); toast("Quiz settings saved.");
+  }
+
+  async function addLearningQuestion(form) {
+    var topic=learningTopic(learningAdminState.quizTopicId); if(!topic) return;
+    var quiz=learningQuiz(topic.id); if(!quiz){ toast("Save the quiz settings first.","error"); return; }
+    var existing=db.learningQuestions||[];
+    var options=[form.option_0.value.trim(),form.option_1.value.trim(),form.option_2.value.trim(),form.option_3.value.trim()];
+    var res=await supabaseClient.from("learning_quiz_questions").insert({quiz_id:quiz.id,question_text:form.question_text.value.trim(),options:options,correct_option:Number(form.correct_option.value),question_order:existing.length+1});
+    if(res.error){toast(res.error.message,"error");return;}
+    form.reset(); await loadAdminLearningQuestions(quiz.id); toast("Question added.");
+  }
+
+  async function editLearningQuestion(id) {
+    var q=(db.learningQuestions||[]).find(function(x){return String(x.id)===String(id);}); if(!q) return;
+    var form=el("learningQuestionForm"); if(!form) return;
+    form.question_text.value=q.question_text||""; (q.options||[]).forEach(function(o,i){if(form['option_'+i])form['option_'+i].value=o||"";}); form.correct_option.value=String(q.correct_option||0); form.dataset.editId=q.id; form.querySelector('button[type="submit"]').textContent="Save question"; form.scrollIntoView({behavior:'smooth',block:'center'});
+  }
+  async function submitLearningQuestionForm(form) {
+    var topic=learningTopic(learningAdminState.quizTopicId), quiz=topic&&learningQuiz(topic.id); if(!quiz)return;
+    var options=[form.option_0.value.trim(),form.option_1.value.trim(),form.option_2.value.trim(),form.option_3.value.trim()];
+    var id=form.dataset.editId||"";
+    var res=id?await supabaseClient.from("learning_quiz_questions").update({question_text:form.question_text.value.trim(),options:options,correct_option:Number(form.correct_option.value)}).eq("id",id):await supabaseClient.from("learning_quiz_questions").insert({quiz_id:quiz.id,question_text:form.question_text.value.trim(),options:options,correct_option:Number(form.correct_option.value),question_order:(db.learningQuestions||[]).length+1});
+    if(res.error){toast(res.error.message,"error");return;} form.reset(); delete form.dataset.editId; form.querySelector('button[type="submit"]').textContent="Add question"; await loadAdminLearningQuestions(quiz.id); toast(id?"Question updated.":"Question added.");
+  }
+
+  function bindLearning() {
+    Array.prototype.forEach.call(document.querySelectorAll("[data-learning-open]"),function(b){b.addEventListener("click",function(){location.hash="#/learning/topic/"+encodeURIComponent(b.getAttribute("data-learning-open"));render();});});
+    Array.prototype.forEach.call(document.querySelectorAll("[data-learning-back]"),function(b){b.addEventListener("click",function(){location.hash="#/learning";render();});});
+    var complete=el("learningLessonComplete"); if(complete) complete.addEventListener("click",function(){var m=location.hash.match(/^#\/learning\/topic\/([^?]+)/); if(m) markLearningLessonComplete(decodeURIComponent(m[1]));});
+    var m=location.hash.match(/^#\/learning\/topic\/([^?]+)/); if(m) loadLearningQuiz(decodeURIComponent(m[1]));
+  }
+
+  function bindAdminLearning() {
+    Array.prototype.forEach.call(document.querySelectorAll("[data-learning-admin-edit]"),function(b){b.addEventListener("click",function(){learningAdminState.editId=b.getAttribute("data-learning-admin-edit");learningAdminState.quizTopicId="";render();});});
+    Array.prototype.forEach.call(document.querySelectorAll("[data-learning-admin-quiz]"),function(b){b.addEventListener("click",async function(){learningAdminState.quizTopicId=b.getAttribute("data-learning-admin-quiz");learningAdminState.editId="";render();var q=learningQuiz(learningAdminState.quizTopicId);if(q)await loadAdminLearningQuestions(q.id);});});
+    var cancel=el("learningCancelEdit");if(cancel)cancel.addEventListener("click",function(){learningAdminState.editId="";render();});
+    var close=el("learningCloseQuiz");if(close)close.addEventListener("click",function(){learningAdminState.quizTopicId="";render();});
+    var tf=el("learningTopicForm");if(tf)tf.addEventListener("submit",function(e){e.preventDefault();saveLearningTopic(tf);});
+    var qf=el("learningQuizSettingsForm");if(qf){qf.addEventListener("submit",function(e){e.preventDefault();saveLearningQuiz(qf);});var q=learningQuiz(learningAdminState.quizTopicId);if(q)loadAdminLearningQuestions(q.id);}
+    var questionForm=el("learningQuestionForm");if(questionForm)questionForm.addEventListener("submit",function(e){e.preventDefault();submitLearningQuestionForm(questionForm);});
+    Array.prototype.forEach.call(document.querySelectorAll("[data-learning-question-edit]"),function(b){b.addEventListener("click",function(){editLearningQuestion(b.getAttribute("data-learning-question-edit"));});});
+    Array.prototype.forEach.call(document.querySelectorAll("[data-learning-question-delete]"),function(b){b.addEventListener("click",function(){var id=b.getAttribute("data-learning-question-delete");confirmDialog("Delete quiz question","This question will be permanently removed.",async function(){var r=await supabaseClient.from("learning_quiz_questions").delete().eq("id",id);if(r.error){toast(r.error.message,"error");return;}var q=learningQuiz(learningAdminState.quizTopicId);if(q)await loadAdminLearningQuestions(q.id);toast("Question deleted.");});});});
+    var archive=el("learningArchiveBtn");if(archive)archive.addEventListener("click",async function(){var t=learningTopic(learningAdminState.editId);if(!t)return;var r=await supabaseClient.from("learning_topics").update({archived:!t.archived,published:t.archived?t.published:false}).eq("id",t.id);if(r.error){toast(r.error.message,"error");return;}await refreshData();render();toast(t.archived?"Topic restored.":"Topic archived.");});
+    var del=el("learningDeleteBtn");if(del)del.addEventListener("click",function(){var t=learningTopic(learningAdminState.editId);if(!t)return;confirmDialog("Delete learning topic","This removes the topic, lesson, quiz, questions and learner progress permanently.",async function(){var r=await supabaseClient.from("learning_topics").delete().eq("id",t.id);if(r.error){toast(r.error.message,"error");return;}learningAdminState.editId="";await refreshData();render();toast("Learning topic deleted.");});});
+  }
+
   /* ------------------------- router ------------------------- */
   function render() {
     var __scrollY = window.scrollY || window.pageYOffset || 0;
@@ -3681,14 +3960,20 @@
       renderChrome(); bindAuth(); __restoreScroll(); return;
     }
 
-    if (hash === "#/admin" || hash === "#/admin/attendance" || hash === "#/admin/hse") {
-      // Use the exact role already resolved for the authenticated session by
-      // refreshSessionUser(). Do not perform a second, separate client-side
-      // role interpretation for Administration pages.
+    if (hash === "#/admin" || hash === "#/admin/attendance" || hash === "#/admin/hse" || hash === "#/admin/learning") {
+      // Use the exact role already resolved for the authenticated session.
       if (normalizeRole(currentUser && currentUser.role) !== "admin") { location.hash = "#/dashboard"; return; }
       view.innerHTML = hash === "#/admin" ? adminOverview()
         : hash === "#/admin/hse" ? hseAdminView()
+        : hash === "#/admin/learning" ? adminLearningView()
         : adminManagement();
+    } else if (hash === "#/learning" || hash.indexOf("#/learning/topic/") === 0) {
+      if (!isIntern(u)) { location.hash = "#/dashboard"; return; }
+      if (hash.indexOf("#/learning/topic/") === 0) {
+        var learningTopicId = decodeURIComponent(hash.substring("#/learning/topic/".length).split("?")[0]);
+        view.innerHTML = learningTopicView(u, learningTopicId);
+      } else view.innerHTML = learningView(u);
+      renderChrome(); bindAuth(); bindLearning(); __restoreScroll(); return;
     } else if (hash === "#/history") {
       view.innerHTML = historyView(u);
     } else if (hash === "#/leave") {
@@ -3706,7 +3991,9 @@
       if (hash !== "#/dashboard") { location.hash = "#/dashboard"; return; }
       view.innerHTML = dashboardView(u);
     }
-    renderChrome(); bindApp(); __restoreScroll();
+    renderChrome();
+    if (hash === "#/admin/learning") bindAdminLearning(); else bindApp();
+    __restoreScroll();
   }
 
   function bindApp() {
