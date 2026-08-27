@@ -178,37 +178,47 @@
     currentUser = null;
     if (!authUser) return;
 
-    /* The signed-in user's role must come from the live database, not a stale
-       in-memory profile. Tech Support and the main app share the portal_role()
-       role source when it is available; profiles.role remains the attendance
-       fallback for installations that have not deployed that RPC. */
-    var profileRes = await supabaseClient.from("profiles").select("*").eq("id", authUser.id).maybeSingle();
-    if (!profileRes.error && profileRes.data) {
-      currentUser = mapProfile(profileRes.data);
-    } else {
-      currentUser = db.users.find(function (u) { return u.id === authUser.id; }) || null;
-    }
-
-    if (!currentUser) return;
-
-    var roleResolved = false;
+    /* The role changed by Tech Support is stored in the portal role tables.
+       Resolve those tables directly first and give Administration/admin
+       precedence if more than one role record exists. This prevents a stale
+       profiles.role or JWT/cache value from forcing the user into Staff mode. */
+    var liveRole = null;
     try {
-      var roleRes = await supabaseClient.rpc("portal_role");
-      if (!roleRes.error && roleRes.data != null) {
-        var liveRole = normalizeRole(roleRes.data);
-        /* portal_role() is authoritative for the portal role. Ignore an
-           unrelated IT Support role here; the E-Attendance UI has only Staff
-           and Administration interfaces. */
-        if (liveRole === "admin" || liveRole === "staff") {
-          currentUser.role = liveRole;
-          roleResolved = true;
-        }
-      }
-    } catch (roleErr) {
-      console.warn("Portal role lookup:", roleErr);
+      var roleSources = [];
+      var userRolesRes = await supabaseClient.from("user_roles").select("role").eq("user_id", authUser.id);
+      if (!userRolesRes.error && userRolesRes.data) roleSources = roleSources.concat(userRolesRes.data);
+      var supportRolesRes = await supabaseClient.from("support_roles").select("role").eq("user_id", authUser.id);
+      if (!supportRolesRes.error && supportRolesRes.data) roleSources = roleSources.concat(supportRolesRes.data);
+
+      var normalizedRoles = roleSources.map(function (r) { return normalizeRole(r.role); });
+      if (normalizedRoles.indexOf("admin") !== -1) liveRole = "admin";
+      else if (normalizedRoles.indexOf("staff") !== -1) liveRole = "staff";
+    } catch (roleTableErr) {
+      console.warn("Portal role table lookup:", roleTableErr);
     }
 
-    if (!roleResolved) currentUser.role = normalizeRole(currentUser.role) || "staff";
+    /* Same server-side resolver used by Tech Support. */
+    if (!liveRole) {
+      try {
+        var roleRes = await supabaseClient.rpc("portal_role");
+        if (!roleRes.error && roleRes.data != null) {
+          var resolved = normalizeRole(roleRes.data);
+          if (resolved === "admin" || resolved === "staff") liveRole = resolved;
+        }
+      } catch (roleRpcErr) {
+        console.warn("Portal role RPC lookup:", roleRpcErr);
+      }
+    }
+
+    /* Final legacy fallback only. */
+    var profileRes = await supabaseClient.from("profiles").select("*").eq("id", authUser.id).maybeSingle();
+    if (!profileRes.error && profileRes.data) currentUser = mapProfile(profileRes.data);
+    else currentUser = db.users.find(function (u) { return u.id === authUser.id; }) || null;
+
+    if (!currentUser) {
+      currentUser = { id: authUser.id, email: authUser.email || "", role: liveRole || "staff" };
+    }
+    if (liveRole) currentUser.role = liveRole;
 
     var cached = db.users.find(function (u) { return u.id === authUser.id; });
     if (cached) {
@@ -510,8 +520,8 @@
       links = [["#/login", "Sign in"], ["#/signup", "Register"]];
     } else {
       links = normalizeRole(u.role) === "admin"
-        ? [["#/admin", "Overview"], ["#/admin/attendance", "Attendance Management"], ["#/admin/hse", "HSE Attendance Detail"], ["#/dashboard", "My Dashboard"], ["#/settings", "Settings"]]
-        : [["#/dashboard", "Dashboard"], ["#/history", "Attendance History"], ["#/leave", "Leave"], ["#/settings", "Settings"]];
+        ? [["#/admin", "Overview"], ["#/admin/attendance", "Attendance Management"], ["#/admin/hse", "HSE Attendance Detail"], ["#/dashboard", "My Dashboard"], ["#/messages", "Messages"], ["#/settings", "Settings"]]
+        : [["#/dashboard", "Dashboard"], ["#/history", "Attendance History"], ["#/leave", "Leave"], ["#/messages", "Messages"], ["#/settings", "Settings"]];
 
     }
     var hash = PAGE === "about" ? "" : (location.hash || (u ? "#/dashboard" : "#/login"));
@@ -3958,10 +3968,8 @@
   setInterval(async function () {
     if (session()) {
       if (await enforceCurrentAccountStatus(true)) {
-        /* Role synchronization: the canonical role is profiles.role. If an
-           administrator changes a user's role while that user is signed in,
-           refresh only the profile role and re-render the existing interface.
-           No existing feature/navigation is rebuilt or removed. */
+        /* Role synchronization: refresh the live portal role from the same
+           role sources used by Tech Support before deciding which UI to show. */
         try {
           var beforeRole = currentUser ? normalizeRole(currentUser.role) : null;
           await refreshSessionUser();
