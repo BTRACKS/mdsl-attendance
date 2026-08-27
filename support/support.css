@@ -1220,6 +1220,10 @@ body.modal-open{overflow:hidden}
 }
 
 @media (max-width:760px){
+  /* Interaction fix only: keep the approved menu design unchanged, but place the
+     masthead stacking context above the backdrop so fixed menu controls receive
+     pointer/touch events. */
+  .masthead{z-index:60 !important;}
   .masthead-inner{
     min-height:64px;
     padding:12px 14px;
