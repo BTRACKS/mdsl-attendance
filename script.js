@@ -76,7 +76,7 @@
      Views read synchronously from this cache; actions that change data
      (sign up, sign in, submit attendance) await refreshData() before
      re-rendering, so the UI code below stays largely unchanged. */
-  var db = { users: [], attendance: [], leaves: [], staffCount: null, hse: [], hseSettings: null };
+  var db = { users: [], attendance: [], leaves: [], staffCount: null, hse: [], hseSettings: null, overview: null, overviewError: null };
   var authUser = null;     // the raw Supabase auth user (has .id, .email)
   var currentUser = null;  // the matching row from db.users (profile + role)
   var dataError = null;
@@ -153,13 +153,28 @@
       var hseSetRes = await supabaseClient.from("hse_settings").select("*").limit(1);
       db.hseSettings = (!hseSetRes.error && hseSetRes.data && hseSetRes.data[0]) ? hseSetRes.data[0] : null;
 
-      // profiles select() is RLS-restricted before login, so db.users can be
-      // empty pre-auth. staff_count() is a SECURITY DEFINER RPC that returns
-      // just the count without exposing any profile rows to anon visitors.
-      var countRes = await supabaseClient.rpc("staff_count");
-      db.staffCount = (!countRes.error && typeof countRes.data === "number")
-        ? countRes.data
-        : db.users.filter(function (u) { return u.role !== "admin"; }).length;
+      // The Admin Overview must never derive global statistics from the
+      // session/RLS-dependent db.users array. Fetch its authoritative dataset
+      // through a SECURITY DEFINER RPC that validates the current user as an
+      // Administration user on the server, then reads the current database.
+      db.overview = null;
+      db.overviewError = null;
+      if (authUser) {
+        var overviewRes = await supabaseClient.rpc("admin_overview_data");
+        if (!overviewRes.error && overviewRes.data) {
+          db.overview = overviewRes.data;
+          db.staffCount = Number(overviewRes.data.total_staff || 0);
+        } else if (overviewRes.error) {
+          db.overviewError = overviewRes.error.message || "Unable to load the authoritative Overview data.";
+        }
+      }
+
+      // Preserve the existing staff_count RPC for non-Overview functionality.
+      // Do not use a local user-list fallback for Admin Overview statistics.
+      if (db.staffCount == null) {
+        var countRes = await supabaseClient.rpc("staff_count");
+        if (!countRes.error && typeof countRes.data === "number") db.staffCount = countRes.data;
+      }
     } finally {
       pageLoader.hide();
     }
@@ -472,6 +487,19 @@
 
   function record(userId, key) {
     return db.attendance.find(function (a) { return a.userId === userId && a.date === key; }) || null;
+  }
+
+  function overviewUsers() {
+    return db.overview && Array.isArray(db.overview.users) ? db.overview.users.map(mapProfile) : [];
+  }
+  function overviewAttendance() {
+    return db.overview && Array.isArray(db.overview.attendance) ? db.overview.attendance.map(mapAttendance) : [];
+  }
+  function overviewLeaves() {
+    return db.overview && Array.isArray(db.overview.leaves) ? db.overview.leaves.map(mapLeave) : [];
+  }
+  function overviewRecord(userId, key, attendance) {
+    return (attendance || []).find(function (a) { return String(a.userId) === String(userId) && a.date === key; }) || null;
   }
 
   /* ------------------------- toasts & modal ------------------------- */
@@ -1500,51 +1528,74 @@
 
   /* ---------- admin ---------- */
   function adminOverview() {
+    if (!db.overview) {
+      return '<div class="page"><div class="page-head"><p class="eyebrow">Administration</p><h1>Attendance Overview</h1></div>' +
+        '<div class="alert alert-error">' + esc(db.overviewError || "The authoritative Overview data could not be loaded. Please refresh and try again.") + '</div></div>';
+    }
+
     var now = new Date(), key = dateKey(now);
-    var staff = db.users.filter(function (u) { return u.role !== "admin"; });
-    var today = db.attendance.filter(function (a) { return a.date === key; });
+    var users = overviewUsers();
+    var attendance = overviewAttendance();
+    var leaves = overviewLeaves();
+    var staff = users.filter(function (u) { return normalizeRole(u.role) !== "admin"; });
+    var today = attendance.filter(function (a) { return a.date === key; });
     var morning = today.filter(function (a) { return a.morning; });
     var evening = today.filter(function (a) { return a.evening; });
     var dayState = dayStatus(now);
     /* On weekends and public holidays attendance is locked, so no one counts as missing. */
-    var missing = dayState.open ? staff.filter(function (u) { return !record(u.id, key); }) : [];
+    var missing = dayState.open ? staff.filter(function (u) { return !overviewRecord(u.id, key, attendance); }) : [];
 
-    var activity = db.attendance.slice().sort(function (a, b) {
+    var activity = attendance.slice().sort(function (a, b) {
       return (Math.max((b.evening && b.evening.at) || 0, (b.morning && b.morning.at) || 0)) -
              (Math.max((a.evening && a.evening.at) || 0, (a.morning && a.morning.at) || 0));
     }).slice(0, 8);
 
+    function leaveForOverviewDate(userId, dateKeyValue) {
+      return leaves.find(function (l) {
+        return String(l.userId) === String(userId) && l.status !== "cancelled" &&
+          l.startDate <= dateKeyValue && dateKeyValue <= l.endDate;
+      }) || null;
+    }
+
+    function overviewTable(list) {
+      if (!list.length) return '<div class="table-wrap"><p class="empty">No staff match the selected filters.</p></div>';
+      return '<div class="table-wrap"><table><thead><tr><th>Staff</th><th>Department</th><th>Type</th><th>Resumption</th><th>Closing</th><th>Status</th></tr></thead><tbody>' +
+        list.map(function (u) {
+          var a = overviewRecord(u.id, key, attendance);
+          var leave = leaveForOverviewDate(u.id, key);
+          return '<tr><td><div class="staff-cell">' + avatarHtml(u, "avatar-sm") +
+            '<div class="staff-cell-info"><div class="who">' + esc(profileDisplayName(u)) + '</div></div></div></td>' +
+            '<td>' + esc(u.department) + '</td><td>' + esc(u.employmentType) + '</td>' +
+            '<td class="num">' + (a && a.morning ? esc(a.morning.time) : '—') + '</td>' +
+            '<td class="num">' + (a && a.evening ? esc(a.evening.time) : '—') + '</td>' +
+            '<td>' + (leave ? '<span class="tag tag-leave">Leave</span>' :
+              (a ? statusOf(a, u.id, key) : (!dayState.open ? dayStatusTag(dayState) : '<span class="tag tag-miss">Not submitted</span>'))) +
+            '</td></tr>';
+        }).join('') + '</tbody></table></div>';
+    }
+
     return '<div class="page"><div class="page-head"><p class="eyebrow">Administration</p><h1>Attendance Overview</h1></div>' +
       '<div class="stats">' +
-      stat("Total Staff", staff.length, "", ICON.users) + stat("Staff Present", morning.length, "ok", ICON.check) +
-      stat("Morning Submitted", morning.length, "ok", ICON.sunrise) + stat("Evening Submitted", evening.length, "accent", ICON.sunset) +
-      (dayState.open
-        ? stat("Missing Attendance", missing.length, missing.length ? "danger" : "", ICON.alert)
-        : stat("Missing Attendance", "—", "", ICON.alert)) + "</div>" +
+      stat("Total Sign-Up Users", users.length, "", ICON.users) + stat("Staff Present", morning.filter(function (a) {
+        return staff.some(function (u) { return String(u.id) === String(a.userId); });
+      }).length, "ok", ICON.check) +
+      stat("Morning Submitted", morning.filter(function (a) { return staff.some(function (u) { return String(u.id) === String(a.userId); }); }).length, "ok", ICON.sunrise) +
+      stat("Evening Submitted", evening.filter(function (a) { return staff.some(function (u) { return String(u.id) === String(a.userId); }); }).length, "accent", ICON.sunset) +
+      (dayState.open ? stat("Missing Attendance", missing.length, missing.length ? "danger" : "", ICON.alert) : stat("Missing Attendance", "—", "", ICON.alert)) + '</div>' +
       weekStatusPanel(now) +
-      '<div class="layout"><div><section class="section"><div class="section-head"><h2>Today\'s Register</h2><span>' + longDate(now) + " · " + esc(dayStatus(now).reason) + "</span></div>" +
-      (dayStatus(now).open ? "" : '<div class="day-lock compact ' + dayStatus(now).kind + '">' +
-        '<span class="day-lock-icon" aria-hidden="true">' + ICON.lock + "</span>" +
-        '<div class="day-lock-body"><p class="day-lock-title">Attendance locked today</p>' +
-        '<p class="day-lock-note">' + esc(dayStatus(now).kind === "weekend" ? "Weekend — attendance stamping is only available Monday–Friday." : "Public holiday: " + dayStatus(now).reason + ". Staff cannot stamp attendance today.") + "</p></div></div>") +
-
-      adminTable(staff, key) + "</section></div>" +
-      '<aside><div class="panel"><div class="panel-head">' + ICON.activity + 'Recent Attendance Activity</div><div class="panel-body">' +
-      '<div class="feed">' + (activity.length ? activity.map(function (a) {
-        var user = db.users.find(function (u) { return u.id === a.userId; }) || { fullName: "Unknown" };
+      '<div class="layout"><div><section class="section"><div class="section-head"><h2>Today\'s Register</h2><span>' + longDate(now) + ' · ' + esc(dayStatus(now).reason) + '</span></div>' +
+      (dayState.open ? '' : '<div class="day-lock compact ' + dayState.kind + '"><span class="day-lock-icon" aria-hidden="true">' + ICON.lock + '</span><div class="day-lock-body"><p class="day-lock-title">Attendance locked today</p><p class="day-lock-note">' + esc(dayState.kind === 'weekend' ? 'Weekend — attendance stamping is only available Monday–Friday.' : 'Public holiday: ' + dayState.reason + '. Staff cannot stamp attendance today.') + '</p></div></div>') +
+      overviewTable(staff) + '</section></div>' +
+      '<aside><div class="panel"><div class="panel-head">' + ICON.activity + 'Recent Attendance Activity</div><div class="panel-body"><div class="feed">' +
+      (activity.length ? activity.map(function (a) {
+        var user = users.find(function (u) { return String(u.id) === String(a.userId); }) || { fullName: 'Unknown' };
         var latest = a.evening || a.morning;
-        return '<div class="feed-item"><span class="feed-time">' + esc(latest ? latest.time : "—") + "</span>" +
-          "<p><b>" + esc(user.fullName) + "</b> submitted " + (a.evening ? "closing" : "resumption") +
-          " time · " + esc(prettyDate(a.date)) + "</p></div>";
-      }).join("") : '<p class="empty">No activity recorded.</p>') + "</div></div></div>" +
-      '<div class="panel" style="margin-top:20px"><div class="panel-head">' + ICON.alert + 'Missing Today</div><div class="panel-body">' +
-      (!dayState.open
-        ? '<p class="dateline">' + esc(dayState.kind === "weekend"
-            ? "Weekend — attendance is not required today, so no staff are marked missing."
-            : "Public holiday (" + dayState.reason + ") — attendance is not required today, so no staff are marked missing.") + "</p>"
-        : (missing.length ? staffList(missing)
-          : '<p class="dateline">All staff have submitted attendance.</p>')) +
-      "</div></div></aside></div></div>";
+        return '<div class="feed-item"><span class="feed-time">' + esc(latest ? latest.time : '—') + '</span><p><b>' + esc(profileDisplayName(user)) + '</b> submitted ' + (a.evening ? 'closing' : 'resumption') + ' time · ' + esc(prettyDate(a.date)) + '</p></div>';
+      }).join('') : '<p class="empty">No activity recorded.</p>') +
+      '</div></div></div><div class="panel" style="margin-top:20px"><div class="panel-head">' + ICON.alert + 'Missing Today</div><div class="panel-body">' +
+      (!dayState.open ? '<p class="dateline">' + esc(dayState.kind === 'weekend' ? 'Weekend — attendance is not required today, so no staff are marked missing.' : 'Public holiday (' + dayState.reason + ') — attendance is not required today, so no staff are marked missing.') + '</p>' :
+        (missing.length ? staffList(missing) : '<p class="dateline">All staff have submitted attendance.</p>')) +
+      '</div></div></aside></div></div>';
   }
 
   /* Admin-facing week overview: which days of the current week are working
