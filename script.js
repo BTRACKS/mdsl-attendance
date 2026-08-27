@@ -14,11 +14,22 @@
 
   /* ------------------------- routing ------------------------- */
   var PAGE = (document.body.getAttribute("data-page") || "app");
-  var HOME = PAGE === "app" ? "" : "index.html";
-  var ABOUT_URL = PAGE === "app" ? "about.html" : "about.html";
+  /* The root app remains the source of truth. The Learn entry point reuses
+     this exact script and shared stylesheet instead of creating a second
+     learning implementation. */
+  var HOME = PAGE === "app" ? "" : (PAGE === "learn" ? "../index.html" : "index.html");
+  var ABOUT_URL = PAGE === "learn" ? "../about.html" : "about.html";
+  function defaultHash(u) {
+    if (!u) return "#/login";
+    if (PAGE === "learn") {
+      if (normalizeRole(u.role) === "admin") return "#/admin/learning";
+      if (isIntern(u)) return "#/learning";
+    }
+    return "#/dashboard";
+  }
   function go(hash) {
     if (PAGE === "app") { location.hash = hash; render(); }
-    else { location.href = "index.html" + hash; }
+    else { location.href = HOME + hash; }
   }
 
   var DEPARTMENTS = ["Operations", "Media & Broadcast", "Technology", "Marketing", "Creative & Design", "Finance", "Human Resources", "Sales",
@@ -609,14 +620,13 @@
       links = [["#/login", "Sign in"], ["#/signup", "Register"]];
     } else {
       if (normalizeRole(u.role) === "admin") {
-        links = [["#/admin", "Overview"], ["#/admin/attendance", "Attendance Management"], ["#/admin/hse", "HSE Attendance"], ["#/admin/learning", "Learning Management"], ["#/dashboard", "Dashboard"], ["#/messages", "Messages"]];
+        links = [["#/admin", "Overview"], ["#/admin/attendance", "Attendance Management"], ["#/admin/hse", "HSE Attendance"], ["#/dashboard", "Dashboard"], ["#/messages", "Messages"]];
       } else {
         links = [["#/dashboard", "Dashboard"], ["#/history", "Attendance History"], ["#/leave", "Leave"], ["#/messages", "Messages"]];
-        if (isIntern(u)) links.splice(1, 0, ["#/learning", "Learning / Training"]);
       }
 
     }
-    var hash = PAGE === "about" ? "" : (location.hash || (u ? "#/dashboard" : "#/login"));
+    var hash = PAGE === "about" ? "" : (location.hash || defaultHash(u));
     links = links.concat([[ABOUT_URL, "About Us"]]);
     el("nav").innerHTML = links.map(function (l) {
       var href = l[0].charAt(0) === "#" ? HOME + l[0] : l[0];
@@ -836,6 +846,8 @@
 
       '<section class="section"><div class="section-head"><h2>Recent Records</h2><span><a class="link-muted" href="#/history">View full history</a></span></div>' +
       historyTable(u, 5) + "</section>" +
+
+      '<section class="section dashboard-learning-card"><div class="dashboard-learning-content"><div class="dashboard-learning-icon" aria-hidden="true">' + ICON.cap + '</div><div class="dashboard-learning-copy"><p class="eyebrow">Learn</p><h2>Continue your learning</h2><p>Continue your learning, explore lessons, and complete quizzes.</p></div><a class="btn btn-primary" href="learn/learn.html">Go to Learning <span aria-hidden="true">→</span></a></div></section>' +
 
       "</div>" + profilePanel(u) + "</div></div>";
   }
@@ -1664,7 +1676,9 @@
       '</div></div></div><div class="panel" style="margin-top:20px"><div class="panel-head">' + ICON.alert + 'Missing Today</div><div class="panel-body">' +
       (!dayState.open ? '<p class="dateline">' + esc(dayState.kind === 'weekend' ? 'Weekend — attendance is not required today, so no staff are marked missing.' : 'Public holiday (' + dayState.reason + ') — attendance is not required today, so no staff are marked missing.') + '</p>' :
         (missing.length ? staffList(missing) : '<p class="dateline">All staff have submitted attendance.</p>')) +
-      '</div></div></aside></div></div>';
+      '</div></div></aside></div>' +
+      '<section class="section dashboard-learning-card"><div class="dashboard-learning-content"><div class="dashboard-learning-icon" aria-hidden="true">' + ICON.cap + '</div><div class="dashboard-learning-copy"><p class="eyebrow">Learn</p><h2>Manage learning</h2><p>Continue your learning administration, organize lessons, and manage quizzes.</p></div><a class="btn btn-primary" href="learn/learn.html">Go to Learning <span aria-hidden="true">→</span></a></div></section>' +
+      '</div>';
   }
 
   /* Admin-facing week overview: which days of the current week are working
@@ -3789,7 +3803,7 @@
       '</article>';
   }
   function learningView(u) {
-    if (!isIntern(u)) { location.hash = "#/dashboard"; return ""; }
+    if (!isIntern(u)) { go("#/dashboard"); return ""; }
     var topics = learningPublishedTopics(), overall = learningOverallPercent();
     var groups = ["Marine Navigation", "Marine Communication", "Marine Electronic Equipment"].map(function(category){
       var list = topics.filter(function(t){ return t.category === category; });
@@ -3801,10 +3815,10 @@
   }
 
   function learningTopicView(u, topicId) {
-    if (!isIntern(u)) { location.hash = "#/dashboard"; return ""; }
+    if (!isIntern(u)) { go("#/dashboard"); return ""; }
     var topics = learningPublishedTopics(), t = learningTopic(topicId);
-    if (!t || !t.published || t.archived) { toast("This learning topic is not available.", "error"); location.hash = "#/learning"; return ""; }
-    if (!learningUnlocked(topicId)) { toast("Complete the previous module before starting this one.", "error"); location.hash = "#/learning"; return ""; }
+    if (!t || !t.published || t.archived) { toast("This learning topic is not available.", "error"); go("#/learning"); return ""; }
+    if (!learningUnlocked(topicId)) { toast("Complete the previous module before starting this one.", "error"); go("#/learning"); return ""; }
     var lesson = learningLesson(topicId) || {}, quiz = learningQuiz(topicId), p = learningProgress(topicId), pct = learningPercent(topicId);
     var idx = topics.findIndex(function(x){ return String(x.id) === String(topicId); });
     var next = idx >= 0 ? topics[idx + 1] : null;
@@ -4100,8 +4114,15 @@
     var __scrollY = window.scrollY || window.pageYOffset || 0;
     var __restoreScroll = function () { window.requestAnimationFrame(function () { window.scrollTo(0, __scrollY); }); };
     var u = session();
-    var hash = location.hash || (u ? "#/dashboard" : "#/login");
+    var hash = location.hash || defaultHash(u);
     var view = el("view");
+
+    /* Backwards compatibility: old root learning hashes now open the single
+       dedicated Learn entry point. No second learning system is created. */
+    if (PAGE === "app" && (hash === "#/learning" || hash.indexOf("#/learning/topic/") === 0 || hash === "#/admin/learning")) {
+      location.replace("learn/learn.html" + hash);
+      return;
+    }
 
     if (PAGE === "about") { view.innerHTML = aboutView(); renderChrome(); return; }
     if (hash === "#/about") { location.replace("about.html"); return; }
@@ -4494,7 +4515,7 @@
     if (event === "SIGNED_OUT") { authUser = null; currentUser = null; }
   });
 
-  if (PAGE === "app") window.addEventListener("hashchange", render);
+  if (PAGE === "app" || PAGE === "learn") window.addEventListener("hashchange", render);
   /* Re-check frequently enough that an administrator's deactivation is
      enforced promptly for users who are already signed in. */
   setInterval(async function () {
@@ -4509,9 +4530,15 @@
           if (beforeRole !== afterRole) {
             /* Role changed in the database: rebuild the route and chrome from
                the newly resolved role. Existing features remain untouched. */
-            if (afterRole === "admin") location.hash = "#/admin";
-            else if (afterRole === "staff" && location.hash.indexOf("#/admin") === 0) location.hash = "#/dashboard";
-            render();
+            if (PAGE === "learn") {
+              if (afterRole === "admin") location.hash = "#/admin/learning";
+              else if (afterRole === "staff") location.hash = isIntern(currentUser) ? "#/learning" : "#/dashboard";
+              render();
+            } else {
+              if (afterRole === "admin") location.hash = "#/admin";
+              else if (afterRole === "staff" && location.hash.indexOf("#/admin") === 0) location.hash = "#/dashboard";
+              render();
+            }
             return;
           }
         } catch (roleErr) {

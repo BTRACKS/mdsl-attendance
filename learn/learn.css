@@ -1,0 +1,2 @@
+/* Dedicated Learn entry point. Keep the shared application stylesheet as the single source of visual truth. */
+@import url("../style.css");
