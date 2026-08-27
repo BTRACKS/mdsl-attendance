@@ -1496,3 +1496,59 @@ body.maintenance-page{background:var(--gradient-hero);min-height:100vh}
   .nav{max-width:calc(100% - 320px)}
   .nav a{font-size:12px;padding-left:8px;padding-right:8px}
 }
+
+/* ---------- Header proportions + true desktop nav centering ---------- */
+@media (min-width:1181px){
+  .masthead-inner{
+    min-height:88px;
+    height:88px;
+    padding:16px 24px;
+    position:relative;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+  }
+
+  .nav{
+    position:absolute;
+    left:50%;
+    top:50%;
+    transform:translate(-50%,-50%);
+    margin:0;
+    height:46px;
+    min-height:46px;
+    width:max-content;
+    max-width:calc(100% - 360px);
+    padding:4px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:2px;
+    box-sizing:border-box;
+  }
+
+  .nav a{
+    height:36px;
+    display:inline-flex;
+    align-items:center;
+    padding:7px 10px;
+    line-height:20px;
+    font-size:12.5px;
+    white-space:nowrap;
+  }
+
+  .masthead-right{
+    margin-left:auto;
+    flex:0 0 auto;
+    height:100%;
+    display:flex;
+    align-items:center;
+    justify-content:flex-end;
+  }
+}
+
+@media (min-width:1181px) and (max-width:1320px){
+  .masthead-inner{padding-left:18px;padding-right:18px}
+  .nav{max-width:calc(100% - 320px)}
+  .nav a{font-size:12px;padding-left:8px;padding-right:8px}
+}
