@@ -1466,3 +1466,33 @@ body.maintenance-page{background:var(--gradient-hero);min-height:100vh}
   .nav{padding:0 14px}
   .nav a,.nav-signout{padding:15px 2px;font-size:14px}
 }
+
+
+/* ---------- Final header navigation alignment ---------- */
+@media (min-width:1181px){
+  .masthead-inner{position:relative;justify-content:space-between}
+  .nav{
+    position:absolute;
+    left:50%;
+    top:50%;
+    transform:translate(-50%,-50%);
+    margin:0;
+    width:max-content;
+    max-width:calc(100% - 360px);
+    flex:0 0 auto;
+    justify-content:center;
+    gap:2px;
+  }
+  .masthead-right{
+    margin-left:auto;
+    flex:0 0 auto;
+    justify-content:flex-end;
+  }
+  .nav a{font-size:12.5px;padding:8px 10px}
+}
+
+@media (min-width:1181px) and (max-width:1320px){
+  .masthead-inner{padding-left:18px;padding-right:18px}
+  .nav{max-width:calc(100% - 320px)}
+  .nav a{font-size:12px;padding-left:8px;padding-right:8px}
+}
