@@ -165,10 +165,57 @@
     }
   }
 
+  function normalizeRole(role) {
+    var r = String(role == null ? "" : role).trim().toLowerCase().replace(/[\s-]+/g, "_");
+    if (r === "admin" || r === "administrator" || r === "administration") return "admin";
+    if (r === "staff" || r === "employee") return "staff";
+    return r;
+  }
+
   async function refreshSessionUser() {
     var sessionRes = await supabaseClient.auth.getSession();
     authUser = (sessionRes.data && sessionRes.data.session) ? sessionRes.data.session.user : null;
-    currentUser = authUser ? (db.users.find(function (u) { return u.id === authUser.id; }) || null) : null;
+    currentUser = null;
+    if (!authUser) return;
+
+    /* The signed-in user's role must come from the live database, not a stale
+       in-memory profile. Tech Support and the main app share the portal_role()
+       role source when it is available; profiles.role remains the attendance
+       fallback for installations that have not deployed that RPC. */
+    var profileRes = await supabaseClient.from("profiles").select("*").eq("id", authUser.id).maybeSingle();
+    if (!profileRes.error && profileRes.data) {
+      currentUser = mapProfile(profileRes.data);
+    } else {
+      currentUser = db.users.find(function (u) { return u.id === authUser.id; }) || null;
+    }
+
+    if (!currentUser) return;
+
+    var roleResolved = false;
+    try {
+      var roleRes = await supabaseClient.rpc("portal_role");
+      if (!roleRes.error && roleRes.data != null) {
+        var liveRole = normalizeRole(roleRes.data);
+        /* portal_role() is authoritative for the portal role. Ignore an
+           unrelated IT Support role here; the E-Attendance UI has only Staff
+           and Administration interfaces. */
+        if (liveRole === "admin" || liveRole === "staff") {
+          currentUser.role = liveRole;
+          roleResolved = true;
+        }
+      }
+    } catch (roleErr) {
+      console.warn("Portal role lookup:", roleErr);
+    }
+
+    if (!roleResolved) currentUser.role = normalizeRole(currentUser.role) || "staff";
+
+    var cached = db.users.find(function (u) { return u.id === authUser.id; });
+    if (cached) {
+      cached.role = currentUser.role;
+    } else {
+      db.users.push(currentUser);
+    }
   }
 
   /* Account status is enforced after Supabase Authentication succeeds.
@@ -462,9 +509,9 @@
     if (!u) {
       links = [["#/login", "Sign in"], ["#/signup", "Register"]];
     } else {
-      links = u.role === "admin"
-        ? [["#/admin", "Overview"], ["#/admin/attendance", "Attendance Management"], ["#/admin/hse", "HSE Attendance"], ["#/dashboard", "My Dashboard"], ["#/messages", "Messages"], ["#/settings", "Settings"]]
-        : [["#/dashboard", "Dashboard"], ["#/history", "Attendance History"], ["#/leave", "Leave"], ["#/messages", "Messages"], ["#/settings", "Settings"]];
+      links = normalizeRole(u.role) === "admin"
+        ? [["#/admin", "Overview"], ["#/admin/attendance", "Attendance Management"], ["#/admin/hse", "HSE Attendance Detail"], ["#/dashboard", "My Dashboard"], ["#/settings", "Settings"]]
+        : [["#/dashboard", "Dashboard"], ["#/history", "Attendance History"], ["#/leave", "Leave"], ["#/settings", "Settings"]];
 
     }
     var hash = PAGE === "about" ? "" : (location.hash || (u ? "#/dashboard" : "#/login"));
@@ -3536,7 +3583,7 @@
     }
 
     if (hash === "#/admin" || hash === "#/admin/attendance" || hash === "#/admin/hse") {
-      if (u.role !== "admin") { location.hash = "#/dashboard"; return; }
+      if (normalizeRole(u.role) !== "admin") { location.hash = "#/dashboard"; return; }
       view.innerHTML = hash === "#/admin" ? adminOverview()
         : hash === "#/admin/hse" ? hseAdminView()
         : adminManagement();
@@ -3822,7 +3869,7 @@
       }
       await initMessaging();
       toast("Signed in as " + profileDisplayName(currentUser) + ".");
-      location.hash = currentUser.role === "admin" ? "#/admin" : "#/dashboard";
+      location.hash = normalizeRole(currentUser.role) === "admin" ? "#/admin" : "#/dashboard";
       render();
     });
 
@@ -3916,11 +3963,14 @@
            refresh only the profile role and re-render the existing interface.
            No existing feature/navigation is rebuilt or removed. */
         try {
-          var roleRes = await supabaseClient.from("profiles").select("role").eq("id", authUser.id).maybeSingle();
-          if (!roleRes.error && roleRes.data && currentUser && roleRes.data.role !== currentUser.role) {
-            currentUser.role = roleRes.data.role;
-            var cached = db.users.find(function (u) { return u.id === authUser.id; });
-            if (cached) cached.role = roleRes.data.role;
+          var beforeRole = currentUser ? normalizeRole(currentUser.role) : null;
+          await refreshSessionUser();
+          var afterRole = currentUser ? normalizeRole(currentUser.role) : null;
+          if (beforeRole !== afterRole) {
+            /* Role changed in the database: rebuild the route and chrome from
+               the newly resolved role. Existing features remain untouched. */
+            if (afterRole === "admin") location.hash = "#/admin";
+            else if (afterRole === "staff" && location.hash.indexOf("#/admin") === 0) location.hash = "#/dashboard";
             render();
             return;
           }
