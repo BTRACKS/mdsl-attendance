@@ -998,6 +998,20 @@ body.maintenance-page{background:var(--gradient-hero);min-height:100vh}
   .dashboard-learning-copy p:not(.eyebrow){font-size:12.5px;line-height:1.45}
 }
 
+
+/* Admin dashboard Learn action: intentionally discreet management control. */
+.dashboard-learning-admin-btn{
+  flex:0 0 auto;
+  white-space:nowrap;
+}
+@media (max-width:760px){
+  .dashboard-learning-admin-btn{
+    width:100%;
+    max-width:100%;
+    box-sizing:border-box;
+  }
+}
+
 /* ---------- Dashboard Leave card ---------- */
 .dashboard-leave-card{border-left:0}
 .dashboard-leave-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:14px}
