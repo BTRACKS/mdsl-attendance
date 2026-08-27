@@ -1552,3 +1552,43 @@ body.maintenance-page{background:var(--gradient-hero);min-height:100vh}
   .nav{max-width:calc(100% - 320px)}
   .nav a{font-size:12px;padding-left:8px;padding-right:8px}
 }
+
+
+/* Final desktop masthead proportions: centered navigation with the restored
+   larger pill and full Learning Management label. */
+@media (min-width:1181px){
+  .masthead-inner{
+    position:relative;
+    min-height:88px;
+    height:88px;
+    padding:16px 24px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+  }
+  .brand{position:relative;z-index:2;}
+  .nav{
+    position:absolute;
+    left:50%;
+    top:50%;
+    transform:translate(-50%,-50%);
+    margin:0;
+    width:max-content;
+    max-width:calc(100% - 430px);
+    min-height:46px;
+    padding:4px;
+    gap:2px;
+    flex:0 0 auto;
+    overflow:hidden;
+  }
+  .nav a{
+    font-size:13px;
+    padding:10px 12px;
+  }
+  .masthead-right{
+    position:relative;
+    z-index:2;
+    flex:0 0 auto;
+    margin-left:auto;
+  }
+}
