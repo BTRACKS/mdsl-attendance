@@ -3945,7 +3945,7 @@
     var removeIds = existing.filter(function(b){ return keepIds.indexOf(String(b.id)) === -1; }).map(function(b){ return b.id; });
     if (removeIds.length) { var del = await supabaseClient.from('learning_lesson_blocks').delete().in('id', removeIds); if (del.error) throw del.error; }
     if (!blocks.length) return;
-    var rows = blocks.map(function(b){ return { id: b.id || undefined, topic_id: topicId, block_order: b.block_order, heading: b.heading.trim() || null, content: b.content.trim() || null, image_url: b.image_url.trim() || null, image_alt: b.image_alt.trim() || null }; });
+    var rows = blocks.map(function(b){ return { topic_id: topicId, block_order: b.block_order, heading: b.heading.trim() || null, content: b.content.trim() || null, image_url: b.image_url.trim() || null, image_alt: b.image_alt.trim() || null, ...(b.id ? { id: b.id } : {}) }; });
     var up = await supabaseClient.from('learning_lesson_blocks').upsert(rows, { onConflict:'id' });
     if (up.error) throw up.error;
   }
