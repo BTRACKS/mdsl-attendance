@@ -1732,3 +1732,16 @@ body.maintenance-page{background:var(--gradient-hero);min-height:100vh}
   .nav a,.nav-signout{min-height:60px;padding:18px 6px;font-size:15.5px}
   .menu-toggle{width:48px;height:48px}
 }
+
+/* ---------- Mobile navigation full-width correction ----------
+   Keep all existing menu behavior and styling; only force the opened
+   mobile navigation panel to span the complete viewport width. */
+@media (max-width:1180px){
+  .nav{
+    left:0;
+    right:0;
+    width:100%;
+    max-width:none;
+    box-sizing:border-box;
+  }
+}
