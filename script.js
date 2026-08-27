@@ -3879,7 +3879,8 @@
   async function saveLearningTopic(form) {
     var v = readForm(form, { title:req("Topic title"), category:req("Category"), module_order:req("Module order") }); if (!v) return;
     var id = v.id || "";
-    var payload = { title:v.title, category:v.category, description:v.description||"", module_order:Number(v.module_order), published:!!form.published.checked, archived:(editing ? !!editing.archived : false) };
+    var existingTopic = id ? learningTopic(id) : null;
+    var payload = { title:v.title, category:v.category, description:v.description||"", module_order:Number(v.module_order), published:!!form.published.checked, archived:(existingTopic ? !!existingTopic.archived : false) };
     var topicRes = id ? await supabaseClient.from("learning_topics").update(payload).eq("id",id).select("*").single() : await supabaseClient.from("learning_topics").insert(Object.assign(payload,{created_by:authUser?authUser.id:null})).select("*").single();
     if (topicRes.error) { toast(topicRes.error.message,"error"); return; }
     var topic = topicRes.data;
