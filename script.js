@@ -4066,13 +4066,27 @@
     Array.prototype.forEach.call(editor.querySelectorAll('[data-learning-block-file]'),function(file){file.addEventListener('change',async function(){var f=file.files&&file.files[0],i=Number(file.getAttribute('data-learning-block-file'));if(!f)return;try{var form=el('learningTopicForm'),topicId=((form.querySelector('[name="id"]')||{}).value||learningAdminState.editId||'draft-'+Date.now()),url=await uploadLearningImage(f,topicId),hidden=editor.querySelector('[data-block-index="'+i+'"] [data-block-image-url]'),name=editor.querySelector('[data-learning-block-image-name="'+i+'"]');if(hidden)hidden.value=url;if(name)name.textContent='Image attached';}catch(e){toast(e.message||'Image upload failed.','error');}file.value='';});});
   }
 
+  function openAdminLearningQuiz(topicId) {
+    topicId = String(topicId || "");
+    if (!topicId || !learningTopic(topicId)) return;
+    learningAdminState.quizTopicId = topicId;
+    learningAdminState.editId = topicId;
+    render();
+    window.setTimeout(async function(){
+      var q = learningQuiz(topicId);
+      if (q) await loadAdminLearningQuestions(q.id);
+      var quizSection = document.querySelector(".learning-admin-quiz");
+      if (quizSection) quizSection.scrollIntoView({behavior:"smooth",block:"start"});
+    }, 60);
+  }
+
   function bindAdminLearning() {
     Array.prototype.forEach.call(document.querySelectorAll("[data-learning-admin-edit]"),function(b){b.addEventListener("click",function(){learningAdminState.editId=b.getAttribute("data-learning-admin-edit");learningAdminState.quizTopicId="";render();});});
-    Array.prototype.forEach.call(document.querySelectorAll("[data-learning-admin-quiz]"),function(b){b.addEventListener("click",async function(){var topicId=b.getAttribute("data-learning-admin-quiz");if(!learningTopic(topicId))return;learningAdminState.quizTopicId=topicId;learningAdminState.editId="";render();var q=learningQuiz(topicId);if(q)await loadAdminLearningQuestions(q.id);var quizSection=document.querySelector(".learning-admin-quiz");if(quizSection)quizSection.scrollIntoView({behavior:"smooth",block:"start"});});});
+    Array.prototype.forEach.call(document.querySelectorAll("[data-learning-admin-quiz]"),function(b){b.addEventListener("click",function(){openAdminLearningQuiz(b.getAttribute("data-learning-admin-quiz"));});});
     var cancel=el("learningCancelEdit");if(cancel)cancel.addEventListener("click",function(){learningAdminState.editId="";render();});
     var close=el("learningCloseQuiz");if(close)close.addEventListener("click",function(){learningAdminState.quizTopicId="";render();});
     var tf=el("learningTopicForm");if(tf){tf.addEventListener("submit",function(e){e.preventDefault();saveLearningTopic(tf);});bindLearningImageUploads();bindLearningBlocks();}
-    var quizShortcut=el('learningTopicQuizShortcut');if(quizShortcut)quizShortcut.addEventListener('click',function(){var topicId=learningAdminState.editId;if(topicId){learningAdminState.quizTopicId=topicId;render();window.setTimeout(function(){var q=document.querySelector('.learning-admin-quiz');if(q)q.scrollIntoView({behavior:'smooth',block:'start'});},80);}});
+    var quizShortcut=el('learningTopicQuizShortcut');if(quizShortcut)quizShortcut.addEventListener('click',function(){openAdminLearningQuiz(learningAdminState.editId);});
     var qf=el("learningQuizSettingsForm");if(qf){qf.addEventListener("submit",function(e){e.preventDefault();saveLearningQuiz(qf);});var q=learningQuiz(learningAdminState.quizTopicId);if(q)loadAdminLearningQuestions(q.id);}
     var questionForm=el("learningQuestionForm");if(questionForm)questionForm.addEventListener("submit",function(e){e.preventDefault();submitLearningQuestionForm(questionForm);});
     Array.prototype.forEach.call(document.querySelectorAll("[data-learning-question-edit]"),function(b){b.addEventListener("click",function(){editLearningQuestion(b.getAttribute("data-learning-question-edit"));});});

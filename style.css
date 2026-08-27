@@ -1779,3 +1779,47 @@ body.maintenance-page{background:var(--gradient-hero);min-height:100vh}
 .learning-admin-form .field>small{line-height:1.5}
 .learning-admin-form input,.learning-admin-form select,.learning-admin-form textarea{font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
 .learning-admin-form input::placeholder,.learning-admin-form textarea::placeholder{font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;padding-top:1px}
+
+/* Learning Management hint and placeholder spacing refinement */
+.learning-page .field > small,
+.learning-page .learning-upload-note,
+.learning-page .learning-upload-status,
+.learning-page .learning-block-image-name,
+.learning-page .learning-no-quiz p,
+.learning-page .learning-quiz-empty,
+.learning-page .learning-quiz-error,
+.learning-page .learning-quiz-loading,
+.learning-page .learning-blocks-empty,
+.learning-page .learning-question-admin .section-head > span {
+  display:block;
+  margin-top:8px;
+  line-height:1.55;
+}
+.learning-page .field > small:first-child { margin-top:8px; }
+.learning-page input,
+.learning-page select,
+.learning-page textarea {
+  box-sizing:border-box;
+  padding:13px 14px;
+}
+.learning-page input::placeholder,
+.learning-page textarea::placeholder {
+  opacity:.72;
+  line-height:1.45;
+}
+.learning-page .field > label + input,
+.learning-page .field > label + select,
+.learning-page .field > label + textarea,
+.learning-page .field > label + .learning-switch,
+.learning-page .field > label + .learning-blocks-editor,
+.learning-page .field > label + .learning-blocks-editor + .learning-add-block {
+  margin-top:4px;
+}
+.learning-page .hint {
+  margin-top:12px;
+  padding:14px 16px;
+  line-height:1.6;
+}
+.learning-page .learning-block-editor .field > label {
+  margin-bottom:3px;
+}
