@@ -1757,3 +1757,25 @@ body.maintenance-page{background:var(--gradient-hero);min-height:100vh}
 .learning-editor-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
 .learning-image-file{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
 .learning-upload-note,.learning-upload-status{font-size:10.5px;color:var(--ink-4)}
+
+/* Learning content blocks */
+.learning-content-block{padding:0 0 22px;margin:0 0 22px;border-bottom:1px solid var(--rule)}
+.learning-content-block:last-child{border-bottom:0;margin-bottom:0;padding-bottom:0}
+.learning-content-block>h3{font-size:18px;line-height:1.35;margin:0 0 10px;color:var(--ink);font-weight:700}
+.learning-content-block .learning-copy-block{margin-bottom:0}
+.learning-blocks-editor{display:grid;gap:14px}
+.learning-blocks-empty{padding:18px;border:1px dashed var(--rule-strong);border-radius:13px;background:var(--paper-2);font-size:12px;color:var(--ink-3);line-height:1.6}
+.learning-block-editor{padding:16px;border:1px solid var(--rule);border-radius:14px;background:var(--paper-2)}
+.learning-block-editor-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.learning-block-editor-head>div:first-child{display:flex;align-items:center;gap:9px;min-width:0}
+.learning-block-number{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;background:var(--paper);border:1px solid var(--rule);color:var(--navy);font-size:11px;font-weight:800;flex:0 0 auto}
+.learning-block-editor-actions{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}
+.learning-block-editor .field{gap:7px}
+.learning-block-editor textarea,.learning-block-editor input{padding:13px 14px;line-height:1.55}
+.learning-block-editor textarea::placeholder,.learning-block-editor input::placeholder{opacity:.72}
+.learning-block-image-row{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:9px}
+.learning-block-image-name{font-size:11px;color:var(--ink-4)}
+.learning-add-block{margin-top:12px;min-height:42px}
+.learning-admin-form .field>small{line-height:1.5}
+.learning-admin-form input,.learning-admin-form select,.learning-admin-form textarea{font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
+.learning-admin-form input::placeholder,.learning-admin-form textarea::placeholder{font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;padding-top:1px}

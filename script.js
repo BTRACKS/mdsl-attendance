@@ -77,7 +77,7 @@
      (sign up, sign in, submit attendance) await refreshData() before
      re-rendering, so the UI code below stays largely unchanged. */
   var db = { users: [], attendance: [], leaves: [], staffCount: null, hse: [], hseSettings: null, overview: null, overviewError: null,
-    learningTopics: [], learningLessons: [], learningQuizzes: [], learningProgress: [], learningAttempts: [], learningQuestions: [] };
+    learningTopics: [], learningLessons: [], learningLessonBlocks: [], learningQuizzes: [], learningProgress: [], learningAttempts: [], learningQuestions: [] };
   var authUser = null;     // the raw Supabase auth user (has .id, .email)
   var currentUser = null;  // the matching row from db.users (profile + role)
   var dataError = null;
@@ -160,17 +160,19 @@
       try {
         var learningTopicsRes = await supabaseClient.from("learning_topics").select("*").order("module_order", { ascending: true }).order("created_at", { ascending: true });
         var learningLessonsRes = await supabaseClient.from("learning_lessons").select("*");
+        var learningLessonBlocksRes = await supabaseClient.from("learning_lesson_blocks").select("*").order("block_order", { ascending: true });
         var learningQuizzesRes = await supabaseClient.from("learning_quizzes").select("*");
         var learningProgressRes = await supabaseClient.from("learning_progress").select("*").eq("user_id", authUser ? authUser.id : "");
         var learningAttemptsRes = await supabaseClient.from("learning_quiz_attempts").select("*").eq("user_id", authUser ? authUser.id : "").order("attempted_at", { ascending: false });
         db.learningTopics = learningTopicsRes.error ? [] : (learningTopicsRes.data || []);
         db.learningLessons = learningLessonsRes.error ? [] : (learningLessonsRes.data || []);
+        db.learningLessonBlocks = learningLessonBlocksRes.error ? [] : (learningLessonBlocksRes.data || []);
         db.learningQuizzes = learningQuizzesRes.error ? [] : (learningQuizzesRes.data || []);
         db.learningProgress = learningProgressRes.error ? [] : (learningProgressRes.data || []);
         db.learningAttempts = learningAttemptsRes.error ? [] : (learningAttemptsRes.data || []);
         db.learningQuestions = [];
       } catch (learningErr) {
-        db.learningTopics = []; db.learningLessons = []; db.learningQuizzes = []; db.learningProgress = []; db.learningAttempts = []; db.learningQuestions = [];
+        db.learningTopics = []; db.learningLessons = []; db.learningLessonBlocks = []; db.learningQuizzes = []; db.learningProgress = []; db.learningAttempts = []; db.learningQuestions = [];
         console.warn("Learning module data:", learningErr);
       }
 
@@ -3707,6 +3709,9 @@
   function learningLesson(topicId) {
     return (db.learningLessons || []).find(function (l) { return String(l.topic_id) === String(topicId); }) || null;
   }
+  function learningLessonBlocks(topicId) {
+    return (db.learningLessonBlocks || []).filter(function (b) { return String(b.topic_id) === String(topicId); }).sort(function(a,b){ return Number(a.block_order||0)-Number(b.block_order||0); });
+  }
   function learningQuiz(topicId) {
     return (db.learningQuizzes || []).find(function (q) { return String(q.topic_id) === String(topicId) && q.published !== false; }) || null;
   }
@@ -3746,8 +3751,6 @@
     return '<span class="tag tag-neutral">Not started</span>';
   }
   function learningTextHtml(text) {
-    /* Content is stored as plain text plus safe image tokens inserted by the
-       editor. We never inject arbitrary HTML from the database. */
     return String(text || "").trim().split(/\n\s*\n/).filter(Boolean).map(function(block){
       var lines = block.split(/\n/).map(function(x){ return x.trim(); }).filter(Boolean);
       if (!lines.length) return "";
@@ -3756,6 +3759,18 @@
         if (image) return '<figure class="learning-inline-image"><img src="' + esc(image[1]) + '" alt="' + esc(image[2] || "Learning illustration") + '" loading="lazy" /><figcaption>' + esc(image[2] || "Learning illustration") + '</figcaption></figure>';
         return i === 0 && lines.length > 1 ? '<h3>' + esc(line) + '</h3>' : '<p>' + esc(line) + '</p>';
       }).join("") + '</div>';
+    }).join("");
+  }
+  function learningBlocksHtml(blocks) {
+    return (blocks || []).map(function(b){
+      var heading = String(b.heading || "").trim();
+      var body = String(b.content || "").trim();
+      var image = String(b.image_url || "").trim();
+      var html = '<article class="learning-content-block">';
+      if (heading) html += '<h3>' + esc(heading) + '</h3>';
+      if (body) html += learningTextHtml(body);
+      if (image) html += '<figure class="learning-inline-image"><img src="' + esc(image) + '" alt="' + esc(b.image_alt || heading || "Learning illustration") + '" loading="lazy" /><figcaption>' + esc(b.image_alt || heading || "Learning illustration") + '</figcaption></figure>';
+      return html + '</article>';
     }).join("");
   }
   function learningCard(t, index) {
@@ -3800,7 +3815,7 @@
       '<section class="section learning-lesson"><div class="section-head"><h2>Lesson</h2>' + learningStatusTag(pct, learningCompleted(topicId)) + '</div>' +
       (lesson.introduction ? '<div class="learning-introduction">' + esc(lesson.introduction) + '</div>' : '') +
       (lesson.image_url ? '<figure class="learning-figure"><img src="' + esc(lesson.image_url) + '" alt="' + esc(lesson.image_alt || t.title) + '" loading="lazy" /><figcaption>' + esc(lesson.image_alt || "Learning illustration") + '</figcaption></figure>' : '') +
-      '<div class="learning-richtext">' + learningTextHtml(lesson.content || "Lesson content will be published here.") + '</div>' +
+      '<div class="learning-richtext">' + (learningLessonBlocks(topicId).length ? learningBlocksHtml(learningLessonBlocks(topicId)) : learningTextHtml(lesson.content || "Lesson content will be published here.")) + '</div>' +
       (!p || !p.lesson_completed ? '<button class="btn btn-primary" type="button" id="learningLessonComplete">Mark lesson complete</button>' : '<div class="learning-complete-callout">' + ICON.check + '<div><strong>Lesson complete</strong><span>Continue to the quiz when you are ready.</span></div></div>') +
       '</section>' +
       (quiz ? '<section class="section learning-quiz" id="learningTopicQuiz"><div class="section-head"><div><p class="eyebrow">Knowledge check</p><h2>' + esc(quiz.title || 'Topic Quiz') + '</h2></div><span>Pass mark ' + Number(quiz.passing_score || 70) + '%</span></div><div id="learningQuizMount"><div class="learning-quiz-loading">Loading quiz…</div></div></section>' : '<section class="section"><div class="learning-no-quiz"><h2>No quiz attached</h2><p>Complete the lesson to finish this module.</p></div></section>') +
@@ -3849,26 +3864,50 @@
   }
 
   var learningAdminState = { editId: "", quizTopicId: "" };
+  function learningAdminInitialBlocks(editing) {
+    if (!editing) return [];
+    var existing = learningLessonBlocks(editing.id);
+    if (existing.length) return existing;
+    var lesson = learningLesson(editing.id) || {};
+    if (!String(lesson.content || '').trim() && !String(lesson.image_url || '').trim()) return [];
+    return [{ id:'', topic_id:editing.id, block_order:1, heading:'', content:lesson.content || '', image_url:lesson.image_url || '', image_alt:lesson.image_alt || '' }];
+  }
+  function learningBlockEditorHtml(blocks) {
+    blocks = Array.isArray(blocks) ? blocks : [];
+    return '<div id="learningBlocksEditor" class="learning-blocks-editor">' + (blocks.length ? blocks.map(function(b,i){ return learningBlockRowHtml(b,i); }).join('') : '<div class="learning-blocks-empty" id="learningBlocksEmpty">No content blocks yet. Use the + button below to add one.</div>') + '</div>' +
+      '<button class="btn btn-ghost learning-add-block" type="button" id="learningAddBlock">+ <span>Add content block</span></button>';
+  }
+  function learningBlockRowHtml(b,i) {
+    return '<article class="learning-block-editor" data-learning-block data-block-index="' + i + '" data-block-id="' + esc(b.id || '') + '">' +
+      '<div class="learning-block-editor-head"><div><span class="learning-block-number">' + (i+1) + '</span><strong>Content Block ' + (i+1) + '</strong></div><div class="learning-block-editor-actions">' +
+      '<button class="btn btn-ghost btn-sm" type="button" data-learning-block-up="' + i + '" aria-label="Move block up">↑</button>' +
+      '<button class="btn btn-ghost btn-sm" type="button" data-learning-block-down="' + i + '" aria-label="Move block down">↓</button>' +
+      '<button class="btn btn-ghost btn-sm" type="button" data-learning-block-remove="' + i + '">Remove</button></div></div>' +
+      '<div class="form-grid"><div class="field full"><label>Heading <span class="support-optional">optional</span></label><input data-block-heading value="' + esc(b.heading || '') + '" placeholder="e.g. Radar display basics" /></div>' +
+      '<div class="field full"><label>Text</label><textarea data-block-content rows="6" placeholder="Write the details for this section…">' + esc(b.content || '') + '</textarea></div>' +
+      '<div class="field full"><label>Image <span class="support-optional">optional</span></label><div class="learning-block-image-row"><button class="btn btn-ghost btn-sm" type="button" data-learning-block-image="' + i + '">Upload image</button><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" class="learning-image-file" data-learning-block-file="' + i + '" /><span class="learning-block-image-name" data-learning-block-image-name="' + i + '">' + esc(b.image_url ? 'Image attached' : 'No image selected') + '</span></div><input type="hidden" data-block-image-url value="' + esc(b.image_url || '') + '" /><input data-block-image-alt value="' + esc(b.image_alt || '') + '" placeholder="Image description / caption" /></div></div>' +
+      '</article>';
+  }
   function adminLearningView() {
     var topics = (db.learningTopics || []).slice().sort(function(a,b){ return Number(a.module_order||0)-Number(b.module_order||0); });
     var editing = learningTopic(learningAdminState.editId);
     var quizTopic = learningTopic(learningAdminState.quizTopicId);
     var lesson = editing ? learningLesson(editing.id) || {} : {};
     var quiz = quizTopic ? learningQuiz(quizTopic.id) : null;
+    var blocks = learningAdminInitialBlocks(editing);
     return '<div class="page learning-page"><div class="page-head learning-hero"><div><p class="eyebrow">Administration</p><h1>Learning Management</h1><p class="learning-hero-copy">Create, organize, publish and maintain the intern training pathway without editing application code.</p></div><div class="learning-admin-summary"><strong>' + topics.filter(function(t){return t.published&&!t.archived;}).length + '</strong><span>Published modules</span></div></div>' +
       '<div class="learning-admin-layout"><section class="section"><div class="section-head"><div><p class="eyebrow">Course builder</p><h2>' + (editing ? 'Edit topic' : 'Create topic') + '</h2></div>' + (editing ? '<button class="btn btn-ghost btn-sm" id="learningCancelEdit" type="button">New topic</button>' : '') + '</div>' +
       '<form id="learningTopicForm" class="learning-admin-form"><input type="hidden" name="id" value="' + esc(editing ? editing.id : '') + '" /><input type="hidden" name="employment_type" value="Intern" />' +
       '<div class="form-grid"><div class="field"><label>Topic title</label><input name="title" required value="' + esc(editing ? editing.title : '') + '" placeholder="e.g. Radar" /></div>' +
       '<div class="field"><label>Category</label><select name="category"><option' + (!editing||editing.category==='Marine Navigation'?' selected':'') + '>Marine Navigation</option><option' + (editing&&editing.category==='Marine Communication'?' selected':'') + '>Marine Communication</option><option' + (editing&&editing.category==='Marine Electronic Equipment'?' selected':'') + '>Marine Electronic Equipment</option></select></div>' +
       '<div class="field"><label>Module order</label><input name="module_order" type="number" min="1" required value="' + esc(editing ? editing.module_order : (topics.length+1)) + '" /></div>' +
-      '<div class="field"><label>Cover / lesson image URL <span class="support-optional">optional</span></label><input name="image_url" type="url" value="' + esc(lesson.image_url || '') + '" placeholder="https://…" /><input id="learningCoverImageFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif" class="learning-image-file" /><small class="learning-upload-note">Upload an optional cover image. You can also insert images directly into lesson content below.</small></div>' +
+      '<div class="field"><label>Cover / lesson image URL <span class="support-optional">optional</span></label><input name="image_url" type="url" value="' + esc(lesson.image_url || '') + '" placeholder="https://…" /><input id="learningCoverImageFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif" class="learning-image-file" /></div>' +
       '<div class="field full"><label>Short description</label><textarea name="description" rows="3" placeholder="What will the intern learn?">' + esc(editing ? editing.description : '') + '</textarea></div>' +
       '<div class="field full"><label>Lesson introduction</label><textarea name="introduction" rows="3" placeholder="A concise introduction to the topic…">' + esc(lesson.introduction || '') + '</textarea></div>' +
-      '<div class="field full"><label>Lesson content</label><div class="learning-editor-toolbar"><label class="btn btn-ghost btn-sm learning-image-upload-btn" for="learningContentImageFile">Insert image</label><input id="learningContentImageFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif" class="learning-image-file" /><span class="learning-upload-status" id="learningImageUploadStatus">Images are inserted at the cursor.</span></div><textarea id="learningContentEditor" name="content" rows="14" placeholder="Use blank lines to separate sections. The first line of each multi-line block becomes its heading. Add an image with Insert image.">' + esc(lesson.content || '') + '</textarea></div>' +
-      '<div class="field"><label>Image alt/caption <span class="support-optional">optional</span></label><input name="image_alt" value="' + esc(lesson.image_alt || '') + '" placeholder="Describe the diagram" /></div>' +
+      '<div class="field full"><label>Lesson Content</label>' + learningBlockEditorHtml(blocks) + '</div>' +
       '<div class="field"><label>Publishing</label><label class="learning-switch"><input type="checkbox" name="published" ' + (editing ? (editing.published?'checked':'') : '') + ' /><span>Publish this topic to interns</span></label></div></div>' +
-      '<div class="learning-admin-actions"><button class="btn btn-primary" type="submit">' + (editing?'Save changes':'Create topic') + '</button>' + (editing ? '<button class="btn btn-ghost" type="button" id="learningArchiveBtn">' + (editing.archived?'Restore topic':'Archive topic') + '</button><button class="btn btn-ghost" type="button" id="learningDeleteBtn">Delete topic</button>' : '') + '</div></form></section>' +
-      '<section class="section"><div class="section-head"><div><p class="eyebrow">Curriculum</p><h2>Modules</h2></div><span>' + topics.length + ' total</span></div><div class="learning-admin-list">' + (topics.length ? topics.map(function(t,i){ var q=learningQuiz(t.id); return '<div class="learning-admin-row ' + (t.archived?'is-archived':'') + '"><div class="learning-admin-row-number">' + Number(t.module_order||i+1) + '</div><div class="learning-admin-row-main"><strong>' + esc(t.title) + '</strong><span>' + esc(t.category) + ' · ' + (t.published?'Published':'Draft') + (t.archived?' · Archived':'') + '</span></div><div class="learning-admin-row-actions"><button class="btn btn-ghost btn-sm" type="button" data-learning-admin-edit="' + esc(t.id) + '">Edit</button><button class="btn btn-dark btn-sm" type="button" data-learning-admin-quiz="' + esc(t.id) + '">' + (q ? 'Manage Quiz' : 'Add Quiz') + (q?' · '+((db.learningQuestions||[]).filter(function(x){return String(x.quiz_id)===String(q.id)}).length || 'manage'):'') + '</button></div></div>'; }).join('') : '<div class="learning-empty"><h2>No modules yet</h2><p>Create the first training topic using the course builder.</p></div>') + '</div></section></div>' +
+      '<div class="learning-admin-actions"><button class="btn btn-primary" type="submit">' + (editing?'Save changes':'Create topic') + '</button>' + (editing ? '<button class="btn btn-dark" type="button" id="learningTopicQuizShortcut">Quiz</button><button class="btn btn-ghost" type="button" id="learningArchiveBtn">' + (editing.archived?'Restore topic':'Archive topic') + '</button><button class="btn btn-ghost" type="button" id="learningDeleteBtn">Delete topic</button>' : '') + '</div></form></section>' +
+      '<section class="section"><div class="section-head"><div><p class="eyebrow">Curriculum</p><h2>Modules</h2></div><span>' + topics.length + ' total</span></div><div class="learning-admin-list">' + (topics.length ? topics.map(function(t,i){ var q=learningQuiz(t.id); return '<div class="learning-admin-row ' + (t.archived?'is-archived':'') + '"><div class="learning-admin-row-number">' + Number(t.module_order||i+1) + '</div><div class="learning-admin-row-main"><strong>' + esc(t.title) + '</strong><span>' + esc(t.category) + ' · Intern · ' + (t.published?'Published':'Draft') + (t.archived?' · Archived':'') + '</span></div><div class="learning-admin-row-actions"><button class="btn btn-ghost btn-sm" type="button" data-learning-admin-edit="' + esc(t.id) + '">Edit</button><button class="btn btn-dark btn-sm" type="button" data-learning-admin-quiz="' + esc(t.id) + '">Quiz</button></div></div>'; }).join('') : '<div class="learning-empty"><h2>No modules yet</h2><p>Create the first training topic using the course builder.</p></div>') + '</div></section></div>' +
       (quizTopic ? adminLearningQuizEditor(quizTopic, quiz) : '') + '</div>';
   }
 
@@ -3888,63 +3927,45 @@
     mount.innerHTML = db.learningQuestions.length ? db.learningQuestions.map(function(q,i){ return '<div class="learning-admin-question"><div><span>Question ' + (i+1) + '</span><strong>' + esc(q.question_text) + '</strong><small>Correct: ' + String.fromCharCode(65+Number(q.correct_option||0)) + '</small></div><div><button class="btn btn-ghost btn-sm" type="button" data-learning-question-edit="' + esc(q.id) + '">Edit</button><button class="btn btn-ghost btn-sm" type="button" data-learning-question-delete="' + esc(q.id) + '">Delete</button></div></div>'; }).join('') : '<p class="learning-quiz-empty">No questions yet. Add the first question below.</p>';
   }
 
+  function collectLearningBlocks() {
+    return Array.prototype.map.call(document.querySelectorAll('[data-learning-block]'), function(row, i){
+      return {
+        id: row.getAttribute('data-block-id') || '',
+        block_order: i + 1,
+        heading: (row.querySelector('[data-block-heading]') || {}).value || '',
+        content: (row.querySelector('[data-block-content]') || {}).value || '',
+        image_url: (row.querySelector('[data-block-image-url]') || {}).value || '',
+        image_alt: (row.querySelector('[data-block-image-alt]') || {}).value || ''
+      };
+    }).filter(function(b){ return b.heading.trim() || b.content.trim() || b.image_url.trim(); });
+  }
+  async function saveLearningBlocks(topicId, blocks) {
+    var existing = learningLessonBlocks(topicId);
+    var keepIds = blocks.map(function(b){ return b.id; }).filter(Boolean);
+    var removeIds = existing.filter(function(b){ return keepIds.indexOf(String(b.id)) === -1; }).map(function(b){ return b.id; });
+    if (removeIds.length) { var del = await supabaseClient.from('learning_lesson_blocks').delete().in('id', removeIds); if (del.error) throw del.error; }
+    if (!blocks.length) return;
+    var rows = blocks.map(function(b){ return { id: b.id || undefined, topic_id: topicId, block_order: b.block_order, heading: b.heading.trim() || null, content: b.content.trim() || null, image_url: b.image_url.trim() || null, image_alt: b.image_alt.trim() || null }; });
+    var up = await supabaseClient.from('learning_lesson_blocks').upsert(rows, { onConflict:'id' });
+    if (up.error) throw up.error;
+  }
   async function saveLearningTopic(form) {
-    var v = readForm(form, { title:req("Topic title"), category:req("Category"), module_order:req("Module order") });
-    if (!v) { toast("Please correct the highlighted fields.", "error"); return; }
-
-    var id = (form.querySelector('[name="id"]') || {}).value || "";
-    id = String(id).trim();
+    var v = readForm(form, { title:req('Topic title'), category:req('Category'), module_order:req('Module order') });
+    if (!v) { toast('Please correct the highlighted fields.', 'error'); return; }
+    var id = String(((form.querySelector('[name="id"]') || {}).value || '')).trim();
     var editingTopic = id ? learningTopic(id) : null;
     var publishedInput = form.querySelector('[name="published"]');
-    var payload = {
-      title: v.title,
-      category: v.category,
-      description: ((form.querySelector('[name="description"]') || {}).value || "").trim(),
-      module_order: Number(v.module_order),
-      published: !!(publishedInput && publishedInput.checked),
-      archived: editingTopic ? !!editingTopic.archived : false
-    };
-
+    var payload = { title:v.title, category:v.category, description:((form.querySelector('[name="description"]') || {}).value || '').trim(), module_order:Number(v.module_order), published:!!(publishedInput && publishedInput.checked), archived:editingTopic ? !!editingTopic.archived : false, employment_type:'Intern' };
     try {
-      var topicRes = id
-        ? await supabaseClient.from("learning_topics").update(payload).eq("id", id).select("*").single()
-        : await supabaseClient.from("learning_topics").insert(Object.assign(payload, { created_by: authUser ? authUser.id : null })).select("*").single();
-
-      if (topicRes.error) {
-        console.error("Learning topic database error:", topicRes.error);
-        toast("Topic could not be saved: " + topicRes.error.message, "error");
-        return;
-      }
-
-      var topic = topicRes.data;
-      if (!topic || !topic.id) {
-        toast("The topic was saved but no database record was returned.", "error");
-        return;
-      }
-
-      var lessonPayload = {
-        topic_id: topic.id,
-        introduction: ((form.querySelector('[name="introduction"]') || {}).value || "").trim(),
-        content: ((form.querySelector('[name="content"]') || {}).value || "").trim(),
-        image_url: (((form.querySelector('[name="image_url"]') || {}).value || "").trim() || null),
-        image_alt: (((form.querySelector('[name="image_alt"]') || {}).value || "").trim() || null)
-      };
-
-      var lessonRes = await supabaseClient.from("learning_lessons").upsert(lessonPayload, { onConflict: "topic_id" });
-      if (lessonRes.error) {
-        console.error("Learning lesson database error:", lessonRes.error);
-        toast("Topic was created, but its lesson could not be saved: " + lessonRes.error.message, "error");
-        return;
-      }
-
-      learningAdminState.editId = topic.id;
-      await refreshData();
-      render();
-      toast(id ? "Learning topic updated." : "Learning topic created.");
-    } catch (err) {
-      console.error("Learning topic save failed:", err);
-      toast((err && err.message) || "Learning topic could not be saved.", "error");
-    }
+      var topicRes = id ? await supabaseClient.from('learning_topics').update(payload).eq('id',id).select('*').single() : await supabaseClient.from('learning_topics').insert(Object.assign(payload,{created_by:authUser ? authUser.id : null})).select('*').single();
+      if (topicRes.error) { console.error('Learning topic database error:',topicRes.error); toast('Topic could not be saved: '+topicRes.error.message,'error'); return; }
+      var topic=topicRes.data; if(!topic||!topic.id){toast('The topic was saved but no database record was returned.','error');return;}
+      var lessonPayload={topic_id:topic.id,introduction:((form.querySelector('[name="introduction"]')||{}).value||'').trim(),content:editingTopic && !learningLessonBlocks(topic.id).length ? ((form.querySelector('[name="content"]')||{}).value||'').trim() : ((learningLesson(topic.id)||{}).content||''),image_url:(((form.querySelector('[name="image_url"]')||{}).value||'').trim()||null),image_alt:(((form.querySelector('[name="image_alt"]')||{}).value||'').trim()||null)};
+      var lessonRes=await supabaseClient.from('learning_lessons').upsert(lessonPayload,{onConflict:'topic_id'});
+      if(lessonRes.error){console.error('Learning lesson database error:',lessonRes.error);toast('Topic was saved, but its lesson could not be saved: '+lessonRes.error.message,'error');return;}
+      try { await saveLearningBlocks(topic.id,collectLearningBlocks()); } catch(blockErr) { console.error('Learning blocks database error:',blockErr); toast('Topic was saved, but lesson content blocks could not be saved: '+(blockErr.message||blockErr),'error'); return; }
+      learningAdminState.editId=topic.id; await refreshData(); render(); toast(id?'Learning topic updated.':'Learning topic created.');
+    } catch(err){console.error('Learning topic save failed:',err);toast((err&&err.message)||'Learning topic could not be saved.','error');}
   }
 
   async function saveLearningQuiz(form) {
@@ -4033,12 +4054,25 @@
     });
   }
 
+  function bindLearningBlocks() {
+    var editor=el('learningBlocksEditor'); if(!editor) return;
+    var add=el('learningAddBlock');
+    function rerender(blocks){ editor.innerHTML=blocks.length?blocks.map(function(b,i){return learningBlockRowHtml(b,i);}).join(''):'<div class="learning-blocks-empty" id="learningBlocksEmpty">No content blocks yet. Use the + button below to add one.</div>'; bindLearningBlocks(); }
+    if(add) add.addEventListener('click',function(){ var blocks=collectLearningBlocks(); blocks.push({id:'',block_order:blocks.length+1,heading:'',content:'',image_url:'',image_alt:''}); rerender(blocks); var rows=document.querySelectorAll('[data-learning-block]'); if(rows.length) rows[rows.length-1].scrollIntoView({behavior:'smooth',block:'center'}); });
+    Array.prototype.forEach.call(editor.querySelectorAll('[data-learning-block-remove]'),function(btn){btn.addEventListener('click',function(){var blocks=collectLearningBlocks();var i=Number(btn.getAttribute('data-learning-block-remove'));blocks.splice(i,1);rerender(blocks);});});
+    Array.prototype.forEach.call(editor.querySelectorAll('[data-learning-block-up]'),function(btn){btn.addEventListener('click',function(){var blocks=collectLearningBlocks(),i=Number(btn.getAttribute('data-learning-block-up'));if(i<=0)return;var x=blocks.splice(i,1)[0];blocks.splice(i-1,0,x);rerender(blocks);});});
+    Array.prototype.forEach.call(editor.querySelectorAll('[data-learning-block-down]'),function(btn){btn.addEventListener('click',function(){var blocks=collectLearningBlocks(),i=Number(btn.getAttribute('data-learning-block-down'));if(i>=blocks.length-1)return;var x=blocks.splice(i,1)[0];blocks.splice(i+1,0,x);rerender(blocks);});});
+    Array.prototype.forEach.call(editor.querySelectorAll('[data-learning-block-image]'),function(btn){btn.addEventListener('click',function(){var i=Number(btn.getAttribute('data-learning-block-image')),file=editor.querySelector('[data-learning-block-file="'+i+'"]');if(file)file.click();});});
+    Array.prototype.forEach.call(editor.querySelectorAll('[data-learning-block-file]'),function(file){file.addEventListener('change',async function(){var f=file.files&&file.files[0],i=Number(file.getAttribute('data-learning-block-file'));if(!f)return;try{var form=el('learningTopicForm'),topicId=((form.querySelector('[name="id"]')||{}).value||learningAdminState.editId||'draft-'+Date.now()),url=await uploadLearningImage(f,topicId),hidden=editor.querySelector('[data-block-index="'+i+'"] [data-block-image-url]'),name=editor.querySelector('[data-learning-block-image-name="'+i+'"]');if(hidden)hidden.value=url;if(name)name.textContent='Image attached';}catch(e){toast(e.message||'Image upload failed.','error');}file.value='';});});
+  }
+
   function bindAdminLearning() {
     Array.prototype.forEach.call(document.querySelectorAll("[data-learning-admin-edit]"),function(b){b.addEventListener("click",function(){learningAdminState.editId=b.getAttribute("data-learning-admin-edit");learningAdminState.quizTopicId="";render();});});
     Array.prototype.forEach.call(document.querySelectorAll("[data-learning-admin-quiz]"),function(b){b.addEventListener("click",async function(){var topicId=b.getAttribute("data-learning-admin-quiz");if(!learningTopic(topicId))return;learningAdminState.quizTopicId=topicId;learningAdminState.editId="";render();var q=learningQuiz(topicId);if(q)await loadAdminLearningQuestions(q.id);var quizSection=document.querySelector(".learning-admin-quiz");if(quizSection)quizSection.scrollIntoView({behavior:"smooth",block:"start"});});});
     var cancel=el("learningCancelEdit");if(cancel)cancel.addEventListener("click",function(){learningAdminState.editId="";render();});
     var close=el("learningCloseQuiz");if(close)close.addEventListener("click",function(){learningAdminState.quizTopicId="";render();});
-    var tf=el("learningTopicForm");if(tf){tf.addEventListener("submit",function(e){e.preventDefault();saveLearningTopic(tf);});bindLearningImageUploads();}
+    var tf=el("learningTopicForm");if(tf){tf.addEventListener("submit",function(e){e.preventDefault();saveLearningTopic(tf);});bindLearningImageUploads();bindLearningBlocks();}
+    var quizShortcut=el('learningTopicQuizShortcut');if(quizShortcut)quizShortcut.addEventListener('click',function(){var topicId=learningAdminState.editId;if(topicId){learningAdminState.quizTopicId=topicId;render();window.setTimeout(function(){var q=document.querySelector('.learning-admin-quiz');if(q)q.scrollIntoView({behavior:'smooth',block:'start'});},80);}});
     var qf=el("learningQuizSettingsForm");if(qf){qf.addEventListener("submit",function(e){e.preventDefault();saveLearningQuiz(qf);});var q=learningQuiz(learningAdminState.quizTopicId);if(q)loadAdminLearningQuestions(q.id);}
     var questionForm=el("learningQuestionForm");if(questionForm)questionForm.addEventListener("submit",function(e){e.preventDefault();submitLearningQuestionForm(questionForm);});
     Array.prototype.forEach.call(document.querySelectorAll("[data-learning-question-edit]"),function(b){b.addEventListener("click",function(){editLearningQuestion(b.getAttribute("data-learning-question-edit"));});});
