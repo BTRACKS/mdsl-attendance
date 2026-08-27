@@ -847,7 +847,7 @@
       '<section class="section"><div class="section-head"><h2>Recent Records</h2><span><a class="link-muted" href="#/history">View full history</a></span></div>' +
       historyTable(u, 5) + "</section>" +
 
-      '<section class="section dashboard-learning-card"><div class="dashboard-learning-content"><div class="dashboard-learning-icon" aria-hidden="true">' + ICON.cap + '</div><div class="dashboard-learning-copy"><p class="eyebrow">Learn</p><h2>Continue your learning</h2><p>Explore lessons, build your technical knowledge, and complete quizzes.</p></div><a class="btn btn-primary" href="learn/learn.html">Go to Learning <span aria-hidden="true">→</span></a></div></section>' +
+      '<section class="section dashboard-learning-card"><div class="dashboard-learning-content"><div class="dashboard-learning-icon" aria-hidden="true">' + ICON.cap + '</div><div class="dashboard-learning-copy"><p class="eyebrow">Learn</p><h2>' + (normalizeRole(u.role) === "admin" ? 'Learning Management' : 'Continue your learning') + '</h2><p>' + (normalizeRole(u.role) === "admin" ? 'Manage technical and operations learning content.' : 'Explore lessons, build your technical knowledge, and complete quizzes.') + '</p></div><a class="btn ' + (normalizeRole(u.role) === "admin" ? 'btn-ghost' : 'btn-primary') + '" href="learn/learn.html">' + (normalizeRole(u.role) === "admin" ? 'Manage Learning' : 'Go to Learning') + ' <span aria-hidden="true">→</span></a></div></section>' +
 
       "</div>" + profilePanel(u) + "</div></div>";
   }
