@@ -1895,6 +1895,8 @@ body.maintenance-page{background:var(--gradient-hero);min-height:100vh}
 }
 
 
+/* HSE Session Settings — allow the speaker menu to extend beyond its panel only */
+aside .panel:has(#hseSettingsForm){overflow:visible}
 /* HSE Session Settings — speaker picker profile pictures only */
 .hse-speaker-picker{position:relative;width:100%}
 .hse-speaker-trigger{width:100%;min-height:44px;display:flex;align-items:center;gap:10px;padding:7px 12px;border:1px solid var(--rule);border-radius:10px;background:var(--paper);color:var(--ink);font:inherit;text-align:left;cursor:pointer}
