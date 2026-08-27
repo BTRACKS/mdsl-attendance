@@ -1677,7 +1677,7 @@
       (!dayState.open ? '<p class="dateline">' + esc(dayState.kind === 'weekend' ? 'Weekend — attendance is not required today, so no staff are marked missing.' : 'Public holiday (' + dayState.reason + ') — attendance is not required today, so no staff are marked missing.') + '</p>' :
         (missing.length ? staffList(missing) : '<p class="dateline">All staff have submitted attendance.</p>')) +
       '</div></div></aside></div>' +
-      '<section class="section dashboard-learning-card"><div class="dashboard-learning-content"><div class="dashboard-learning-icon" aria-hidden="true">' + ICON.cap + '</div><div class="dashboard-learning-copy"><p class="eyebrow">Learn</p><h2>Learning Management</h2><p>Manage technical and operations learning content.</p></div><a class="btn btn-ghost btn-sm dashboard-learning-admin-btn" href="learn/learn.html">Manage Learning <span aria-hidden="true">→</span></a></div></section>' +
+      '<section class="section dashboard-learning-card"><div class="dashboard-learning-content"><div class="dashboard-learning-icon" aria-hidden="true">' + ICON.cap + '</div><div class="dashboard-learning-copy"><p class="eyebrow">Learn</p><h2>Learning Management</h2><p>Manage technical and operations learning content.</p></div><a class="btn btn-ghost" href="learn/learn.html">Manage Learning <span aria-hidden="true">→</span></a></div></section>' +
       '</div>';
   }
 
