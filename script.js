@@ -688,13 +688,18 @@
     var values = {}, ok = true;
     Object.keys(rules).forEach(function (name) {
       var input = form.querySelector('[name="' + name + '"]');
+      if (!input) {
+        console.error("Form field not found:", name);
+        ok = false;
+        return;
+      }
       var wrap = input.closest(".field");
-      var errBox = wrap.querySelector(".error");
+      var errBox = wrap ? wrap.querySelector(".error") : null;
       var v = (input.value || "").trim();
       values[name] = v;
       var msg = rules[name](v, values);
-      errBox.textContent = msg || "";
-      wrap.classList.toggle("invalid", !!msg);
+      if (errBox) errBox.textContent = msg || "";
+      if (wrap) wrap.classList.toggle("invalid", !!msg);
       if (msg) ok = false;
     });
     return ok ? values : null;
@@ -3878,32 +3883,61 @@
 
   async function saveLearningTopic(form) {
     var v = readForm(form, { title:req("Topic title"), category:req("Category"), module_order:req("Module order") });
-    if (!v) return;
+    if (!v) { toast("Please correct the highlighted fields.", "error"); return; }
+
+    var id = (form.querySelector('[name="id"]') || {}).value || "";
+    id = String(id).trim();
+    var editingTopic = id ? learningTopic(id) : null;
+    var publishedInput = form.querySelector('[name="published"]');
+    var payload = {
+      title: v.title,
+      category: v.category,
+      description: ((form.querySelector('[name="description"]') || {}).value || "").trim(),
+      module_order: Number(v.module_order),
+      published: !!(publishedInput && publishedInput.checked),
+      archived: editingTopic ? !!editingTopic.archived : false
+    };
+
     try {
-      var id = v.id || "";
-      var existingTopic = id ? learningTopic(id) : null;
-      if (!authUser) {
-        var sessionRes = await supabaseClient.auth.getSession();
-        authUser = sessionRes.data && sessionRes.data.session ? sessionRes.data.session.user : null;
-      }
-      if (!authUser) { toast("Your session has expired. Please sign in again.","error"); return; }
-      var order = Number(v.module_order);
-      if (!Number.isFinite(order) || order < 1) { toast("Module order must be a number greater than 0.","error"); return; }
-      var payload = { title:v.title, category:v.category, description:v.description||"", module_order:order, published:!!form.published.checked, archived:(existingTopic ? !!existingTopic.archived : false) };
       var topicRes = id
-        ? await supabaseClient.from("learning_topics").update(payload).eq("id",id).select("*").single()
-        : await supabaseClient.from("learning_topics").insert(Object.assign(payload,{created_by:authUser.id})).select("*").single();
-      if (topicRes.error) { console.error("learning_topics write:",topicRes.error); toast("Topic could not be saved: " + (topicRes.error.message || "Database error"),"error"); return; }
+        ? await supabaseClient.from("learning_topics").update(payload).eq("id", id).select("*").single()
+        : await supabaseClient.from("learning_topics").insert(Object.assign(payload, { created_by: authUser ? authUser.id : null })).select("*").single();
+
+      if (topicRes.error) {
+        console.error("Learning topic database error:", topicRes.error);
+        toast("Topic could not be saved: " + topicRes.error.message, "error");
+        return;
+      }
+
       var topic = topicRes.data;
-      if (!topic || !topic.id) { toast("The database did not return the saved topic.","error"); return; }
-      var lessonPayload = { topic_id:topic.id, introduction:form.introduction.value.trim(), content:form.content.value.trim(), image_url:form.image_url.value.trim()||null, image_alt:form.image_alt.value.trim()||null };
-      var lessonRes = await supabaseClient.from("learning_lessons").upsert(lessonPayload,{onConflict:"topic_id"});
-      if (lessonRes.error) { console.error("learning_lessons write:",lessonRes.error); toast("Topic saved, but lesson content could not be saved: " + (lessonRes.error.message || "Database error"),"error"); return; }
+      if (!topic || !topic.id) {
+        toast("The topic was saved but no database record was returned.", "error");
+        return;
+      }
+
+      var lessonPayload = {
+        topic_id: topic.id,
+        introduction: ((form.querySelector('[name="introduction"]') || {}).value || "").trim(),
+        content: ((form.querySelector('[name="content"]') || {}).value || "").trim(),
+        image_url: (((form.querySelector('[name="image_url"]') || {}).value || "").trim() || null),
+        image_alt: (((form.querySelector('[name="image_alt"]') || {}).value || "").trim() || null)
+      };
+
+      var lessonRes = await supabaseClient.from("learning_lessons").upsert(lessonPayload, { onConflict: "topic_id" });
+      if (lessonRes.error) {
+        console.error("Learning lesson database error:", lessonRes.error);
+        toast("Topic was created, but its lesson could not be saved: " + lessonRes.error.message, "error");
+        return;
+      }
+
+      learningAdminState.editId = topic.id;
       await refreshData();
-      var saved = (db.learningTopics || []).some(function(t){ return String(t.id) === String(topic.id); });
-      if (!saved) { toast("Topic was saved, but the current user cannot read it from learning_topics. Check the SELECT RLS policy.","error"); return; }
-      learningAdminState.editId=topic.id; render(); toast(id?"Learning topic updated.":"Learning topic created.");
-    } catch (err) { console.error("Learning topic save failed:",err); toast("Topic could not be saved: " + (err && err.message ? err.message : String(err)),"error"); }
+      render();
+      toast(id ? "Learning topic updated." : "Learning topic created.");
+    } catch (err) {
+      console.error("Learning topic save failed:", err);
+      toast((err && err.message) || "Learning topic could not be saved.", "error");
+    }
   }
 
   async function saveLearningQuiz(form) {
