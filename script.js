@@ -847,9 +847,7 @@
       '<section class="section"><div class="section-head"><h2>Recent Records</h2><span><a class="link-muted" href="#/history">View full history</a></span></div>' +
       historyTable(u, 5) + "</section>" +
 
-      (normalizeRole(u.role) === "admin"
-        ? '<section class="section dashboard-learning-card"><div class="dashboard-learning-content"><div class="dashboard-learning-icon" aria-hidden="true">' + ICON.cap + '</div><div class="dashboard-learning-copy"><p class="eyebrow">Learn</p><h2>Learning Management</h2><p>Manage technical and operations learning content.</p></div><a class="btn btn-ghost" href="learn/learn.html">Manage Learning <span aria-hidden="true">→</span></a></div></section>'
-        : '<section class="section dashboard-learning-card"><div class="dashboard-learning-content"><div class="dashboard-learning-icon" aria-hidden="true">' + ICON.cap + '</div><div class="dashboard-learning-copy"><p class="eyebrow">Learn</p><h2>Continue your learning</h2><p>Explore lessons, build your technical knowledge, and complete quizzes.</p></div><a class="btn btn-primary" href="learn/learn.html">Go to Learning <span aria-hidden="true">→</span></a></div></section>') +
+      '<section class="section dashboard-learning-card"><div class="dashboard-learning-content"><div class="dashboard-learning-icon" aria-hidden="true">' + ICON.cap + '</div><div class="dashboard-learning-copy"><p class="eyebrow">Learn</p><h2>Continue your learning</h2><p>Explore lessons, build your technical knowledge, and complete quizzes.</p></div><a class="btn btn-primary" href="learn/learn.html">Go to Learning <span aria-hidden="true">→</span></a></div></section>' +
 
       "</div>" + profilePanel(u) + "</div></div>";
   }
@@ -1679,7 +1677,7 @@
       (!dayState.open ? '<p class="dateline">' + esc(dayState.kind === 'weekend' ? 'Weekend — attendance is not required today, so no staff are marked missing.' : 'Public holiday (' + dayState.reason + ') — attendance is not required today, so no staff are marked missing.') + '</p>' :
         (missing.length ? staffList(missing) : '<p class="dateline">All staff have submitted attendance.</p>')) +
       '</div></div></aside></div>' +
-      '<section class="section dashboard-learning-card"><div class="dashboard-learning-content"><div class="dashboard-learning-icon" aria-hidden="true">' + ICON.cap + '</div><div class="dashboard-learning-copy"><p class="eyebrow">Learn</p><h2>Learning Management</h2><p>Manage technical and operations learning content.</p></div><a class="btn btn-ghost" href="learn/learn.html">Manage Learning <span aria-hidden="true">→</span></a></div></section>' +
+      '<section class="section dashboard-learning-card"><div class="dashboard-learning-content"><div class="dashboard-learning-icon" aria-hidden="true">' + ICON.cap + '</div><div class="dashboard-learning-copy"><p class="eyebrow">Learn</p><h2>Learning Management</h2><p>Manage technical and operations learning content.</p></div><a class="btn btn-primary" href="learn/learn.html">Go to Learning <span aria-hidden="true">→</span></a></div></section>' +
       '</div>';
   }
 
@@ -3726,7 +3724,11 @@
     return (db.learningLessons || []).find(function (l) { return String(l.topic_id) === String(topicId); }) || null;
   }
   function learningLessonBlocks(topicId) {
-    return (db.learningLessonBlocks || []).filter(function (b) { return String(b.topic_id) === String(topicId); }).sort(function(a,b){ return Number(a.block_order||0)-Number(b.block_order||0); });
+    var lesson = learningLesson(topicId);
+    if (!lesson || !lesson.id) return [];
+    return (db.learningLessonBlocks || []).filter(function (b) {
+      return String(b.lesson_id || '') === String(lesson.id);
+    }).sort(function(a,b){ return Number(a.block_order||0)-Number(b.block_order||0); });
   }
   function learningQuiz(topicId) {
     return (db.learningQuizzes || []).find(function (q) { return String(q.topic_id) === String(topicId) && q.published !== false; }) || null;
@@ -3955,13 +3957,27 @@
       };
     }).filter(function(b){ return b.heading.trim() || b.content.trim() || b.image_url.trim(); });
   }
-  async function saveLearningBlocks(topicId, blocks) {
+  async function saveLearningBlocks(topicId, lessonId, blocks) {
+    if (!lessonId) throw new Error('The lesson was saved but no lesson ID was returned. Lesson content blocks cannot be saved without a lesson ID.');
     var existing = learningLessonBlocks(topicId);
     var keepIds = blocks.map(function(b){ return b.id; }).filter(Boolean);
     var removeIds = existing.filter(function(b){ return keepIds.indexOf(String(b.id)) === -1; }).map(function(b){ return b.id; });
-    if (removeIds.length) { var del = await supabaseClient.from('learning_lesson_blocks').delete().in('id', removeIds); if (del.error) throw del.error; }
+    if (removeIds.length) {
+      var del = await supabaseClient.from('learning_lesson_blocks').delete().in('id', removeIds);
+      if (del.error) throw del.error;
+    }
     if (!blocks.length) return;
-    var rows = blocks.map(function(b){ return { topic_id: topicId, block_order: b.block_order, heading: b.heading.trim() || null, content: b.content.trim() || null, image_url: b.image_url.trim() || null, image_alt: b.image_alt.trim() || null, ...(b.id ? { id: b.id } : {}) }; });
+    var rows = blocks.map(function(b){
+      return {
+        lesson_id: lessonId,
+        block_order: b.block_order,
+        heading: b.heading.trim() || null,
+        content: b.content.trim() || null,
+        image_url: b.image_url.trim() || null,
+        image_alt: b.image_alt.trim() || null,
+        ...(b.id ? { id: b.id } : {})
+      };
+    });
     var up = await supabaseClient.from('learning_lesson_blocks').upsert(rows, { onConflict:'id' });
     if (up.error) throw up.error;
   }
@@ -3977,9 +3993,34 @@
       if (topicRes.error) { console.error('Learning topic database error:',topicRes.error); toast('Topic could not be saved: '+topicRes.error.message,'error'); return; }
       var topic=topicRes.data; if(!topic||!topic.id){toast('The topic was saved but no database record was returned.','error');return;}
       var lessonPayload={topic_id:topic.id,introduction:((form.querySelector('[name="introduction"]')||{}).value||'').trim(),content:editingTopic && !learningLessonBlocks(topic.id).length ? ((form.querySelector('[name="content"]')||{}).value||'').trim() : ((learningLesson(topic.id)||{}).content||''),image_url:(((form.querySelector('[name="image_url"]')||{}).value||'').trim()||null),image_alt:(((form.querySelector('[name="image_alt"]')||{}).value||'').trim()||null)};
-      var lessonRes=await supabaseClient.from('learning_lessons').upsert(lessonPayload,{onConflict:'topic_id'});
-      if(lessonRes.error){console.error('Learning lesson database error:',lessonRes.error);toast('Topic was saved, but its lesson could not be saved: '+lessonRes.error.message,'error');return;}
-      try { await saveLearningBlocks(topic.id,collectLearningBlocks()); } catch(blockErr) { console.error('Learning blocks database error:',blockErr); toast('Topic was saved, but lesson content blocks could not be saved: '+(blockErr.message||blockErr),'error'); return; }
+      var lessonRes=await supabaseClient.from('learning_lessons').upsert(lessonPayload,{onConflict:'topic_id'}).select('*').single();
+      if(lessonRes.error){
+        console.error('Learning lesson database error:',lessonRes.error);
+        if(!id){
+          try { await supabaseClient.from('learning_topics').delete().eq('id',topic.id); } catch(cleanupErr) { console.warn('Learning topic cleanup after lesson failure:',cleanupErr); }
+        }
+        toast('Topic was saved, but its lesson could not be saved: '+lessonRes.error.message,'error');
+        return;
+      }
+      var lesson=lessonRes.data;
+      if(!lesson || !lesson.id){
+        if(!id){
+          try { await supabaseClient.from('learning_topics').delete().eq('id',topic.id); } catch(cleanupErr) { console.warn('Learning topic cleanup after missing lesson ID:',cleanupErr); }
+        }
+        toast('Topic was saved, but no lesson ID was returned. The lesson content blocks were not saved.','error');
+        return;
+      }
+      try {
+        await saveLearningBlocks(topic.id, lesson.id, collectLearningBlocks());
+      } catch(blockErr) {
+        console.error('Learning blocks database error:',blockErr);
+        if(!id){
+          try { await supabaseClient.from('learning_lessons').delete().eq('id',lesson.id); } catch(cleanupLessonErr) { console.warn('Learning lesson cleanup after block failure:',cleanupLessonErr); }
+          try { await supabaseClient.from('learning_topics').delete().eq('id',topic.id); } catch(cleanupTopicErr) { console.warn('Learning topic cleanup after block failure:',cleanupTopicErr); }
+        }
+        toast('Lesson content blocks could not be saved: '+(blockErr.message||blockErr),'error');
+        return;
+      }
       learningAdminState.editId=topic.id; await refreshData(); render(); toast(id?'Learning topic updated.':'Learning topic created.');
     } catch(err){console.error('Learning topic save failed:',err);toast((err&&err.message)||'Learning topic could not be saved.','error');}
   }
