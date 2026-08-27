@@ -179,6 +179,28 @@
         if (!overviewRes.error && overviewRes.data) {
           db.overview = overviewRes.data;
           db.staffCount = Number(overviewRes.data.total_staff || 0);
+          // For Administration pages, replace the RLS-limited browser query
+          // with the same authoritative database-backed user/attendance data.
+          // The RPC is independently secured and returns the complete records
+          // for authorized Administration sessions only.
+          db.users = Array.isArray(overviewRes.data.users) ? overviewRes.data.users.map(mapProfile) : db.users;
+          db.attendance = Array.isArray(overviewRes.data.attendance) ? overviewRes.data.attendance.map(mapAttendance) : db.attendance;
+          db.leaves = Array.isArray(overviewRes.data.leaves) ? overviewRes.data.leaves.map(mapLeave) : db.leaves;
+
+          try {
+            var adminHseRes = await supabaseClient.rpc("admin_hse_data");
+            if (!adminHseRes.error && adminHseRes.data) {
+              if (Array.isArray(adminHseRes.data.users)) db.users = adminHseRes.data.users.map(mapProfile);
+              if (Array.isArray(adminHseRes.data.attendance)) db.attendance = adminHseRes.data.attendance.map(mapAttendance);
+              if (Array.isArray(adminHseRes.data.leaves)) db.leaves = adminHseRes.data.leaves.map(mapLeave);
+              if (Array.isArray(adminHseRes.data.hse)) db.hse = adminHseRes.data.hse.map(mapHse);
+              if (adminHseRes.data.hse_settings) db.hseSettings = adminHseRes.data.hse_settings;
+            } else if (adminHseRes.error) {
+              console.error("Admin attendance/HSE RPC:", adminHseRes.error);
+            }
+          } catch (adminHseErr) {
+            console.error("Admin attendance/HSE RPC:", adminHseErr);
+          }
         } else if (overviewRes.error) {
           console.error("Admin Overview RPC:", overviewRes.error);
           db.overviewError = overviewRes.error.message || "Unable to load the authoritative Overview data.";
@@ -1099,7 +1121,7 @@
   function pdfStaffList() {
     var q = String(filters.q || "").toLowerCase();
     return db.users.filter(function (u) {
-      if (!u || u.role === "admin") return false;
+      if (!u) return false;
       var name = profileDisplayName(u).toLowerCase();
       var legacy = String(u.fullName || "").toLowerCase();
       var staffId = String(u.staffId || "").toLowerCase();
@@ -1695,7 +1717,7 @@
 
   function adminManagement() {
     var key = filters.date || dateKey(new Date());
-    var staff = db.users.filter(function (u) { return u.role !== "admin"; }).filter(function (u) {
+    var staff = db.users.filter(function (u) { return !!u; }).filter(function (u) {
       var q = filters.q.toLowerCase();
       var match = !q || u.fullName.toLowerCase().indexOf(q) > -1 || u.staffId.toLowerCase().indexOf(q) > -1 || u.email.toLowerCase().indexOf(q) > -1;
       return match && (!filters.dept || u.department === filters.dept) && (!filters.type || u.employmentType === filters.type);
@@ -1951,7 +1973,7 @@
   function hseAdminView() {
     var key = hseAdmin.date || currentHseDate();
     var s = hseSettings();
-    var staff = db.users.filter(function (u) { return u.role !== "admin"; });
+    var staff = db.users.filter(function (u) { return !!u; });
     var recs = hseRecordsFor(key);
     var presentIds = {};
     recs.forEach(function (r) { presentIds[r.userId] = true; });
