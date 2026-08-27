@@ -1,2 +1,7 @@
-/* Dedicated Learn entry point. Keep the shared application stylesheet as the single source of visual truth. */
-@import url("../style.css");
+/* Temporary visible Learn landing screen. Existing Learning Management implementation remains untouched in script.js. */
+.learn-coming-soon{min-height:100vh;width:100%;display:grid;place-items:center;box-sizing:border-box;padding:48px 24px;overflow-x:hidden}
+.learn-coming-soon-card{width:min(100%,620px);max-width:100%;box-sizing:border-box;text-align:center;padding:56px 48px;border:1px solid rgba(18,58,107,.12);border-radius:20px;background:#fff;box-shadow:0 12px 40px rgba(18,58,107,.08)}
+.learn-coming-soon-icon{width:56px;height:56px;margin:0 auto 24px;display:grid;place-items:center;border-radius:14px;background:rgba(18,58,107,.07);color:#123a6b}
+.learn-coming-soon-icon svg{width:28px;height:28px}.learn-coming-soon .eyebrow{margin:0 0 10px}.learn-coming-soon h1{margin:0}
+.learn-coming-soon-copy{max-width:470px;margin:16px auto 0;line-height:1.7}
+@media(max-width:640px){.learn-coming-soon{padding:24px 16px}.learn-coming-soon-card{padding:40px 20px;border-radius:16px}.learn-coming-soon-icon{margin-bottom:20px}.learn-coming-soon-copy{margin-top:12px;font-size:.95rem}}
