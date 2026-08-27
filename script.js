@@ -847,7 +847,9 @@
       '<section class="section"><div class="section-head"><h2>Recent Records</h2><span><a class="link-muted" href="#/history">View full history</a></span></div>' +
       historyTable(u, 5) + "</section>" +
 
-      '<section class="section dashboard-learning-card"><div class="dashboard-learning-content"><div class="dashboard-learning-icon" aria-hidden="true">' + ICON.cap + '</div><div class="dashboard-learning-copy"><p class="eyebrow">Learn</p><h2>Continue your learning</h2><p>Explore lessons, build your technical knowledge, and complete quizzes.</p></div><a class="btn btn-primary" href="learn/learn.html">Go to Learning <span aria-hidden="true">→</span></a></div></section>' +
+      (normalizeRole(u.role) === "admin"
+        ? '<section class="section dashboard-learning-card"><div class="dashboard-learning-content"><div class="dashboard-learning-icon" aria-hidden="true">' + ICON.cap + '</div><div class="dashboard-learning-copy"><p class="eyebrow">Learn</p><h2>Learning Management</h2><p>Manage technical and operations learning content.</p></div><a class="btn btn-ghost" href="learn/learn.html">Manage Learning <span aria-hidden="true">→</span></a></div></section>'
+        : '<section class="section dashboard-learning-card"><div class="dashboard-learning-content"><div class="dashboard-learning-icon" aria-hidden="true">' + ICON.cap + '</div><div class="dashboard-learning-copy"><p class="eyebrow">Learn</p><h2>Continue your learning</h2><p>Explore lessons, build your technical knowledge, and complete quizzes.</p></div><a class="btn btn-primary" href="learn/learn.html">Go to Learning <span aria-hidden="true">→</span></a></div></section>') +
 
       "</div>" + profilePanel(u) + "</div></div>";
   }
