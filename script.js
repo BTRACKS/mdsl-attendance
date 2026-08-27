@@ -2756,7 +2756,7 @@
   var messageState = {
     conversations: [], activeConversation: null, unlockedPrivateKey: null,
     ownPublicKey: null, pinSessionExpiresAt: 0, unread: 0, sound: localStorage.getItem("md_message_sound") !== "off",
-    realtime: null, initialized: false, loading: false, audioContext: null, audioUnlockBound: false, audioBuffer: null, audioLoadPromise: null, soundSeen: {}
+    realtime: null, initialized: false, loading: false, audioContext: null, audioUnlockBound: false, audioBuffer: null, audioLoadPromise: null, soundSeen: {}, messageLoadSeq: 0
   };
   var MESSAGE_ATTACHMENT_PREFIX = "MDMSG1:";
   var MESSAGE_ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024;
@@ -3005,11 +3005,11 @@
     if (parsed.text) html += '<div class="message-text">' + esc(parsed.text).replace(/\n/g,'<br>') + '</div>';
     if (parsed.attachments.length) {
       html += '<div class="message-attachments">' + parsed.attachments.map(function (a) {
-        var name = esc(a.name || "Attachment"), type = String(a.type || ""), size = formatAttachmentSize(a.size);
+        var name = esc(a.name || "Attachment"), type = String(a.type || ""), size = formatAttachmentSize(a.size), lowerName = String(a.name || "").toLowerCase();
         if (type.indexOf("image/") === 0) {
           return '<div class="message-attachment"><img class="message-attachment-image" src="' + esc(a.dataUrl) + '" alt="' + name + '" loading="lazy" /><div class="message-attachment-info"><a class="message-attachment-link" href="' + esc(a.dataUrl) + '" download="' + name + '">' + name + '</a><small>' + esc(size) + '</small></div></div>';
         }
-        return '<div class="message-attachment message-attachment-file"><span class="message-attachment-icon">PDF</span><div><strong>' + name + '</strong><small>' + esc(size) + '</small><a class="message-attachment-link" href="' + esc(a.dataUrl) + '" download="' + name + '">Download PDF</a></div></div>';
+        return '<div class="message-attachment message-attachment-file"><span class="message-attachment-icon">' + ((type === "application/pdf" || lowerName.endsWith(".pdf")) ? "PDF" : "DOC") + '</span><div><strong>' + name + '</strong><small>' + esc(size) + '</small><a class="message-attachment-link" href="' + esc(a.dataUrl) + '" download="' + name + '">Download file</a></div></div>';
       }).join('') + '</div>';
     }
     return html || '<span class="message-text">&nbsp;</span>';
@@ -3354,7 +3354,7 @@
     return '<div class="chat-header">' + messageAvatar(p, "avatar-sm") + '<div class="chat-identity"><h2>' + esc(p.fullName) + '</h2><span>End-to-end encrypted</span></div>' +
       '<button type="button" class="chat-back" id="chatBack">Back</button>' +
       '<div class="chat-menu-wrap"><button type="button" class="chat-menu-btn" id="chatMenuBtn" aria-haspopup="true" aria-expanded="false" aria-label="Conversation options">&#8942;</button>' +
-      '<div class="chat-menu" id="chatMenu" hidden><button type="button" class="chat-menu-item" id="clearChatBtn">Clear chat</button></div></div></div><div class="message-stream" id="messageStream"><div class="message-loading">Loading secure messages...</div></div><form class="message-composer" id="messageComposer"><div class="message-attachment-stage"><div class="message-attachment-previews" id="messageAttachmentPreviews" hidden></div><div class="message-compose-row"><label class="message-attach-btn" id="messageAttachmentLabel" for="messageAttachment" title="Attach PDF or image" aria-label="Attach PDF or image">' + ICON.paperclip + '<input id="messageAttachment" type="file" accept="application/pdf,image/*" multiple hidden /></label><textarea id="messageInput" rows="1" maxlength="4000" placeholder="Type a message..." autocomplete="off"></textarea><button class="btn btn-primary" type="submit">Send</button></div></div></form>';
+      '<div class="chat-menu" id="chatMenu" hidden><button type="button" class="chat-menu-item" id="clearChatBtn">Clear chat</button></div></div></div><div class="message-stream" id="messageStream"><div class="message-loading">Loading secure messages...</div></div><form class="message-composer" id="messageComposer"><div class="message-attachment-stage"><div class="message-attachment-previews" id="messageAttachmentPreviews" hidden></div><div class="message-compose-row"><label class="message-attach-btn" id="messageAttachmentLabel" for="messageAttachment" title="Attach PDF, Word file or image" aria-label="Attach PDF, Word file or image">' + ICON.paperclip + '<input id="messageAttachment" type="file" accept="application/pdf,image/*,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple hidden /></label><textarea id="messageInput" rows="1" maxlength="4000" placeholder="Type a message..." autocomplete="off"></textarea><button class="btn btn-primary" type="submit">Send</button></div></div></form>';
   }
   /* Clear Chat is a per-device, per-user "hide history before now" cutoff (kept in
      localStorage). It never deletes or touches rows in the database, so the other
@@ -3403,6 +3403,7 @@
   async function loadMessagesForConversation(conversationId, options) {
     var u = session();
     options = options || {};
+    var loadSeq = ++messageState.messageLoadSeq;
     var markRead = options.skipReadMark !== true;
     var renderRows = async function(rows, envelopes, shouldMarkRead, readMap) {
       var em = {}; (envelopes || []).forEach(function (x) { em[x.message_id] = x; });
@@ -3413,7 +3414,7 @@
         html += '<div class="message-row ' + (mine ? 'mine' : 'theirs') + '" data-message-id="' + esc(row.id) + '" data-created-at="' + esc(row.created_at) + '"><div class="message-bubble">' + messageContentHtml(text) + '<span class="message-meta">' + esc(messageTime(row.created_at)) + checks + '</span></div></div>';
         if (shouldMarkRead && !mine) await supabaseClient.rpc("mark_message_read", { p_message_id: row.id });
       }
-      var stream = el("messageStream"); if (stream) {
+      var stream = el("messageStream"); if (stream && loadSeq === messageState.messageLoadSeq && messageState.activeConversation === conversationId) {
         stream.innerHTML = html || '<div class="chat-empty chat-empty-small"><p>No messages yet. Say hello.</p></div>';
         stream.scrollTop = stream.scrollHeight;
       }
@@ -3464,7 +3465,7 @@
     var attachments = [];
     for (var i = 0; i < list.length; i++) {
       var file = list[i];
-      if (!(file.type === "application/pdf" || String(file.type || "").indexOf("image/") === 0)) throw new Error("Only PDF files and images can be attached.");
+      if (!(file.type === "application/pdf" || String(file.type || "").indexOf("image/") === 0 || file.type === "application/msword" || file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || /\.(doc|docx)$/i.test(file.name || ""))) throw new Error("Only PDF, Word files and images can be attached.");
       if (file.size > MESSAGE_ATTACHMENT_MAX_BYTES) throw new Error("Each attachment must be 5MB or smaller.");
       total += file.size;
       if (total > MESSAGE_ATTACHMENT_TOTAL_MAX_BYTES) throw new Error("Attachments must be 10MB or smaller in total.");
@@ -3505,7 +3506,7 @@
       sendMessage(convId, row.getAttribute("data-text") || "").then(async function () {
           markOptimisticMessageSent(tempId);
           await loadMessagesForConversation(convId);
-          await refreshConversationList();
+          await updateConversationListInPlace();
         }).catch(function () { markOptimisticMessageFailed(tempId); });
     }, { once: true });
   }
@@ -3571,6 +3572,15 @@
   function bindConversationList() {
     Array.prototype.forEach.call(document.querySelectorAll("[data-conversation]"),function(b){b.addEventListener("click",function(){messageState.activeConversation=b.getAttribute("data-conversation");writeMessageCache("active",null,{id:messageState.activeConversation});renderMessagesKeepState();loadMessagesForConversation(messageState.activeConversation);});});
   }
+  async function updateConversationListInPlace() {
+    try {
+      var fresh = await fetchConversationList();
+      messageState.conversations = fresh;
+      var list = el("conversationList");
+      if (list) { list.innerHTML = conversationListHtml(fresh); bindConversationList(); }
+      await refreshMessageUnread();
+    } catch (e) { console.warn("Conversation list refresh:", e); }
+  }
   async function refreshConversationList() {
     await loadMessagingData();
     var list = el("conversationList");
@@ -3604,7 +3614,7 @@
       preview.innerHTML=pendingAttachments.map(function(item,index){
         var file=item.file, isImage=String(file.type||"").indexOf("image/")===0;
         return '<div class="message-preview-item">' +
-          (isImage ? '<img class="message-preview-thumb" src="'+esc(item.url)+'" alt="'+esc(file.name)+'" />' : '<div class="message-preview-pdf"><span class="message-attachment-icon">PDF</span></div>') +
+          (isImage ? '<img class="message-preview-thumb" src="'+esc(item.url)+'" alt="'+esc(file.name)+'" />' : '<div class="message-preview-pdf"><span class="message-attachment-icon">'+((file.type === "application/pdf" || /\.pdf$/i.test(file.name || "")) ? "PDF" : "DOC")+'</span></div>') +
           '<div class="message-preview-info"><strong title="'+esc(file.name)+'">'+esc(file.name)+'</strong><small>'+esc(formatAttachmentSize(file.size))+'</small></div>' +
           '<button type="button" class="message-preview-remove" data-remove-attachment="'+index+'" aria-label="Remove '+esc(file.name)+'">&times;</button></div>';
       }).join('');
@@ -3622,7 +3632,7 @@
       if(total>MESSAGE_ATTACHMENT_TOTAL_MAX_BYTES){attachmentInput.value="";toast("Attachments must be 10MB or smaller in total.","error");return;}
       for(var i=0;i<files.length;i++){
         var file=files[i];
-        if(!(file.type === "application/pdf" || String(file.type||"").indexOf("image/")===0)){attachmentInput.value="";toast("Only PDF files and images can be attached.","error");return;}
+        if(!(file.type === "application/pdf" || String(file.type||"").indexOf("image/")===0 || file.type === "application/msword" || file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || /\.(doc|docx)$/i.test(file.name || ""))){attachmentInput.value="";toast("Only PDF, Word files and images can be attached.","error");return;}
         if(file.size>MESSAGE_ATTACHMENT_MAX_BYTES){attachmentInput.value="";toast("Each attachment must be 5MB or smaller.","error");return;}
       }
       files.forEach(function(file){pendingAttachments.push({file:file,url:URL.createObjectURL(file)});});
@@ -3700,7 +3710,10 @@
       messageState.ownPublicKey=k.publicKey||null;
       messageState.unlockedPrivateKey=null;
       messageState.pinSessionExpiresAt=0;
-      if (messageState.hasKey) await restoreMessagingPinSession(k.publicKey);
+      if (messageState.hasKey) {
+        await restoreMessagingPinSession(k.publicKey);
+        if (messageState.unlockedPrivateKey) await loadMessagingData();
+      }
       await startMessagingRealtime();
       refreshMessageUnread();
     } catch(e) { console.warn("Messaging init:",e); }
