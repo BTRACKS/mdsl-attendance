@@ -1854,3 +1854,42 @@ body.maintenance-page{background:var(--gradient-hero);min-height:100vh}
 .learning-page .learning-block-editor .field > label {
   margin-bottom:3px;
 }
+
+/* ---------- Mobile menu toggle polish: centered hamburger/X ---------- */
+@media (max-width:1180px){
+  .menu-toggle{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    position:relative;
+    padding:0;
+    box-sizing:border-box;
+    overflow:hidden;
+  }
+  .menu-toggle span{
+    position:absolute;
+    left:50%;
+    top:50%;
+    width:20px;
+    height:2px;
+    margin:0;
+    transform:translate(-50%,-50%);
+    transform-origin:center;
+    border-radius:999px;
+    transition:transform 220ms cubic-bezier(.4,0,.2,1),opacity 160ms ease;
+  }
+  .menu-toggle span:nth-child(1){top:calc(50% - 8px)}
+  .menu-toggle span:nth-child(2){top:50%}
+  .menu-toggle span:nth-child(3){top:calc(50% + 8px)}
+  .nav.open ~ .masthead-right .menu-toggle span:nth-child(1),
+  .nav.open ~ .masthead-right .menu-toggle span:nth-child(3){
+    top:50%;
+  }
+  .nav.open ~ .masthead-right .menu-toggle span:nth-child(1){
+    transform:translate(-50%,-50%) rotate(45deg);
+  }
+  .nav.open ~ .masthead-right .menu-toggle span:nth-child(2){opacity:0}
+  .nav.open ~ .masthead-right .menu-toggle span:nth-child(3){
+    transform:translate(-50%,-50%) rotate(-45deg);
+  }
+}
