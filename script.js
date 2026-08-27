@@ -159,12 +159,28 @@
       // Administration user on the server, then reads the current database.
       db.overview = null;
       db.overviewError = null;
-      if (authUser) {
+      // The Overview RPC requires an authenticated session. Normally authUser
+      // is already populated, but on a cold load refreshData() can run before
+      // refreshSessionUser(). Resolve the current session here without changing
+      // the existing role-resolution system.
+      var overviewSessionUser = authUser;
+      if (!overviewSessionUser) {
+        try {
+          var overviewSessionRes = await supabaseClient.auth.getSession();
+          overviewSessionUser = overviewSessionRes.data && overviewSessionRes.data.session
+            ? overviewSessionRes.data.session.user : null;
+          if (overviewSessionUser) authUser = overviewSessionUser;
+        } catch (sessionErr) {
+          console.warn("Overview session lookup:", sessionErr);
+        }
+      }
+      if (overviewSessionUser) {
         var overviewRes = await supabaseClient.rpc("admin_overview_data");
         if (!overviewRes.error && overviewRes.data) {
           db.overview = overviewRes.data;
           db.staffCount = Number(overviewRes.data.total_staff || 0);
         } else if (overviewRes.error) {
+          console.error("Admin Overview RPC:", overviewRes.error);
           db.overviewError = overviewRes.error.message || "Unable to load the authoritative Overview data.";
         }
       }
@@ -1576,7 +1592,7 @@
 
     return '<div class="page"><div class="page-head"><p class="eyebrow">Administration</p><h1>Attendance Overview</h1></div>' +
       '<div class="stats">' +
-      stat("Total Sign-Up Users", users.length, "", ICON.users) + stat("Staff Present", morning.filter(function (a) {
+      stat("Total Sign-Up Users", Number(db.overview.total_users || 0), "", ICON.users) + stat("Staff Present", morning.filter(function (a) {
         return staff.some(function (u) { return String(u.id) === String(a.userId); });
       }).length, "ok", ICON.check) +
       stat("Morning Submitted", morning.filter(function (a) { return staff.some(function (u) { return String(u.id) === String(a.userId); }); }).length, "ok", ICON.sunrise) +
