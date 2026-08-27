@@ -1745,3 +1745,15 @@ body.maintenance-page{background:var(--gradient-hero);min-height:100vh}
     box-sizing:border-box;
   }
 }
+
+/* Learning typography and image editor */
+.learning-page,.learning-page input,.learning-page select,.learning-page textarea,.learning-page button{font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
+.learning-page input::placeholder,.learning-page textarea::placeholder{font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
+.learning-richtext,.learning-richtext h3,.learning-richtext p,.learning-introduction,.learning-topic-hero,.learning-admin-form{font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
+.learning-figure img,.learning-inline-image img{display:block;width:100%;max-width:100%;height:auto;max-height:520px;object-fit:contain}
+.learning-inline-image{margin:18px 0;border:1px solid var(--rule);border-radius:14px;overflow:hidden;background:var(--paper-2)}
+.learning-inline-image figcaption{padding:8px 12px;font-size:10.5px;color:var(--ink-4);border-top:1px solid var(--rule)}
+.learning-topic-footer-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:wrap}
+.learning-editor-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+.learning-image-file{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.learning-upload-note,.learning-upload-status{font-size:10.5px;color:var(--ink-4)}

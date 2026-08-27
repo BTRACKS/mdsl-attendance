@@ -3746,10 +3746,16 @@
     return '<span class="tag tag-neutral">Not started</span>';
   }
   function learningTextHtml(text) {
+    /* Content is stored as plain text plus safe image tokens inserted by the
+       editor. We never inject arbitrary HTML from the database. */
     return String(text || "").trim().split(/\n\s*\n/).filter(Boolean).map(function(block){
-      var lines = block.split(/\n/).map(function(x){ return esc(x.trim()); }).filter(Boolean);
+      var lines = block.split(/\n/).map(function(x){ return x.trim(); }).filter(Boolean);
       if (!lines.length) return "";
-      return '<div class="learning-copy-block">' + lines.map(function(line, i){ return i === 0 && lines.length > 1 ? '<h3>' + line + '</h3>' : '<p>' + line + '</p>'; }).join("") + '</div>';
+      return '<div class="learning-copy-block">' + lines.map(function(line, i){
+        var image = line.match(/^\[\[LEARNING_IMAGE\|([^|]+)\|([^\]]*)\]\]$/);
+        if (image) return '<figure class="learning-inline-image"><img src="' + esc(image[1]) + '" alt="' + esc(image[2] || "Learning illustration") + '" loading="lazy" /><figcaption>' + esc(image[2] || "Learning illustration") + '</figcaption></figure>';
+        return i === 0 && lines.length > 1 ? '<h3>' + esc(line) + '</h3>' : '<p>' + esc(line) + '</p>';
+      }).join("") + '</div>';
     }).join("");
   }
   function learningCard(t, index) {
@@ -3763,7 +3769,8 @@
       '<p class="learning-topic-description">' + esc(t.description || "") + '</p>' +
       '<div class="learning-card-progress"><div><span>Progress</span><strong>' + pct + '%</strong></div><div class="learning-progress-track"><i style="width:' + pct + '%"></i></div></div>' +
       '<div class="learning-topic-footer">' + (quiz ? '<span class="learning-quiz-mini">' + ICON.check + ' Quiz included</span>' : '<span class="learning-quiz-mini">Lesson</span>') +
-      (unlocked ? '<button class="btn btn-dark btn-sm" type="button" data-learning-open="' + esc(t.id) + '">' + action + '</button>' : '<span class="learning-locked-note">' + ICON.lock + ' Complete previous module</span>') + '</div>' +
+      '<div class="learning-topic-footer-actions">' + (unlocked ? '<button class="btn btn-dark btn-sm" type="button" data-learning-open="' + esc(t.id) + '">' + action + '</button>' : '<span class="learning-locked-note">' + ICON.lock + ' Complete previous module</span>') +
+      (quiz && unlocked ? '<button class="btn btn-ghost btn-sm" type="button" data-learning-quiz-open="' + esc(t.id) + '">Quiz</button>' : '') + '</div></div>' +
       '</article>';
   }
   function learningView(u) {
@@ -3796,7 +3803,7 @@
       '<div class="learning-richtext">' + learningTextHtml(lesson.content || "Lesson content will be published here.") + '</div>' +
       (!p || !p.lesson_completed ? '<button class="btn btn-primary" type="button" id="learningLessonComplete">Mark lesson complete</button>' : '<div class="learning-complete-callout">' + ICON.check + '<div><strong>Lesson complete</strong><span>Continue to the quiz when you are ready.</span></div></div>') +
       '</section>' +
-      (quiz ? '<section class="section learning-quiz"><div class="section-head"><div><p class="eyebrow">Knowledge check</p><h2>' + esc(quiz.title || 'Topic Quiz') + '</h2></div><span>Pass mark ' + Number(quiz.passing_score || 70) + '%</span></div><div id="learningQuizMount"><div class="learning-quiz-loading">Loading quiz…</div></div></section>' : '<section class="section"><div class="learning-no-quiz"><h2>No quiz attached</h2><p>Complete the lesson to finish this module.</p></div></section>') +
+      (quiz ? '<section class="section learning-quiz" id="learningTopicQuiz"><div class="section-head"><div><p class="eyebrow">Knowledge check</p><h2>' + esc(quiz.title || 'Topic Quiz') + '</h2></div><span>Pass mark ' + Number(quiz.passing_score || 70) + '%</span></div><div id="learningQuizMount"><div class="learning-quiz-loading">Loading quiz…</div></div></section>' : '<section class="section"><div class="learning-no-quiz"><h2>No quiz attached</h2><p>Complete the lesson to finish this module.</p></div></section>') +
       '</main><aside class="learning-sidebar"><section class="section"><div class="section-head"><h2>Your pathway</h2></div><div class="learning-path-list">' + topics.map(function(x,i){ var xp=learningPercent(x.id), done=learningCompleted(x.id), unlock=learningUnlocked(x.id); return '<button type="button" class="learning-path-item ' + (String(x.id)===String(topicId)?'active ':'') + (unlock?'':'locked') + '" data-learning-open="' + esc(x.id) + '"><span class="learning-path-number">' + (i+1) + '</span><span><strong>' + esc(x.title) + '</strong><small>' + (done?'Complete':xp+'%') + '</small></span>' + (done?ICON.check:(unlock?'':' ')) + '</button>'; }).join("") + '</div></section></aside></div>' +
       '<div class="learning-next-row">' + (prev ? '<button class="btn btn-ghost" type="button" data-learning-open="' + esc(prev.id) + '">← Previous</button>' : '<span></span>') + (next && learningCompleted(topicId) ? '<button class="btn btn-dark" type="button" data-learning-open="' + esc(next.id) + '">Next module →</button>' : '<button class="btn btn-ghost" type="button" data-learning-back="1">Back to learning</button>') + '</div></div>';
   }
@@ -3850,18 +3857,18 @@
     var quiz = quizTopic ? learningQuiz(quizTopic.id) : null;
     return '<div class="page learning-page"><div class="page-head learning-hero"><div><p class="eyebrow">Administration</p><h1>Learning Management</h1><p class="learning-hero-copy">Create, organize, publish and maintain the intern training pathway without editing application code.</p></div><div class="learning-admin-summary"><strong>' + topics.filter(function(t){return t.published&&!t.archived;}).length + '</strong><span>Published modules</span></div></div>' +
       '<div class="learning-admin-layout"><section class="section"><div class="section-head"><div><p class="eyebrow">Course builder</p><h2>' + (editing ? 'Edit topic' : 'Create topic') + '</h2></div>' + (editing ? '<button class="btn btn-ghost btn-sm" id="learningCancelEdit" type="button">New topic</button>' : '') + '</div>' +
-      '<form id="learningTopicForm" class="learning-admin-form"><input type="hidden" name="id" value="' + esc(editing ? editing.id : '') + '" />' +
+      '<form id="learningTopicForm" class="learning-admin-form"><input type="hidden" name="id" value="' + esc(editing ? editing.id : '') + '" /><input type="hidden" name="employment_type" value="Intern" />
       '<div class="form-grid"><div class="field"><label>Topic title</label><input name="title" required value="' + esc(editing ? editing.title : '') + '" placeholder="e.g. Radar" /></div>' +
       '<div class="field"><label>Category</label><select name="category"><option' + (!editing||editing.category==='Marine Navigation'?' selected':'') + '>Marine Navigation</option><option' + (editing&&editing.category==='Marine Communication'?' selected':'') + '>Marine Communication</option><option' + (editing&&editing.category==='Marine Electronic Equipment'?' selected':'') + '>Marine Electronic Equipment</option></select></div>' +
       '<div class="field"><label>Module order</label><input name="module_order" type="number" min="1" required value="' + esc(editing ? editing.module_order : (topics.length+1)) + '" /></div>' +
-      '<div class="field"><label>Cover / lesson image URL <span class="support-optional">optional</span></label><input name="image_url" type="url" value="' + esc(lesson.image_url || '') + '" placeholder="https://…" /></div>' +
+      '<div class="field"><label>Cover / lesson image URL <span class="support-optional">optional</span></label><input name="image_url" type="url" value="' + esc(lesson.image_url || '') + '" placeholder="https://…" /><input id="learningCoverImageFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif" class="learning-image-file" /><small class="learning-upload-note">Upload an optional cover image. You can also insert images directly into lesson content below.</small></div>' +
       '<div class="field full"><label>Short description</label><textarea name="description" rows="3" placeholder="What will the intern learn?">' + esc(editing ? editing.description : '') + '</textarea></div>' +
       '<div class="field full"><label>Lesson introduction</label><textarea name="introduction" rows="3" placeholder="A concise introduction to the topic…">' + esc(lesson.introduction || '') + '</textarea></div>' +
-      '<div class="field full"><label>Lesson content</label><textarea name="content" rows="14" placeholder="Use blank lines to separate sections. The first line of each multi-line block becomes its heading.">' + esc(lesson.content || '') + '</textarea></div>' +
+      '<div class="field full"><label>Lesson content</label><div class="learning-editor-toolbar"><label class="btn btn-ghost btn-sm learning-image-upload-btn" for="learningContentImageFile">Insert image</label><input id="learningContentImageFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif" class="learning-image-file" /><span class="learning-upload-status" id="learningImageUploadStatus">Images are inserted at the cursor.</span></div><textarea id="learningContentEditor" name="content" rows="14" placeholder="Use blank lines to separate sections. The first line of each multi-line block becomes its heading. Add an image with Insert image.">' + esc(lesson.content || '') + '</textarea></div>' +
       '<div class="field"><label>Image alt/caption <span class="support-optional">optional</span></label><input name="image_alt" value="' + esc(lesson.image_alt || '') + '" placeholder="Describe the diagram" /></div>' +
       '<div class="field"><label>Publishing</label><label class="learning-switch"><input type="checkbox" name="published" ' + (editing ? (editing.published?'checked':'') : '') + ' /><span>Publish this topic to interns</span></label></div></div>' +
       '<div class="learning-admin-actions"><button class="btn btn-primary" type="submit">' + (editing?'Save changes':'Create topic') + '</button>' + (editing ? '<button class="btn btn-ghost" type="button" id="learningArchiveBtn">' + (editing.archived?'Restore topic':'Archive topic') + '</button><button class="btn btn-ghost" type="button" id="learningDeleteBtn">Delete topic</button>' : '') + '</div></form></section>' +
-      '<section class="section"><div class="section-head"><div><p class="eyebrow">Curriculum</p><h2>Modules</h2></div><span>' + topics.length + ' total</span></div><div class="learning-admin-list">' + (topics.length ? topics.map(function(t,i){ var q=learningQuiz(t.id); return '<div class="learning-admin-row ' + (t.archived?'is-archived':'') + '"><div class="learning-admin-row-number">' + Number(t.module_order||i+1) + '</div><div class="learning-admin-row-main"><strong>' + esc(t.title) + '</strong><span>' + esc(t.category) + ' · ' + (t.published?'Published':'Draft') + (t.archived?' · Archived':'') + '</span></div><div class="learning-admin-row-actions"><button class="btn btn-ghost btn-sm" type="button" data-learning-admin-edit="' + esc(t.id) + '">Edit</button><button class="btn btn-dark btn-sm" type="button" data-learning-admin-quiz="' + esc(t.id) + '">Quiz' + (q?' · '+((db.learningQuestions||[]).filter(function(x){return String(x.quiz_id)===String(q.id)}).length || 'manage'):'') + '</button></div></div>'; }).join('') : '<div class="learning-empty"><h2>No modules yet</h2><p>Create the first training topic using the course builder.</p></div>') + '</div></section></div>' +
+      '<section class="section"><div class="section-head"><div><p class="eyebrow">Curriculum</p><h2>Modules</h2></div><span>' + topics.length + ' total</span></div><div class="learning-admin-list">' + (topics.length ? topics.map(function(t,i){ var q=learningQuiz(t.id); return '<div class="learning-admin-row ' + (t.archived?'is-archived':'') + '"><div class="learning-admin-row-number">' + Number(t.module_order||i+1) + '</div><div class="learning-admin-row-main"><strong>' + esc(t.title) + '</strong><span>' + esc(t.category) + ' · ' + (t.published?'Published':'Draft') + (t.archived?' · Archived':'') + '</span></div><div class="learning-admin-row-actions"><button class="btn btn-ghost btn-sm" type="button" data-learning-admin-edit="' + esc(t.id) + '">Edit</button><button class="btn btn-dark btn-sm" type="button" data-learning-admin-quiz="' + esc(t.id) + '">' + (q ? 'Manage Quiz' : 'Add Quiz')' + (q?' · '+((db.learningQuestions||[]).filter(function(x){return String(x.quiz_id)===String(q.id)}).length || 'manage'):'') + '</button></div></div>'; }).join('') : '<div class="learning-empty"><h2>No modules yet</h2><p>Create the first training topic using the course builder.</p></div>') + '</div></section></div>' +
       (quizTopic ? adminLearningQuizEditor(quizTopic, quiz) : '') + '</div>';
   }
 
@@ -3974,17 +3981,64 @@
 
   function bindLearning() {
     Array.prototype.forEach.call(document.querySelectorAll("[data-learning-open]"),function(b){b.addEventListener("click",function(){location.hash="#/learning/topic/"+encodeURIComponent(b.getAttribute("data-learning-open"));render();});});
+    Array.prototype.forEach.call(document.querySelectorAll("[data-learning-quiz-open]"),function(b){b.addEventListener("click",function(){location.hash="#/learning/topic/"+encodeURIComponent(b.getAttribute("data-learning-quiz-open"))+"?quiz=1";render();});});
     Array.prototype.forEach.call(document.querySelectorAll("[data-learning-back]"),function(b){b.addEventListener("click",function(){location.hash="#/learning";render();});});
     var complete=el("learningLessonComplete"); if(complete) complete.addEventListener("click",function(){var m=location.hash.match(/^#\/learning\/topic\/([^?]+)/); if(m) markLearningLessonComplete(decodeURIComponent(m[1]));});
-    var m=location.hash.match(/^#\/learning\/topic\/([^?]+)/); if(m) loadLearningQuiz(decodeURIComponent(m[1]));
+    var m=location.hash.match(/^#\/learning\/topic\/([^?]+)/); if(m){loadLearningQuiz(decodeURIComponent(m[1]));if(/[?&]quiz=1/.test(location.hash))window.setTimeout(function(){var q=el("learningTopicQuiz");if(q)q.scrollIntoView({behavior:"smooth",block:"start"});},80);}
+  }
+
+  var LEARNING_IMAGE_BUCKET = "learning-images";
+  var LEARNING_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
+  var LEARNING_IMAGE_TYPES = ["image/jpeg","image/png","image/webp","image/gif"];
+
+  async function uploadLearningImage(file, topicId) {
+    if (!file) throw new Error("Choose an image first.");
+    if (LEARNING_IMAGE_TYPES.indexOf(file.type) === -1) throw new Error("Use JPG, PNG, WebP or GIF images.");
+    if (file.size > LEARNING_IMAGE_MAX_BYTES) throw new Error("Learning images must be 10MB or smaller.");
+    var safeName = String(file.name || "image").toLowerCase().replace(/[^a-z0-9._-]+/g,"-");
+    var path = String(topicId || "new") + "/" + Date.now() + "-" + safeName;
+    var upload = await supabaseClient.storage.from(LEARNING_IMAGE_BUCKET).upload(path,file,{upsert:false,contentType:file.type});
+    if (upload.error) throw upload.error;
+    var pub = supabaseClient.storage.from(LEARNING_IMAGE_BUCKET).getPublicUrl(path);
+    return pub.data.publicUrl;
+  }
+
+  function insertLearningImageToken(textarea,url,alt) {
+    var token = "[[LEARNING_IMAGE|" + url.replace(/\|/g,"%7C") + "|" + String(alt || "Learning illustration").replace(/\]/g,"%5D") + "]]";
+    var start = typeof textarea.selectionStart === "number" ? textarea.selectionStart : textarea.value.length;
+    var end = typeof textarea.selectionEnd === "number" ? textarea.selectionEnd : start;
+    var before = textarea.value.slice(0,start), after = textarea.value.slice(end);
+    var prefix = before && !/\n$/.test(before) ? "\n\n" : "";
+    var suffix = after && !/^\n/.test(after) ? "\n\n" : "";
+    textarea.value = before + prefix + token + suffix + after;
+    var pos = before.length + prefix.length + token.length;
+    textarea.focus(); textarea.setSelectionRange(pos,pos);
+    textarea.dispatchEvent(new Event("input",{bubbles:true}));
+  }
+
+  function bindLearningImageUploads() {
+    var form=el("learningTopicForm"), file=el("learningContentImageFile"), cover=el("learningCoverImageFile"), editor=el("learningContentEditor"), status=el("learningImageUploadStatus");
+    if(!form) return;
+    if(file && editor) file.addEventListener("change",async function(){
+      var f=file.files&&file.files[0]; if(!f)return;
+      try { if(status)status.textContent="Uploading image…"; var topicId=form.id.value||learningAdminState.editId||"new"; var url=await uploadLearningImage(f,topicId); var alt=window.prompt("Image description (optional)",f.name.replace(/\.[^.]+$/,""))||"Learning illustration"; insertLearningImageToken(editor,url,alt); if(status)status.textContent="Image inserted."; }
+      catch(e){ if(status)status.textContent="Upload failed."; toast(e.message||"Image upload failed.","error"); }
+      file.value="";
+    });
+    if(cover) cover.addEventListener("change",async function(){
+      var f=cover.files&&cover.files[0]; if(!f)return;
+      try { var topicId=form.id.value||learningAdminState.editId||"new"; var url=await uploadLearningImage(f,topicId); form.image_url.value=url; toast("Cover image uploaded."); }
+      catch(e){ toast(e.message||"Image upload failed.","error"); }
+      cover.value="";
+    });
   }
 
   function bindAdminLearning() {
     Array.prototype.forEach.call(document.querySelectorAll("[data-learning-admin-edit]"),function(b){b.addEventListener("click",function(){learningAdminState.editId=b.getAttribute("data-learning-admin-edit");learningAdminState.quizTopicId="";render();});});
-    Array.prototype.forEach.call(document.querySelectorAll("[data-learning-admin-quiz]"),function(b){b.addEventListener("click",async function(){learningAdminState.quizTopicId=b.getAttribute("data-learning-admin-quiz");learningAdminState.editId="";render();var q=learningQuiz(learningAdminState.quizTopicId);if(q)await loadAdminLearningQuestions(q.id);});});
+    Array.prototype.forEach.call(document.querySelectorAll("[data-learning-admin-quiz]"),function(b){b.addEventListener("click",async function(){var topicId=b.getAttribute("data-learning-admin-quiz");if(!learningTopic(topicId))return;learningAdminState.quizTopicId=topicId;learningAdminState.editId="";render();var q=learningQuiz(topicId);if(q)await loadAdminLearningQuestions(q.id);var quizSection=document.querySelector(".learning-admin-quiz");if(quizSection)quizSection.scrollIntoView({behavior:"smooth",block:"start"});});});
     var cancel=el("learningCancelEdit");if(cancel)cancel.addEventListener("click",function(){learningAdminState.editId="";render();});
     var close=el("learningCloseQuiz");if(close)close.addEventListener("click",function(){learningAdminState.quizTopicId="";render();});
-    var tf=el("learningTopicForm");if(tf)tf.addEventListener("submit",function(e){e.preventDefault();saveLearningTopic(tf);});
+    var tf=el("learningTopicForm");if(tf){tf.addEventListener("submit",function(e){e.preventDefault();saveLearningTopic(tf);});bindLearningImageUploads();}
     var qf=el("learningQuizSettingsForm");if(qf){qf.addEventListener("submit",function(e){e.preventDefault();saveLearningQuiz(qf);});var q=learningQuiz(learningAdminState.quizTopicId);if(q)loadAdminLearningQuestions(q.id);}
     var questionForm=el("learningQuestionForm");if(questionForm)questionForm.addEventListener("submit",function(e){e.preventDefault();submitLearningQuestionForm(questionForm);});
     Array.prototype.forEach.call(document.querySelectorAll("[data-learning-question-edit]"),function(b){b.addEventListener("click",function(){editLearningQuestion(b.getAttribute("data-learning-question-edit"));});});
