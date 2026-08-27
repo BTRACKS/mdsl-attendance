@@ -847,7 +847,11 @@
       '<section class="section"><div class="section-head"><h2>Recent Records</h2><span><a class="link-muted" href="#/history">View full history</a></span></div>' +
       historyTable(u, 5) + "</section>" +
 
-      '<section class="section dashboard-learning-card"><div class="dashboard-learning-content"><div class="dashboard-learning-icon" aria-hidden="true">' + ICON.cap + '</div><div class="dashboard-learning-copy"><p class="eyebrow">Learn</p><h2>Continue your learning</h2><p>Explore lessons, build your technical knowledge, and complete quizzes.</p></div><a class="btn btn-primary" href="learn/learn.html">Go to Learning <span aria-hidden="true">→</span></a></div></section>' +
+      '<section class="section dashboard-learning-card"><div class="dashboard-learning-content"><div class="dashboard-learning-icon" aria-hidden="true">' + ICON.cap + '</div><div class="dashboard-learning-copy"><p class="eyebrow">Learn</p>' +
+      (normalizeRole(u.role) === "admin"
+        ? '<h2>Learning Management</h2><p>Manage technical and operations learning content.</p>'
+        : '<h2>Continue your learning</h2><p>Explore lessons, build your technical knowledge, and complete quizzes.</p>') +
+      '</div><a class="btn ' + (normalizeRole(u.role) === "admin" ? 'btn-ghost' : 'btn-primary') + '" href="learn/learn.html">' + (normalizeRole(u.role) === "admin" ? 'Manage Learning' : 'Go to Learning') + ' <span aria-hidden="true">→</span></a></div></section>' +
 
       "</div>" + profilePanel(u) + "</div></div>";
   }
@@ -1677,7 +1681,6 @@
       (!dayState.open ? '<p class="dateline">' + esc(dayState.kind === 'weekend' ? 'Weekend — attendance is not required today, so no staff are marked missing.' : 'Public holiday (' + dayState.reason + ') — attendance is not required today, so no staff are marked missing.') + '</p>' :
         (missing.length ? staffList(missing) : '<p class="dateline">All staff have submitted attendance.</p>')) +
       '</div></div></aside></div>' +
-      '<section class="section dashboard-learning-card"><div class="dashboard-learning-content"><div class="dashboard-learning-icon" aria-hidden="true">' + ICON.cap + '</div><div class="dashboard-learning-copy"><p class="eyebrow">Learn</p><h2>Learning Management</h2><p>Manage technical and operations learning content.</p></div><a class="btn btn-ghost" href="learn/learn.html">Manage Learning <span aria-hidden="true">→</span></a></div></section>' +
       '</div>';
   }
 
@@ -4206,11 +4209,10 @@
       return;
     } else {
       if (hash !== "#/dashboard") { location.hash = "#/dashboard"; return; }
-      /* Keep the shared Dashboard route role-aware. Administration users can
-         reach #/dashboard from the sidebar or a direct URL, so they must get
-         the Administration dashboard rather than the staff/intern dashboard.
-         The Learn implementation itself is untouched. */
-      view.innerHTML = normalizeRole(u.role) === "admin" ? adminOverview() : dashboardView(u);
+      // Dashboard is a shared dashboard route. Keep the existing dashboard view
+      // for every authenticated role; its Learn card is role-specific above.
+      // Do not route Admins to adminOverview(), which is the separate Overview page.
+      view.innerHTML = dashboardView(u);
     }
     renderChrome();
     if (hash === "#/admin/learning") bindAdminLearning(); else bindApp();
