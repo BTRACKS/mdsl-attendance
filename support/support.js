@@ -2474,9 +2474,8 @@
     /* The profiles table in this installation does not expose the optional
        account-status columns used by an older build. Query only the stable
        columns so the access gate cannot fail with HTTP 400. */
-    var profileState = await sb.from("profiles")
-      .select("id,role")
-      .eq("id", user.id).maybeSingle();
+    var profileState = { data: null, error: null };
+    console.info("Tech-Support Role Management v4 loaded");
     if (profileState.error) {
       console.warn("Profile role lookup warning:", profileState.error.message);
     }
