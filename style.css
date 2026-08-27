@@ -1893,3 +1893,17 @@ body.maintenance-page{background:var(--gradient-hero);min-height:100vh}
     transform:translate(-50%,-50%) rotate(-45deg);
   }
 }
+
+
+/* HSE Session Settings — speaker picker profile pictures only */
+.hse-speaker-picker{position:relative;width:100%}
+.hse-speaker-trigger{width:100%;min-height:44px;display:flex;align-items:center;gap:10px;padding:7px 12px;border:1px solid var(--rule);border-radius:10px;background:var(--paper);color:var(--ink);font:inherit;text-align:left;cursor:pointer}
+.hse-speaker-trigger:focus{outline:none;border-color:var(--ink-3);box-shadow:0 0 0 2px rgba(0,0,0,.06)}
+.hse-speaker-selected-name{min-width:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hse-speaker-placeholder{flex:1;color:var(--ink-3)}
+.hse-speaker-chevron{margin-left:auto;font-size:18px;line-height:1;color:var(--ink-3)}
+.hse-speaker-menu{position:absolute;z-index:30;left:0;right:0;top:calc(100% + 5px);max-height:260px;overflow:auto;padding:5px;background:var(--paper);border:1px solid var(--rule);border-radius:10px;box-shadow:var(--shadow-md)}
+.hse-speaker-option{width:100%;display:flex;align-items:center;gap:10px;padding:8px 9px;border:0;border-radius:7px;background:transparent;color:var(--ink);font:inherit;text-align:left;cursor:pointer}
+.hse-speaker-option:hover,.hse-speaker-option.active{background:var(--paper-3)}
+.hse-speaker-fallback{width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;border-radius:50%;background:var(--paper-3);color:var(--ink-3);font-weight:600}
+.hse-speaker-option .avatar-sm{margin:0}

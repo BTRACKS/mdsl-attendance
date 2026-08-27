@@ -1963,6 +1963,31 @@
       }).join("");
   }
 
+  function hseSpeakerPicker(selectedId) {
+    var people = db.users.filter(function (u) { return !!u; })
+      .slice().sort(function (a, b) {
+        return profileDisplayName(a).toLowerCase().localeCompare(profileDisplayName(b).toLowerCase());
+      });
+    var selected = people.find(function (u) { return String(u.id || "") === String(selectedId || ""); });
+    var selectedHtml = selected
+      ? avatarHtml(selected, "avatar-sm") + '<span class="hse-speaker-selected-name">' + esc(profileDisplayName(selected)) + '</span>'
+      : '<span class="hse-speaker-placeholder">Select a speaker</span>';
+    var options = people.map(function (u) {
+      var id = String(u.id || "");
+      var active = id === String(selectedId || "");
+      return '<button type="button" class="hse-speaker-option' + (active ? ' active' : '') + '" data-hse-speaker-id="' + esc(id) + '">' +
+        avatarHtml(u, "avatar-sm") + '<span>' + esc(profileDisplayName(u)) + '</span></button>';
+    }).join("");
+    return '<div class="hse-speaker-picker" id="hseSpeakerPicker">' +
+      '<input type="hidden" id="hseSpeaker" value="' + esc(String(selectedId || "")) + '" />' +
+      '<button type="button" class="hse-speaker-trigger" id="hseSpeakerTrigger" aria-haspopup="listbox" aria-expanded="false">' + selectedHtml + '<span class="hse-speaker-chevron" aria-hidden="true">⌄</span></button>' +
+      '<div class="hse-speaker-menu" id="hseSpeakerMenu" role="listbox" hidden>' +
+        '<button type="button" class="hse-speaker-option hse-speaker-clear' + (!selectedId ? ' active' : '') + '" data-hse-speaker-id="">' +
+          '<span class="hse-speaker-fallback">—</span><span>Select a speaker</span></button>' +
+        options +
+      '</div></div>';
+  }
+
   /* Current state of today's HSE session */
   function hseWindowState() {
     var now = new Date();
@@ -2109,7 +2134,7 @@
       '<div class="field"><label for="hseOpen">Window opens</label><input type="time" id="hseOpen" value="' + esc(s.open_time) + '" /></div>' +
       '<div class="field"><label for="hseClose">Window closes</label><input type="time" id="hseClose" value="' + esc(s.close_time) + '" /></div>' +
       '<div class="field"><label for="hseTopic">HSE topic (optional)</label><input type="text" id="hseTopic" value="' + esc(s.topic) + '" placeholder="e.g. Fire Safety Drill" /></div>' +
-      '<div class="field"><label for="hseSpeaker">Speaker</label><select id="hseSpeaker"><option value="">Select a speaker</option>' + hseSpeakerOptions(s.speaker_id) + '</select></div>' +
+      '<div class="field"><label for="hseSpeaker">Speaker</label>' + hseSpeakerPicker(s.speaker_id) + '</div>' +
       '<button class="btn btn-dark btn-block" type="submit">Save settings</button>' +
       "</form></div></div>" +
       '<div class="panel" style="margin-top:20px"><div class="panel-head">' + ICON.alert + "Not Checked In</div><div class=\"panel-body\">" +
@@ -2228,6 +2253,39 @@
 
     var csvBtn = el("hseCsvBtn");
     if (csvBtn) csvBtn.addEventListener("click", downloadHseCsv);
+
+    var speakerTrigger = el("hseSpeakerTrigger"), speakerMenu = el("hseSpeakerMenu"), speakerInput = el("hseSpeaker");
+    if (speakerTrigger && speakerMenu && speakerInput) {
+      speakerTrigger.addEventListener("click", function () {
+        var isOpen = !speakerMenu.hidden;
+        speakerMenu.hidden = isOpen;
+        speakerTrigger.setAttribute("aria-expanded", isOpen ? "false" : "true");
+      });
+      Array.prototype.forEach.call(speakerMenu.querySelectorAll("[data-hse-speaker-id]"), function (option) {
+        option.addEventListener("click", function () {
+          speakerInput.value = option.getAttribute("data-hse-speaker-id") || "";
+          speakerMenu.hidden = true;
+          speakerTrigger.setAttribute("aria-expanded", "false");
+          var picker = el("hseSpeakerPicker");
+          if (picker) {
+            var selected = db.users.find(function (u) { return u && String(u.id || "") === String(speakerInput.value || ""); });
+            var display = selected
+              ? avatarHtml(selected, "avatar-sm") + '<span class="hse-speaker-selected-name">' + esc(profileDisplayName(selected)) + '</span>'
+              : '<span class="hse-speaker-placeholder">Select a speaker</span>';
+            speakerTrigger.innerHTML = display + '<span class="hse-speaker-chevron" aria-hidden="true">⌄</span>';
+          }
+          Array.prototype.forEach.call(speakerMenu.querySelectorAll(".hse-speaker-option"), function (item) {
+            item.classList.toggle("active", item === option);
+          });
+        });
+      });
+      document.addEventListener("click", function (event) {
+        if (!speakerTrigger.contains(event.target) && !speakerMenu.contains(event.target)) {
+          speakerMenu.hidden = true;
+          speakerTrigger.setAttribute("aria-expanded", "false");
+        }
+      });
+    }
 
     var form = el("hseSettingsForm");
     if (form) form.addEventListener("submit", async function (e) {
