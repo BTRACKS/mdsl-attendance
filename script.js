@@ -1406,8 +1406,8 @@
       var hseInfoTop = hseTitleY + 62;
       var hseTopicY = hseTopic ? hseInfoTop : null;
       var hseSpeakerY = hseTopic ? hseInfoTop + 58 : hseInfoTop;
-      var hseAuthY = hseSpeaker ? hseSpeakerY + 58 : (hseTopic ? hseTopicY + 58 : hseInfoTop);
-      var hseDateY = hseAuthY + 58;
+      /* HSE PDF: authorised person's name is intentionally omitted. */
+      var hseDateY = hseSpeaker ? hseSpeakerY + 58 : (hseTopic ? hseTopicY + 58 : hseInfoTop);
       var hseSignY = hseDateY + 58;
 
       if (hseTopic) {
@@ -1423,11 +1423,6 @@
         ctx.fillStyle = BLACK; ctx.font = "700 20px " + FONT;
         ctx.fillText(pdfUpper(hseSpeaker), margin, hseSpeakerY + 24);
       }
-
-      ctx.fillStyle = INK_3; ctx.font = "600 12px " + FONT;
-      ctx.fillText("NAME OF AUTHORISED", margin, hseAuthY);
-      ctx.fillStyle = BLACK; ctx.font = "700 20px " + FONT;
-      ctx.fillText(pdfUpper(authorisedName || "ADMINISTRATOR"), margin, hseAuthY + 24);
 
       ctx.fillStyle = INK_3; ctx.font = "600 12px " + FONT;
       ctx.fillText("ATTENDANCE DATE", margin, hseDateY);
@@ -1482,9 +1477,19 @@
         ctx.beginPath(); ctx.moveTo(tableX, top + 0.5); ctx.lineTo(tableX + tableW, top + 0.5); ctx.stroke();
       }
       var y = top + 14;
-      ctx.font = "600 14px " + FONT;
+      /* Keep every staff name on one straight, centered line. Long names
+         (including titles such as "MR, DAPO SALAMI") are reduced slightly
+         when necessary instead of wrapping onto a second line. */
+      var nameFontSize = 14;
       ctx.fillStyle = (attendancePdf || hseCompactTable) ? "#777777" : INK;
-      pdfCenteredText(ctx, r.name, tableX + col1 / 2, y, col1 - 28, 16, 2);
+      do {
+        ctx.font = "600 " + nameFontSize + "px " + FONT;
+        if (ctx.measureText(pdfUpper(r.name)).width <= col1 - 28 || nameFontSize <= 10) break;
+        nameFontSize -= 1;
+      } while (nameFontSize >= 10);
+      ctx.textAlign = "center";
+      ctx.fillText(pdfUpper(r.name), tableX + col1 / 2, y);
+      ctx.textAlign = "left";
       ctx.font = "500 14px " + FONT;
       ctx.fillStyle = (attendancePdf || hseCompactTable) ? "#777777" : INK_2;
       if (hseCompactTable) {
