@@ -722,6 +722,176 @@
     });
   }
 
+  /* ------------------------- Phase 10: Add New User (IT Support) -------------------------
+     Lets authorized IT Support / administrators onboard a new staff member without
+     touching Supabase directly. This calls a single Postgres function,
+     public.admin_create_staff_user(p_email, p_profile) — see
+     SUPABASE-ADD-NEW-USER.sql — via a normal sb.rpc() call, the same way every
+     other admin action in this file already works (admin_update_profile,
+     admin_set_account_status, set_user_role, …). No service-role key or other
+     privileged credential is used or needed in this file: the SQL function runs
+     with the elevated privileges of its owner (the same way the portal's other
+     "admin_*" functions already do) and re-checks, server-side, that the caller
+     actually holds an allowed role before creating anything.
+     This feature does not touch login, sign-up, existing profiles, roles, or any
+     other tab — it only ever inserts one new profiles row + one new auth user. */
+
+  var ADD_USER = { fields: [] };
+
+  /* Work out which profile columns this database actually has, using the same
+     column-detection approach as the profile editor (colOf against a real row),
+     so the form only ever shows fields that already exist in "profiles". */
+  function detectAddUserFields() {
+    var sample = (USERS.rows && USERS.rows[0]) || {};
+    var known = Object.keys(sample).length > 0;
+    var fields = [];
+
+    var emailCol = colOf(sample, EMAIL_KEYS) || "email";
+    fields.push({ col: emailCol, label: "Email address", type: "email", max: 120, required: true });
+
+    var hasSplitName = colOf(sample, FIRST_NAME_KEYS) || colOf(sample, LAST_NAME_KEYS);
+    var nameCol = colOf(sample, NAME_KEYS);
+    if (!hasSplitName && (nameCol || !known)) {
+      fields.push({ col: nameCol || "full_name", label: "Full name", max: 120, required: true });
+    } else {
+      var titleCol = colOf(sample, TITLE_NAME_KEYS);
+      if (titleCol) fields.push({ col: titleCol, label: "Title", type: "select", options: ["Mr", "Mrs", "Miss"], max: 4 });
+      fields.push({ col: colOf(sample, FIRST_NAME_KEYS) || "first_name", label: "First name", max: 80, required: true });
+      fields.push({ col: colOf(sample, LAST_NAME_KEYS) || "last_name", label: "Last name", max: 80, required: true });
+    }
+
+    var NAME_HANDLED = [TITLE_NAME_KEYS, FIRST_NAME_KEYS, LAST_NAME_KEYS];
+    EDIT_FIELDS.forEach(function (f) {
+      if (NAME_HANDLED.indexOf(f.keys) !== -1) return;
+      var col = colOf(sample, f.keys) || (known ? null : f.keys[0]);
+      if (!col) return;
+      fields.push({ col: col, label: f.label, max: f.max, type: f.type, options: f.options, required: f.keys === TYPE_KEYS });
+    });
+
+    var staffCol = colOf(sample, STAFF_KEYS);
+    if (staffCol) fields.push({ col: staffCol, label: "Staff ID", max: 40 });
+
+    return fields;
+  }
+
+  function addUserFieldHtml(f, i) {
+    var id = "addUserField" + i;
+    var reqAttr = f.required ? " required" : "";
+    var reqMark = f.required ? ' <span aria-hidden="true">*</span>' : "";
+    if (f.type === "select") {
+      return '<div class="field"><label for="' + id + '">' + esc(f.label) + reqMark + '</label>' +
+        '<select id="' + id + '" data-col="' + esc(f.col) + '"' + reqAttr + '>' +
+        '<option value="">Select…</option>' +
+        (f.options || []).map(function (o) { return '<option value="' + esc(o) + '">' + esc(o) + '</option>'; }).join('') +
+        '</select></div>';
+    }
+    return '<div class="field"><label for="' + id + '">' + esc(f.label) + reqMark + '</label>' +
+      '<input id="' + id + '" data-col="' + esc(f.col) + '" data-required="' + (f.required ? "1" : "0") + '" type="' +
+      (f.type || "text") + '" maxlength="' + (f.max || 120) + '"' + reqAttr +
+      (f.type === "email" ? ' placeholder="name@multidigitalng.com" autocomplete="off"' : '') + ' /></div>';
+  }
+
+  function addUserModalHtml(fields) {
+    return '<h2 id="addUserTitle">Add new user</h2>' +
+      '<p class="att-confirm-lede">This creates a sign-in account and the matching staff profile in one step. ' +
+      'The account is created with the default password <strong>123456</strong> — share this with the new staff member ' +
+      'and ask them to change it as soon as they sign in.</p>' +
+      '<div class="edit-grid" id="addUserFields">' + fields.map(addUserFieldHtml).join('') + '</div>' +
+      '<div class="alert alert-error" id="addUserError" hidden></div>' +
+      '<div class="modal-actions">' +
+      '<button class="btn btn-ghost btn-sm" type="button" id="addUserCancel">Cancel</button>' +
+      '<button class="btn btn-primary btn-sm" type="button" id="addUserSubmit">Create account</button>' +
+      '</div>';
+  }
+
+  function closeAddUserModal() {
+    var m = $("addUserModal");
+    if (m) m.remove();
+    document.body.classList.remove("modal-open");
+  }
+
+  async function openAddUserModal() {
+    if (!canManageRoles()) { toast("Only authorized IT Support or an administrator can add new users.", "bad"); return; }
+    if (!USERS.loaded) { loader(true); await loadUsers(false); loader(false); }
+    closeAddUserModal();
+    ADD_USER.fields = detectAddUserFields();
+
+    var wrap = document.createElement("div");
+    wrap.className = "modal-backdrop";
+    wrap.id = "addUserModal";
+    wrap.innerHTML = '<div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="addUserTitle">' +
+      addUserModalHtml(ADD_USER.fields) + '</div>';
+    document.body.appendChild(wrap);
+    document.body.classList.add("modal-open");
+
+    wrap.addEventListener("click", function (e) { if (e.target === wrap) closeAddUserModal(); });
+    document.addEventListener("keydown", addUserEscHandler);
+    $("addUserCancel").addEventListener("click", closeAddUserModal);
+    $("addUserSubmit").addEventListener("click", submitAddUser);
+    var first = wrap.querySelector("input,select");
+    if (first) first.focus();
+  }
+
+  function addUserEscHandler(e) {
+    if (e.key !== "Escape") return;
+    if (!$("addUserModal")) { document.removeEventListener("keydown", addUserEscHandler); return; }
+    closeAddUserModal();
+    document.removeEventListener("keydown", addUserEscHandler);
+  }
+
+  async function submitAddUser() {
+    var err = $("addUserError");
+    err.hidden = true;
+
+    var box = $("addUserFields");
+    var inputs = box.querySelectorAll("[data-col]");
+    var profile = {};
+    Array.prototype.forEach.call(inputs, function (inp) {
+      var col = inp.getAttribute("data-col");
+      var val = inp.value.trim();
+      if (val) profile[col] = val;
+    });
+
+    var emailField = ADD_USER.fields.filter(function (f) { return f.type === "email"; })[0];
+    var email = (emailField && profile[emailField.col]) || "";
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+      err.hidden = false; err.textContent = "Enter a valid email address.";
+      return;
+    }
+    var missing = ADD_USER.fields.filter(function (f) { return f.required && !profile[f.col]; });
+    if (missing.length) {
+      err.hidden = false;
+      err.textContent = "Please complete: " + missing.map(function (f) { return f.label; }).join(", ") + ".";
+      return;
+    }
+
+    var btn = $("addUserSubmit");
+    setBtnLoading(btn, true);
+    loader(true);
+    try {
+      var res = await sb.rpc("admin_create_staff_user", { p_email: email, p_profile: profile });
+      if (res.error) throw res.error;
+      closeAddUserModal();
+      toast("Account created for " + email + ". Default password: 123456 — ask them to change it after signing in.", "good");
+      await loadUsers(true);
+    } catch (ex) {
+      err.hidden = false;
+      err.textContent = (ex && ex.message) || "The account could not be created.";
+    } finally {
+      setBtnLoading(btn, false);
+      loader(false);
+    }
+  }
+
+  function initAddUser() {
+    var btn = $("addUserBtn");
+    if (!btn) return;
+    btn.hidden = !canManageRoles();
+    if (btn.getAttribute("data-ready") === "1") return;
+    btn.setAttribute("data-ready", "1");
+    btn.addEventListener("click", openAddUserModal);
+  }
+
   /* ------------------------- Phase 4: attendance & timestamp correction -------------------------
      Reads the company's existing attendance table (no second database) and
      performs every correction through public.correct_attendance_timestamp(),
@@ -2275,6 +2445,7 @@
     initDashboard();
     initUsers();
     initRoleUi();
+    initAddUser();
     initAttendance();
     initSystem();
     initSettings();
