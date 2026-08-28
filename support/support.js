@@ -552,6 +552,7 @@
 
   function initUsers() {
     var grid = $("usersGrid");
+    if (!grid) return; // Users markup may be unavailable on a reduced/conditional portal view.
     if (grid.getAttribute("data-ready") === "1") return;
     grid.setAttribute("data-ready", "1");
     grid.addEventListener("click", function (e) {
@@ -560,13 +561,18 @@
       var row = USERS.rows[Number(card.getAttribute("data-user"))];
       if (row) openUserProfile(row);
     });
-    $("userBack").addEventListener("click", closeUserProfile);
-    $("usersRefresh").addEventListener("click", function () { closeUserProfile(); loadUsers(true); });
-    var t;
-    $("userSearch").addEventListener("input", function () {
-      clearTimeout(t);
-      t = setTimeout(renderUsers, 140);
-    });
+    var back = $("userBack");
+    if (back) back.addEventListener("click", closeUserProfile);
+    var refresh = $("usersRefresh");
+    if (refresh) refresh.addEventListener("click", function () { closeUserProfile(); loadUsers(true); });
+    var search = $("userSearch");
+    if (search) {
+      var t;
+      search.addEventListener("input", function () {
+        clearTimeout(t);
+        t = setTimeout(renderUsers, 140);
+      });
+    }
   }
 
   /* ------------------------- Phase 3: role management -------------------------
