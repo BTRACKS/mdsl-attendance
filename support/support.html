@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tech Support Portal | Multidigital Service Limited</title>
+<meta name="description" content="Restricted Tech Support / IT portal for Multidigital Service Limited. Authorised IT and administrative staff only." />
+<meta name="robots" content="noindex, nofollow" />
+<link rel="icon" type="image/png" sizes="256x256" href="favicon.png" />
+<link rel="apple-touch-icon" href="favicon.png" />
+<meta name="theme-color" content="#123a6b" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="support.css" />
+</head>
+<body>
+  <div class="top-loader" id="topLoader" hidden aria-hidden="true"></div>
+
+  <!-- Boot state: nothing is rendered until the session + role check finishes. -->
+  <div class="page-loader" id="boot">
+    <span class="spinner spinner-lg" aria-hidden="true"></span>
+    <p>Verifying your access…</p>
+  </div>
+
+  <!-- ===================== LOGIN ===================== -->
+  <main class="auth" id="loginView" hidden>
+    <aside class="auth-aside">
+      <div>
+        <div class="brand">
+          <img class="brand-logo" src="logo-mark.png" alt="Multidigital Service Limited logo" width="42" height="42" onerror="this.style.display='none'" />
+          <span class="brand-text">Multidigital Service Limited<em>Tech Support Portal</em></span>
+        </div>
+        <h1 class="auth-headline">Internal IT &amp; <span>technical support</span></h1>
+        <p class="auth-lede">A restricted workspace for the IT team. Access is granted by role and enforced in the database, not by hiding this page.</p>
+        <div class="aside-points">
+          <div class="aside-point">
+            <h3>Role-based access</h3>
+            <p>Admin and IT Support roles only. Staff accounts are refused.</p>
+          </div>
+          <div class="aside-point">
+            <h3>One shared account system</h3>
+            <p>Same sign-in credentials as the E-Attendance Platform. No duplicate users.</p>
+          </div>
+          <div class="aside-point">
+            <h3>Audited by design</h3>
+            <p>Every request runs as your own user under row level security.</p>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <section class="auth-main">
+      <div class="auth-card">
+        <h1>Sign in to Tech Support</h1>
+        <p class="auth-sub">Use your Multidigital work account. Unauthorised access attempts are logged.</p>
+
+        <form id="loginForm" novalidate>
+          <div class="field">
+            <label for="email">Work email</label>
+            <input id="email" type="email" autocomplete="username" placeholder="you@multidigitalng.com" required />
+          </div>
+          <div class="field">
+            <label for="password">Password</label>
+            <input id="password" type="password" autocomplete="current-password" placeholder="••••••••" required />
+          </div>
+          <div class="form-row">
+            <label class="check" for="showPw">
+              <input id="showPw" type="checkbox" /> Show password
+            </label>
+            <button type="button" class="link-muted" id="forgotBtn">Reset password</button>
+          </div>
+          <div id="loginMsg" class="alert" hidden></div>
+          <div class="form-foot">
+            <button class="btn btn-primary btn-lg btn-block" id="loginSubmit" type="submit">
+              <span>Sign in</span>
+            </button>
+          </div>
+          <p class="hint"><b>Restricted area.</b> This portal is for authorised IT and administrative staff of Multidigital Service Limited only.</p>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <!-- ===================== ACCESS DENIED ===================== -->
+  <main class="denied" id="deniedView" hidden>
+    <div class="denied-card">
+      <h1>You don't have Tech Support access</h1>
+      <p id="deniedBody">Your account is signed in, but it is not assigned an <strong>Admin</strong> or <strong>IT Support</strong> role. Contact the IT administrator if you believe this is a mistake.</p>
+      <div class="panel" style="margin-top:24px">
+        <div class="panel-head">Account</div>
+        <div class="panel-body">
+          <dl class="kv">
+            <div><dt>Signed in as</dt><dd id="deniedEmail">—</dd></div>
+            <div><dt>Detected role</dt><dd id="deniedRole">—</dd></div>
+          </dl>
+        </div>
+      </div>
+      <div class="denied-actions">
+        <button class="btn btn-dark" id="deniedSignOut" type="button">Sign out</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- ===================== PORTAL ===================== -->
+  <div id="portalView" hidden style="min-height:100vh;display:flex;flex-direction:column">
+    <header class="masthead" id="masthead">
+      <div class="masthead-inner">
+        <nav class="nav" id="nav" aria-label="Support navigation">
+          <button type="button" class="active" data-tab="overview">Overview</button>
+          <button type="button" data-tab="users">Users</button>
+          <button type="button" data-tab="attendance">Attendance</button>
+          <button type="button" data-tab="system" id="navSystemBtn">System management</button>
+          <button type="button" data-tab="settings" id="navSettingsBtn">Settings</button>
+          <button type="button" data-tab="leave">Leave</button>
+          <button type="button" data-tab="tickets">Support Tickets <span id="supportTicketNavBadge" hidden></span></button>
+          <button type="button" class="nav-signout" id="navSignout">
+            <span>Sign out</span>
+          </button>
+        </nav>
+        <div class="masthead-right">
+          <button class="btn btn-dark btn-sm" id="logoutBtn" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            <span class="btn-label">Sign out</span>
+          </button>
+          <button class="menu-toggle" id="menuToggle" type="button" aria-label="Menu" aria-expanded="false"><span></span><span></span><span></span></button>
+        </div>
+      </div>
+    </header>
+
+    <div class="nav-backdrop" id="navBackdrop" hidden></div>
+
+    <main class="page">
+      <div class="page-head">
+        <h1>Welcome, <span id="heroName">colleague</span></h1>
+        <span id="roleBadge" hidden aria-hidden="true"></span>
+        
+      </div>
+
+      <!-- Phase 9 — IT Administration Overview -->
+      <section class="section" id="tab-overview">
+        <div class="section-head"><div><h2>IT Administration Overview</h2><p class="overview-lede">Users, attendance, recent changes and portal service status.</p></div><button class="btn btn-ghost btn-sm" id="dashboardRefresh" type="button">Refresh overview</button></div>
+        <div class="dashboard-stats" id="dashboardStats" aria-live="polite">
+          <div class="stat-panel"><span>Total Users</span><strong id="statUsers">—</strong></div><div class="stat-panel"><span>Admins</span><strong id="statAdmins">—</strong></div><div class="stat-panel"><span>IT Support</span><strong id="statSupport">—</strong></div><div class="stat-panel"><span>Staff</span><strong id="statStaff">—</strong></div><div class="stat-panel"><span>Active Accounts</span><strong id="statActive">—</strong></div><div class="stat-panel"><span>Inactive Accounts</span><strong id="statInactive">—</strong></div>
+        </div>
+        <div class="dashboard-grid">
+          <div class="panel"><div class="panel-head">Today's attendance</div><div class="panel-body"><div class="mini-stats" id="attendanceSummary"><div><span>Clock-ins</span><strong>—</strong></div><div><span>Clock-outs</span><strong>—</strong></div><div><span>Missing clock-outs</span><strong>—</strong></div></div><p class="dashboard-state" id="dashboardAttendanceState">Loading today's attendance…</p></div></div>
+      </section>
+
+
+      <!-- Settings / System Configuration (Phase 8) -->
+      <section class="section" id="tab-settings" hidden>
+        <div class="section-head">
+          <h2>Settings</h2>
+          <span id="settingsScope">&nbsp;</span>
+        </div>
+
+        <p class="role-note" id="settingsNote"></p>
+
+        <div class="settings-groups">
+          <div class="panel">
+            <div class="panel-head">Supported configuration</div>
+            <div class="panel-body">
+              <p class="users-state" id="settingsState">Loading supported settings…</p>
+              <div class="settings-list" id="settingsList"></div>
+
+              <section class="windows-settings-section" id="tab-windows">
+                <div class="section-head"><div><h3>Windows Application</h3><p class="overview-lede">Manage the current E-Attendance Windows download and release information.</p></div><button class="btn btn-ghost btn-sm" id="windowsUpdateRefresh" type="button">Refresh</button></div>
+                <div id="windowsUpdateState" class="users-state">Loading Windows application release…</div>
+                <div id="windowsUpdateCurrent"></div>
+                <form id="windowsUpdateForm" class="windows-admin-form" novalidate>
+                  <div class="form-grid">
+                    <div class="field"><label for="windowsVersion">Latest version</label><input id="windowsVersion" type="text" maxlength="40" placeholder="e.g. 1.3.0" required /></div>
+                    <div class="field"><label for="windowsDownloadUrl">Windows download / update link</label><input id="windowsDownloadUrl" type="url" maxlength="2000" placeholder="https://…" required /></div>
+                  </div>
+                  <div class="field"><label for="windowsChangelog">Update description / changelog</label><textarea id="windowsChangelog" rows="4" maxlength="2000" placeholder="Improved performance, bug fixes and other system improvements."></textarea></div>
+                  <label class="check windows-enabled-check" for="windowsEnabled"><input id="windowsEnabled" type="checkbox" checked /> Make this release available to users</label>
+                  <div class="form-foot"><button class="btn btn-primary" id="windowsPublishBtn" type="submit">Publish Windows Update</button></div>
+                  <div id="windowsUpdateMsg" class="alert" hidden></div>
+                </form>
+                <div id="windowsUpdateHistory" class="windows-admin-history"></div>
+              </section>
+
+              <div class="edit-actions" id="settingsActions" hidden>
+                <button class="btn btn-primary btn-sm" id="settingsSave" type="button">Save changes</button>
+                <button class="btn btn-ghost btn-sm" id="settingsReload" type="button">Reload</button>
+              </div>
+              <p class="edit-hint">Only settings explicitly registered as supported by the application are shown here. This page never exposes raw database tables, SQL, credentials or secrets.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  <section class="faq" id="faqSection">
+    <div class="faq-inner">
+      <div class="faq-head">
+        <p class="eyebrow">Frequently Asked Questions</p>
+        <h2>Everything about the E-Attendance Platform</h2>
+        <p class="faq-lede">Short answers to the questions staff and administrators ask most.</p>
+      </div>
+      <div class="faq-list" id="faqList"></div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-top">
+        <div class="footer-about">
+          <p class="footer-title">Multidigital Service Limited</p>
+          <p class="footer-copy">The E-Attendance Platform keeps daily resumption and closing times accurate, transparent and easy to review for every department.</p>
+          <p class="footer-legal">&copy; <span class="year"></span> 2026 Multidigital Service Limited. All rights reserved.</p>
+        </div>
+        <nav class="footer-nav" aria-label="Footer">
+          <div>
+            <h3>Platform</h3>
+            <a href="https://attendancemdsl.vercel.app/index.html#/dashboard">Dashboard</a>
+            <a href="https://attendancemdsl.vercel.app/index.html#/history">Attendance History</a>
+            <a href="https://attendancemdsl.vercel.app/about.html">About Us</a>
+          </div>
+          <div>
+            <h3>Support</h3>
+            <button type="button" class="footer-link" data-scroll="faqSection">FAQ</button>
+            <a href="https://attendancemdsl.vercel.app/index.html#/forgot">Reset password</a>
+            <a href="https://attendancemdsl.vercel.app/index.html#/signup">Register</a>
+          </div>
+        </nav>
+        <div class="footer-offices">
+          <div>
+            <h3>Head Office</h3>
+            <address>Plot 135, GRA Phase 8,<br />G.U. Ake Road,<br />Port Harcourt, Rivers State, Nigeria</address>
+          </div>
+          <div>
+            <h3>Lagos Office</h3>
+            <address>VGB Court, Penthouse 2,<br />86A Oduduwa Crescent,<br />GRA, Ikeja, Lagos State, Nigeria</address>
+          </div>
+          <div>
+            <h3>Email</h3>
+            <a href="mailto:info@multidigitalng.com">info@multidigitalng.com</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </footer>
+  </div>
+
+  <!-- ===================== ROLE CHANGE CONFIRMATION ===================== -->
+  <div class="modal-backdrop" id="confirmBackdrop" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+      <h2 id="confirmTitle">Confirm role change</h2>
+      <p id="confirmBody">—</p>
+      <div class="modal-actions">
+        <button class="btn btn-ghost btn-sm" id="confirmCancel" type="button">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="confirmOk" type="button">Yes, change role</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== TIMESTAMP CORRECTION ===================== -->
+  <div class="modal-backdrop" id="attBackdrop" hidden>
+    <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="attCorrTitle">
+      <h2 id="attCorrTitle">Correct attendance timestamp</h2>
+
+      <div id="attStep1">
+        <dl class="kv att-kv">
+          <div><dt>Staff</dt><dd id="attCorrStaff">—</dd></div>
+          <div><dt id="attCorrFieldLabel">Field</dt><dd id="attCorrField">—</dd></div>
+          <div><dt>Original</dt><dd id="attCorrOriginal">—</dd></div>
+        </dl>
+        <div class="att-form-grid">
+          <div class="field"><label for="attNewDate">Correct date</label><input id="attNewDate" type="date" /></div>
+          <div class="field" id="attNewTimeField"><label for="attNewTime">Correct time</label><input id="attNewTime" type="time" /></div>
+        </div>
+        <div class="field">
+          <label for="attReason">Reason for correction</label>
+          <select id="attReason"></select>
+        </div>
+        <div class="field" id="attReasonOtherField" hidden>
+          <label for="attReasonOther">Explain</label>
+          <textarea id="attReasonOther" rows="2" maxlength="240" placeholder="Briefly describe why this record is being corrected"></textarea>
+        </div>
+      </div>
+
+      <div id="attStep2" hidden>
+        <p class="att-confirm-lede">Confirm this correction. The original value is kept for the audit record.</p>
+        <dl class="kv att-kv">
+          <div><dt>Staff</dt><dd id="sumStaff">—</dd></div>
+          <div><dt id="sumFieldLabel">Field</dt><dd id="sumField">—</dd></div>
+          <div><dt>Original</dt><dd id="sumOriginal">—</dd></div>
+          <div><dt>New</dt><dd id="sumNew">—</dd></div>
+          <div><dt>Reason</dt><dd id="sumReason">—</dd></div>
+        </dl>
+      </div>
+
+      <div class="alert alert-error" id="attCorrError" hidden></div>
+
+      <div class="modal-actions">
+        <button class="btn btn-ghost btn-sm" id="attCancel" type="button">Cancel</button>
+        <button class="btn btn-ghost btn-sm" id="attBack" type="button" hidden>Back</button>
+        <button class="btn btn-primary btn-sm" id="attContinue" type="button">Review change</button>
+        <button class="btn btn-primary btn-sm" id="attConfirm" type="button" hidden>Confirm correction</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== CHANGE CONFIRMATION (Phase 6) ===================== -->
+  <div class="modal-backdrop" id="changeBackdrop" hidden>
+    <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="changeTitle">
+      <h2 id="changeTitle">Confirm changes</h2>
+      <p class="att-confirm-lede" id="changeLede">Review the existing value against the new value before saving.</p>
+      <div class="diff-table" id="changeDiff"></div>
+      <div class="field" id="changeReasonField" hidden>
+        <label for="changeReason">Reason</label>
+        <input id="changeReason" type="text" maxlength="240" placeholder="Why is this change needed?" />
+      </div>
+      <div class="alert alert-error" id="changeError" hidden></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost btn-sm" id="changeCancel" type="button">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="changeOk" type="button">Confirm and save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== ACCOUNT ACTION CONFIRMATION (Phase 7) ===================== -->
+  <div class="modal-backdrop" id="acctBackdrop" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="acctConfirmTitle">
+      <h2 id="acctConfirmTitle">Confirm account action</h2>
+      <p class="att-confirm-lede" id="acctConfirmBody">&mdash;</p>
+      <dl class="kv att-kv" id="acctConfirmKv"></dl>
+      <div class="field" id="acctConfirmInputField" hidden>
+        <label for="acctConfirmInput">New sign-in email</label>
+        <input id="acctConfirmInput" type="email" autocomplete="off" placeholder="name@multidigitalng.com" />
+      </div>
+      <div class="alert alert-error" id="acctConfirmError" hidden></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost btn-sm" id="acctConfirmCancel" type="button">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="acctConfirmOk" type="button">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toasts" id="toasts"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="support.js?v=deleteaccount2"></script>
+</body>
+</html>

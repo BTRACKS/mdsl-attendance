@@ -904,8 +904,6 @@
 
       hseStaffCard(u) +
 
-      windowsUpdateCard(u) +
-
       '<section class="section dashboard-leave-card">' +
         '<div class="section-head"><h2>Leave</h2><span>' + (leave ? "Currently on leave" : "Time away") + '</span></div>' +
         (leave
@@ -947,7 +945,7 @@
       '<a class="btn btn-ghost btn-sm btn-block" style="margin-top:16px" href="#/settings">' + ICON.settings + "<span>Profile &amp; settings</span></a>" +
       "</div></div>" +
       '<div class="panel" style="margin-top:20px"><div class="panel-head">' + ICON.activity + 'This Month</div><div class="panel-body">' +
-      monthSummary(u) + "</div></div></aside>";
+      monthSummary(u) + "</div></div>" + windowsUpdateCard(u) + '</aside>';
   }
   function row(k, v) { return "<div><dt>" + esc(k) + "</dt><dd>" + esc(v) + "</dd></div>"; }
 
