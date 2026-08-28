@@ -120,6 +120,9 @@ img{max-width:100%;display:block}
 .btn-dark:hover{background:var(--navy-deep)}
 .btn-ghost{background:var(--paper);border-color:var(--rule-strong);color:var(--ink-2);box-shadow:var(--shadow-xs)}
 .btn-ghost:hover{border-color:var(--navy);color:var(--navy)}
+.btn-danger{background:var(--danger);color:#fff;border-color:var(--danger);box-shadow:var(--shadow-xs)}
+.btn-danger:hover{background:#a93226;border-color:#a93226}
+.btn-danger:focus-visible{outline:none;box-shadow:0 0 0 4px rgba(192,57,43,.16)}
 .btn-block{width:100%}
 .btn:disabled{opacity:.45;cursor:not-allowed;transform:none;box-shadow:none}
 .btn-sm{padding:9px 16px;font-size:13px}

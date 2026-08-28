@@ -1739,6 +1739,7 @@
     $("acctToggle").textContent = active ? "Deactivate account" : "Activate account";
     $("acctReset").hidden = !(admin && email);
     $("acctRecheck").hidden = !admin;
+    $("acctDelete").hidden = !(canManageRoles() && !isSelf(row));
     $("acctEmailBtn").hidden = !(admin && isSelf(row));
 
     $("accountNote").textContent = !admin
@@ -1863,6 +1864,82 @@
       done: function () {
         toast(active ? "Account deactivated." : "Account activated.", "good");
         refreshUser(rowId(row));
+      }
+    });
+  }
+
+  /* ---------- permanent account deletion ----------
+     The browser never receives or stores a service-role key. The database RPC
+     validates the caller's live Admin/IT Support role server-side, permanently
+     deletes the real Supabase Authentication user, and removes the matching
+     profile/staff record in the same transaction. The UI is changed only after
+     the database reports success. */
+  function askAccountDelete() {
+    var row = USERS.current;
+    if (!row || !canManageRoles()) return;
+
+    var id = rowId(row);
+    var name = displayName(row);
+    var email = pick(row, EMAIL_KEYS);
+
+    if (!id) {
+      toast("This user does not have a valid authentication ID.", "bad");
+      return;
+    }
+    if (isSelf(row)) {
+      toast("You cannot delete your own account.", "bad");
+      return;
+    }
+
+    openAcct({
+      title: "Permanently delete " + name + "?",
+      body: "This action is permanent and cannot be undone. It will permanently delete the user's Supabase Authentication account and remove the matching staff/profile record. The user will no longer be able to sign in.",
+      rows: [
+        ["Staff member", name],
+        ["Email", email ? String(email) : "No email on record"],
+        ["User ID", String(id)],
+        ["Action", "Permanent account deletion"],
+        ["Requested by", (ME.user && ME.user.email) || "—"]
+      ],
+      okLabel: "Yes, permanently delete",
+      onConfirm: async function () {
+        var res;
+        try {
+          // The privileged delete happens inside PostgreSQL. No service-role
+          // key or other privileged credential is exposed to this browser.
+          res = await sb.rpc("admin_delete_user", {
+            p_user_id: String(id)
+          });
+        } catch (ex) {
+          return { error: { message: ex && ex.message ? ex.message : "The account could not be deleted." } };
+        }
+        if (res.error) return { error: res.error };
+
+        var data = res.data;
+        if (data !== true && data !== "true" && !(data && data.success === true)) {
+          return { error: { message: "The database did not confirm account deletion." } };
+        }
+        return { data: data };
+      },
+      done: async function () {
+        var deletedId = String(id);
+
+        // Only mutate the in-memory list after the server has confirmed success.
+        USERS.rows = USERS.rows.filter(function (u) {
+          return String(rowId(u)) !== deletedId;
+        });
+        USERS.loaded = true;
+        USERS.current = null;
+
+        closeUserProfile();
+        renderUsers();
+
+        // Refresh roles/overview data immediately so counts and lists reflect the
+        // deletion without a browser refresh.
+        try { await loadRoles(); } catch (e) {}
+        try { await loadDashboard(); } catch (e) {}
+
+        toast("Account permanently deleted for " + name + ".", "good");
       }
     });
   }
@@ -2062,6 +2139,7 @@
     $("acctToggle").addEventListener("click", askAccountToggle);
     $("acctReset").addEventListener("click", askReset);
     $("acctRecheck").addEventListener("click", recheckAccount);
+    $("acctDelete").addEventListener("click", askAccountDelete);
     $("acctEmailBtn").addEventListener("click", askEmailChange);
 
     $("acctConfirmCancel").addEventListener("click", closeAcct);
