@@ -1220,7 +1220,10 @@
 
   function pdfNameOnly(u) {
     if (!u) return "STAFF MEMBER";
-    return [u.firstName, u.lastName].filter(function (x) { return String(x || "").trim(); }).join(" ").trim() || u.fullName || "STAFF MEMBER";
+    var name = [u.firstName, u.lastName].filter(function (x) { return String(x || "").trim(); }).join(" ").trim() || u.fullName || "STAFF MEMBER";
+    /* Attendance Records PDF: include the staff member's saved title with a comma. */
+    var title = String(u.title || "").trim();
+    return title ? title + ", " + name : name;
   }
 
 
