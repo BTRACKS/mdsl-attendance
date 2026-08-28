@@ -833,10 +833,9 @@
     var w = db.windowsUpdate;
     var version = w ? String(w.version || "Latest") : "Not published yet";
     var changelog = w ? String(w.changelog || "").trim() : "";
-    var cardClass = u ? 'section windows-app-card windows-app-card-sidebar' : 'section windows-app-card';
-    return '<section class="' + cardClass + '" id="windowsUpdateCard">' +
-      '<div class="windows-app-main"><div class="windows-app-icon" aria-hidden="true">' + ICON.windows + '</div>' +
-      '<div class="windows-app-copy"><p class="eyebrow">Available on Windows</p><h2>Get the E-Attendance desktop experience on Windows.</h2>' +
+    return '<section class="section windows-app-card" id="windowsUpdateCard">' +
+      '<div class="windows-app-main"><div class="windows-app-head"><div class="windows-app-icon" aria-hidden="true">' + ICON.windows + '</div><p class="eyebrow">Available on Windows</p></div>' +
+      '<div class="windows-app-copy"><h2>Get the E-Attendance desktop experience on Windows.</h2>' +
       (w ? '<p>Version <strong>' + esc(version) + '</strong> <span class="windows-latest">Latest version available.</span></p>' : '<p>The Windows desktop download will appear here when it is published by IT Support.</p>') +
       (changelog ? '<div class="windows-changelog"><strong>What\'s New:</strong><p>' + esc(changelog) + '</p></div>' : '') +
       '</div></div>' +

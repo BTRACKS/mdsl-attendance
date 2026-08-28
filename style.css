@@ -1924,9 +1924,16 @@ aside .panel:has(#hseSettingsForm){overflow:visible}
 }
 .windows-app-main{
   display:flex;
+  flex-direction:column;
   align-items:flex-start;
   gap:12px;
   flex:1 1 auto;
+  min-width:0;
+}
+.windows-app-head{
+  display:flex;
+  align-items:center;
+  gap:10px;
   min-width:0;
 }
 .windows-app-icon{
@@ -1954,7 +1961,22 @@ aside .panel:has(#hseSettingsForm){overflow:visible}
   flex:1 1 auto;
   width:auto;
 }
-.windows-app-copy .eyebrow{margin:0 0 8px}
+.windows-app-head .eyebrow{
+  margin:0;
+  display:inline-flex;
+  align-items:center;
+  min-height:26px;
+  padding:4px 10px;
+  border:1px solid var(--rule-strong);
+  border-radius:999px;
+  background:var(--paper);
+  font-size:9px;
+  font-weight:700;
+  line-height:1.15;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  white-space:nowrap;
+}
 .windows-app-copy h2{
   font-size:20px;
   line-height:1.18;
@@ -2014,7 +2036,7 @@ aside .panel:has(#hseSettingsForm){overflow:visible}
     padding:18px 16px;
     box-sizing:border-box;
   }
-  .windows-app-main{
+ .windows-app-main{
     display:flex;
     flex-direction:column;
     align-items:flex-start;
@@ -2040,8 +2062,7 @@ aside .panel:has(#hseSettingsForm){overflow:visible}
     max-width:100%;
     min-width:0;
   }
-  .windows-app-copy .eyebrow{margin-bottom:7px}
-  .windows-app-copy h2{
+    .windows-app-copy h2{
     font-size:18px;
     line-height:1.22;
     margin-bottom:8px;
@@ -2071,73 +2092,10 @@ aside .panel:has(#hseSettingsForm){overflow:visible}
 @media(max-width:420px){
   .windows-app-card{padding:16px}
   .windows-app-main{gap:11px}
+  .windows-app-head{gap:8px}
   .windows-app-copy h2{font-size:17px}
   .windows-app-copy>p{font-size:12.5px}
   .windows-download{margin-top:14px}
-}
-
-/* Windows card inside the staff profile sidebar: stack the content so the
-   narrow 348px sidebar never squeezes the heading into a vertical column. */
-.windows-app-card-sidebar{
-  display:block;
-  width:100%;
-  box-sizing:border-box;
-  margin-top:20px;
-  padding:20px;
-}
-.windows-app-card-sidebar .windows-app-main{
-  display:block;
-  width:100%;
-  min-width:0;
-}
-.windows-app-card-sidebar .windows-app-icon{
-  width:34px;
-  height:34px;
-  margin:0 0 14px;
-}
-.windows-app-card-sidebar .windows-app-icon svg{
-  width:17px !important;
-  height:17px !important;
-}
-.windows-app-card-sidebar .windows-app-copy{
-  display:block;
-  width:100%;
-  min-width:0;
-}
-.windows-app-card-sidebar .windows-app-copy .eyebrow{
-  display:inline-flex;
-  margin:0 0 10px;
-}
-.windows-app-card-sidebar .windows-app-copy h2{
-  display:block;
-  width:100%;
-  max-width:none;
-  margin:0 0 8px;
-  font-size:18px;
-  line-height:1.22;
-  overflow-wrap:break-word;
-  word-break:normal;
-}
-.windows-app-card-sidebar .windows-app-copy>p{
-  display:block;
-  width:100%;
-  margin:0;
-  font-size:13px;
-  line-height:1.5;
-}
-.windows-app-card-sidebar .windows-latest{
-  margin-left:4px;
-}
-.windows-app-card-sidebar .windows-changelog{
-  margin-top:12px;
-  padding-top:12px;
-}
-.windows-app-card-sidebar .windows-download{
-  display:inline-flex;
-  width:auto;
-  max-width:100%;
-  margin-top:16px;
-  white-space:nowrap;
 }
 
 .windows-download-disabled{cursor:default;pointer-events:none;opacity:.72}
