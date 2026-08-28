@@ -1909,8 +1909,7 @@ aside .panel:has(#hseSettingsForm){overflow:visible}
 .hse-speaker-option:hover,.hse-speaker-option.active{background:var(--paper-3)}
 .hse-speaker-fallback{width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;border-radius:50%;background:var(--paper-3);color:var(--ink-3);font-weight:600}
 .hse-speaker-option .avatar-sm{margin:0}
-\n\n/* ---------- Windows application update card ---------- */\n.windows-app-card{display:flex;align-items:center;justify-content:space-between;gap:20px;position:relative;overflow:hidden;margin-top:24px;width:100%}\n.layout > aside .windows-app-card{margin-top:26px}\n.windows-app-main{display:flex;align-items:flex-start;gap:10px;min-width:0;flex:1 1 auto}\n.windows-app-icon{width:28px;height:28px;flex:0 0 28px;display:grid;place-items:center;border-radius:8px;background:var(--paper-2);border:1px solid var(--rule);color:var(--navy);margin-top:3px}\n.windows-app-icon svg{width:15px;height:15px}\n.windows-app-copy{min-width:0}\n.windows-app-copy .eyebrow{margin-bottom:10px}\n.windows-app-copy h2{font-size:20px;margin-bottom:8px}\n.windows-app-copy>p{font-size:13.5px;color:var(--ink-3)}\n.windows-latest{color:var(--ink-4);margin-left:5px}\n.windows-changelog{margin-top:14px;padding-top:12px;border-top:1px solid var(--rule);font-size:13px;color:var(--ink-3)}\n.windows-changelog strong{color:var(--ink)}\n.windows-download{flex:0 0 auto;white-space:nowrap}\n.windows-update-notice{max-width:var(--maxw);margin:20px auto 0;padding:14px 18px;border:1px solid var(--rule-strong);border-radius:14px;background:var(--paper);display:flex;align-items:center;justify-content:space-between;gap:16px;box-shadow:var(--shadow-xs)}\n.windows-update-notice strong{font-size:13.5px}.windows-update-notice p{font-size:12.5px;color:var(--ink-3);margin-top:2px}\n.windows-update-notice .btn{flex:0 0 auto}\n@media(max-width:1120px){.layout > aside .windows-app-card{margin-top:24px}}
-@media(max-width:720px){.windows-app-card{display:block;margin-top:20px}.layout > aside .windows-app-card{margin-top:22px}.windows-app-main{gap:9px}.windows-app-copy h2{font-size:18px}.windows-download{width:100%;margin-top:16px}.windows-update-notice{margin:14px 16px 0;align-items:flex-start}.windows-update-notice .btn{margin-top:2px}}\n
+\n\n/* ---------- Windows application update card ---------- */\n.windows-app-card{display:flex;align-items:center;justify-content:space-between;gap:24px;position:relative;overflow:hidden;margin-top:28px}\n.windows-app-main{display:flex;align-items:flex-start;gap:12px;min-width:0}\n.windows-app-icon{width:32px;height:32px;flex:0 0 32px;display:grid;place-items:center;border-radius:10px;background:var(--paper-2);border:1px solid var(--rule);color:var(--navy);margin-top:2px}\n.windows-app-icon svg{width:17px;height:17px}\n.windows-app-copy{min-width:0}\n.windows-app-copy .eyebrow{margin-bottom:10px}\n.windows-app-copy h2{font-size:20px;margin-bottom:8px}\n.windows-app-copy>p{font-size:13.5px;color:var(--ink-3)}\n.windows-latest{color:var(--ink-4);margin-left:5px}\n.windows-changelog{margin-top:14px;padding-top:12px;border-top:1px solid var(--rule);font-size:13px;color:var(--ink-3)}\n.windows-changelog strong{color:var(--ink)}\n.windows-download{flex:0 0 auto;white-space:nowrap}\n.windows-update-notice{max-width:var(--maxw);margin:20px auto 0;padding:14px 18px;border:1px solid var(--rule-strong);border-radius:14px;background:var(--paper);display:flex;align-items:center;justify-content:space-between;gap:16px;box-shadow:var(--shadow-xs)}\n.windows-update-notice strong{font-size:13.5px}.windows-update-notice p{font-size:12.5px;color:var(--ink-3);margin-top:2px}\n.windows-update-notice .btn{flex:0 0 auto}\n@media(max-width:720px){.windows-app-card{display:block;margin-top:22px}.windows-app-main{gap:10px}.windows-app-copy h2{font-size:18px}.windows-download{width:100%;margin-top:18px}.windows-update-notice{margin:14px 16px 0;align-items:flex-start}.windows-update-notice .btn{margin-top:2px}}\n
 .windows-download-disabled{cursor:default;pointer-events:none;opacity:.72}
 
 /* Windows app management is intentionally housed under Settings. */
@@ -1918,3 +1917,125 @@ aside .panel:has(#hseSettingsForm){overflow:visible}
 .windows-settings-section> .section-head{margin-bottom:14px}
 .windows-settings-section h3{font-size:17px}
 @media(max-width:720px){.windows-settings-section{margin-top:22px;padding-top:20px}}
+
+
+/* ---------- FINAL WINDOWS DASHBOARD CARD FIX ---------- */
+/* Keep the Windows card visually separated from This Month and make its
+   contents predictable at every viewport size. */
+.layout > aside .windows-app-card {
+  display:flex;
+  flex-direction:row;
+  align-items:center;
+  justify-content:space-between;
+  width:100%;
+  box-sizing:border-box;
+  margin-top:28px !important;
+  margin-bottom:0;
+  gap:22px;
+}
+.layout > aside .windows-app-main {
+  display:flex;
+  align-items:flex-start;
+  flex:1 1 auto;
+  min-width:0;
+  gap:12px;
+}
+.layout > aside .windows-app-icon {
+  width:42px !important;
+  height:42px !important;
+  min-width:42px !important;
+  min-height:42px !important;
+  flex:0 0 42px !important;
+  display:grid !important;
+  place-items:center !important;
+  margin:1px 0 0 !important;
+  padding:0 !important;
+  box-sizing:border-box;
+}
+.layout > aside .windows-app-icon svg {
+  width:22px !important;
+  height:22px !important;
+  max-width:22px !important;
+  max-height:22px !important;
+  display:block !important;
+}
+.layout > aside .windows-app-copy {
+  min-width:0;
+  flex:1 1 auto;
+}
+.layout > aside .windows-app-copy .eyebrow {
+  margin:0 0 8px;
+}
+.layout > aside .windows-app-copy h2 {
+  margin:0 0 8px;
+  font-size:18px;
+  line-height:1.15;
+  overflow-wrap:anywhere;
+}
+.layout > aside .windows-app-copy > p {
+  margin:0;
+  line-height:1.5;
+}
+.layout > aside .windows-changelog {
+  margin-top:12px;
+  padding-top:10px;
+}
+.layout > aside .windows-download {
+  flex:0 0 auto;
+  margin:0;
+}
+@media (max-width:900px) {
+  .layout > aside .windows-app-card {
+    gap:18px;
+    margin-top:26px !important;
+  }
+}
+@media (max-width:720px) {
+  .layout > aside .windows-app-card {
+    display:flex;
+    flex-direction:column;
+    align-items:stretch;
+    gap:0;
+    margin-top:28px !important;
+    padding:20px;
+  }
+  .layout > aside .windows-app-main {
+    display:flex;
+    flex-direction:column;
+    align-items:stretch;
+    gap:14px;
+  }
+  .layout > aside .windows-app-icon {
+    width:48px !important;
+    height:48px !important;
+    min-width:48px !important;
+    min-height:48px !important;
+    flex:0 0 48px !important;
+    align-self:flex-start;
+    margin:0 !important;
+  }
+  .layout > aside .windows-app-icon svg {
+    width:25px !important;
+    height:25px !important;
+    max-width:25px !important;
+    max-height:25px !important;
+  }
+  .layout > aside .windows-app-copy .eyebrow {
+    margin-bottom:8px;
+  }
+  .layout > aside .windows-app-copy h2 {
+    font-size:18px;
+    line-height:1.14;
+    margin-bottom:8px;
+  }
+  .layout > aside .windows-app-copy > p {
+    font-size:13px;
+    line-height:1.5;
+  }
+  .layout > aside .windows-download {
+    width:100%;
+    margin-top:16px;
+    box-sizing:border-box;
+    justify-content:center;
+  }
+}
