@@ -1911,10 +1911,7 @@ aside .panel:has(#hseSettingsForm){overflow:visible}
 .hse-speaker-option .avatar-sm{margin:0}
 /* ---------- Windows application update card ---------- */
 .windows-app-card{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:20px;
+  display:block;
   width:100%;
   min-width:0;
   box-sizing:border-box;
@@ -1927,7 +1924,7 @@ aside .panel:has(#hseSettingsForm){overflow:visible}
   flex-direction:column;
   align-items:flex-start;
   gap:12px;
-  flex:1 1 auto;
+  width:100%;
   min-width:0;
 }
 .windows-app-head{
@@ -2003,7 +2000,11 @@ aside .panel:has(#hseSettingsForm){overflow:visible}
 .windows-changelog strong{color:var(--ink)}
 .windows-changelog p{margin:4px 0 0}
 .windows-download{
+  display:inline-flex;
   flex:0 0 auto;
+  width:auto;
+  max-width:100%;
+  margin-top:16px;
   white-space:nowrap;
 }
 .windows-update-notice{
@@ -2076,7 +2077,6 @@ aside .panel:has(#hseSettingsForm){overflow:visible}
   .windows-latest{display:inline;margin-left:4px}
   .windows-changelog{margin-top:12px;padding-top:12px}
   .windows-download{
-    display:inline-flex;
     width:auto;
     max-width:100%;
     margin-top:16px;
