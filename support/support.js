@@ -736,7 +736,11 @@
      This feature does not touch login, sign-up, existing profiles, roles, or any
      other tab — it only ever inserts one new profiles row + one new auth user. */
 
-  var ADD_USER = { fields: [] };
+  /* fullNameCol / firstNameCol / lastNameCol let submitAddUser() auto-derive
+     full_name from First Name + Last Name (see below) whenever the form is
+     showing split name fields but the "profiles" table still has a NOT NULL
+     full_name column underneath. */
+  var ADD_USER = { fields: [], hasSplitName: false, fullNameCol: null, firstNameCol: null, lastNameCol: null };
 
   /* Work out which profile columns this database actually has, using the same
      column-detection approach as the profile editor (colOf against a real row),
@@ -751,13 +755,24 @@
 
     var hasSplitName = colOf(sample, FIRST_NAME_KEYS) || colOf(sample, LAST_NAME_KEYS);
     var nameCol = colOf(sample, NAME_KEYS);
+    ADD_USER.hasSplitName = !!hasSplitName;
+    /* The "profiles" table may still require full_name (NOT NULL) even when
+       the form itself now only collects First Name / Last Name. Remember the
+       real full_name column (or fall back to the conventional "full_name"
+       name) so it can be filled in automatically below, without ever
+       rendering a redundant "Full name" input alongside First/Last name. */
+    ADD_USER.fullNameCol = nameCol || "full_name";
     if (!hasSplitName && (nameCol || !known)) {
       fields.push({ col: nameCol || "full_name", label: "Full name", max: 120, required: true });
+      ADD_USER.firstNameCol = null;
+      ADD_USER.lastNameCol = null;
     } else {
       var titleCol = colOf(sample, TITLE_NAME_KEYS);
       if (titleCol) fields.push({ col: titleCol, label: "Title", type: "select", options: ["Mr", "Mrs", "Miss"], max: 4 });
-      fields.push({ col: colOf(sample, FIRST_NAME_KEYS) || "first_name", label: "First name", max: 80, required: true });
-      fields.push({ col: colOf(sample, LAST_NAME_KEYS) || "last_name", label: "Last name", max: 80, required: true });
+      ADD_USER.firstNameCol = colOf(sample, FIRST_NAME_KEYS) || "first_name";
+      ADD_USER.lastNameCol = colOf(sample, LAST_NAME_KEYS) || "last_name";
+      fields.push({ col: ADD_USER.firstNameCol, label: "First name", max: 80, required: true });
+      fields.push({ col: ADD_USER.lastNameCol, label: "Last name", max: 80, required: true });
     }
 
     var NAME_HANDLED = [TITLE_NAME_KEYS, FIRST_NAME_KEYS, LAST_NAME_KEYS];
@@ -851,6 +866,18 @@
       var val = inp.value.trim();
       if (val) profile[col] = val;
     });
+
+    /* The form collects First Name / Last Name, but "profiles.full_name" is
+       still NOT NULL on the existing database, so derive it here rather than
+       ever submitting it as null. This never overwrites an explicit
+       "Full name" value — it only applies when the form is in split
+       first/last name mode. */
+    if (ADD_USER.hasSplitName && ADD_USER.fullNameCol) {
+      var firstVal = (profile[ADD_USER.firstNameCol] || "").trim();
+      var lastVal = (profile[ADD_USER.lastNameCol] || "").trim();
+      var fullVal = (firstVal + " " + lastVal).trim();
+      if (fullVal) profile[ADD_USER.fullNameCol] = fullVal;
+    }
 
     var emailField = ADD_USER.fields.filter(function (f) { return f.type === "email"; })[0];
     var email = (emailField && profile[emailField.col]) || "";
