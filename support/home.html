@@ -111,7 +111,6 @@
           <button type="button" data-tab="users">Users</button>
           <button type="button" data-tab="attendance">Attendance</button>
           <button type="button" data-tab="system" id="navSystemBtn">System management</button>
-          <button type="button" data-tab="windows" id="navWindowsBtn">Windows app</button>
           <button type="button" data-tab="settings" id="navSettingsBtn">Settings</button>
           <button type="button" data-tab="leave">Leave</button>
           <button type="button" data-tab="tickets">Support Tickets <span id="supportTicketNavBadge" hidden></span></button>
@@ -149,238 +148,6 @@
       </section>
 
 
-      <!-- Windows application release management -->
-      <section class="section" id="tab-windows" hidden>
-        <div class="section-head"><div><h2>Windows Application</h2><p class="overview-lede">Manage the current E-Attendance Windows download and release information.</p></div><button class="btn btn-ghost btn-sm" id="windowsUpdateRefresh" type="button">Refresh</button></div>
-        <div id="windowsUpdateState" class="users-state">Loading Windows application release…</div>
-        <div id="windowsUpdateCurrent"></div>
-        <form id="windowsUpdateForm" class="windows-admin-form" novalidate>
-          <div class="grid-2">
-            <div class="field"><label for="windowsVersion">Latest version</label><input id="windowsVersion" type="text" maxlength="40" placeholder="e.g. 1.3.0" required /></div>
-            <div class="field"><label for="windowsDownloadUrl">Windows download / update link</label><input id="windowsDownloadUrl" type="url" maxlength="2000" placeholder="https://…" required /></div>
-          </div>
-          <div class="field"><label for="windowsChangelog">Update description / changelog</label><textarea id="windowsChangelog" rows="4" maxlength="2000" placeholder="Improved performance, bug fixes and other system improvements."></textarea></div>
-          <label class="check windows-enabled-check" for="windowsEnabled"><input id="windowsEnabled" type="checkbox" checked /> Make this release available to users</label>
-          <div class="form-foot"><button class="btn btn-primary" id="windowsPublishBtn" type="submit">Publish Windows Update</button></div>
-          <div id="windowsUpdateMsg" class="alert" hidden></div>
-        </form>
-        <div id="windowsUpdateHistory" class="windows-admin-history"></div>
-      </section>
-
-      <!-- Users & profiles -->
-      <section class="section" id="tab-tickets" hidden>
-        <div class="section-head"><div><h2>Support Tickets</h2><p class="overview-lede">Review, assign and resolve staff support requests.</p></div><div class="section-head-actions"><button class="btn btn-ghost btn-sm" id="supportTicketsRefresh" type="button">Refresh</button><button class="btn btn-primary btn-sm" id="supportTicketNewBtn" type="button">+ New Ticket</button></div></div>
-        <div id="supportTicketsState" class="users-state">Loading tickets…</div>
-        <div id="supportTicketsList"></div>
-      </section>
-
-      <section class="section" id="tab-users" hidden>
-        <div class="section-head">
-          <h2>Users &amp; profiles</h2>
-          <span id="usersCount">&nbsp;</span>
-        </div>
-
-        <div id="usersListView">
-          <div class="users-toolbar">
-            <div class="field search-field">
-              <label for="userSearch">Search staff</label>
-              <input id="userSearch" type="search" placeholder="Search by name, email or staff ID" autocomplete="off" />
-            </div>
-            <button class="btn btn-ghost btn-sm" id="usersRefresh" type="button">Refresh</button>
-            <button class="btn btn-primary btn-sm" id="addUserBtn" type="button" hidden>+ Add New User</button>
-          </div>
-          <p class="users-state" id="usersState">Loading staff records…</p>
-          <div class="users-grid" id="usersGrid"></div>
-        </div>
-
-        <div id="userProfileView" hidden>
-          <button class="link-muted users-back" id="userBack" type="button">&larr; Back to all users</button>
-          <div class="profile-head">
-            <div class="avatar avatar-lg" id="profileAvatar"></div>
-            <div class="profile-ident">
-              <h3 id="profileName">—</h3>
-              <p id="profileMeta">—</p>
-            </div>
-          </div>
-          <div class="panel panel-span" id="profileIdentityPanel">
-            <div class="panel-head">User identity</div>
-            <div class="panel-body"><dl class="kv" id="kvUserIdentity"></dl></div>
-          </div>
-          <div class="grid-2 profile-grid">
-            <div class="panel">
-              <div class="panel-head">Contact</div>
-              <div class="panel-body"><dl class="kv" id="kvUserContact"></dl></div>
-            </div>
-            <div class="panel">
-              <div class="panel-head">Employment</div>
-              <div class="panel-body"><dl class="kv" id="kvUserWork"></dl></div>
-            </div>
-            <div class="panel">
-              <div class="panel-head">Account</div>
-              <div class="panel-body"><dl class="kv" id="kvUserAccount"></dl></div>
-            </div>
-            <div class="panel panel-span" id="rolePanel">
-              <div class="panel-head">Role management</div>
-              <div class="panel-body panel-body-compact">
-                <dl class="kv" id="kvUserRole"></dl>
-                <div class="role-form" id="roleForm" hidden>
-                  <div class="field">
-                    <label for="roleSelect">Portal role</label>
-                    <select id="roleSelect">
-                      <option value="staff">Staff</option>
-                      <option value="it_support">IT Support</option>
-                      <option value="admin">Administrator</option>
-                    </select>
-                  </div>
-                  <button class="btn btn-primary btn-sm" id="roleSave" type="button">Save role</button>
-                </div>
-                <p class="role-note" id="roleNote"></p>
-              </div>
-            </div>
-            <!-- Account & password support (Phase 7) -->
-            <div class="panel panel-span" id="accountPanel">
-              <div class="panel-head">Account &amp; password support</div>
-              <div class="panel-body">
-                <div class="acct-summary">
-                  <div class="avatar avatar-lg" id="acctAvatar"></div>
-                  <div class="acct-ident">
-                    <h3 id="acctName">&mdash;</h3>
-                    <p id="acctEmail">&mdash;</p>
-                    <p id="acctSub">&mdash;</p>
-                  </div>
-                </div>
-                <dl class="kv" id="kvAccountState"></dl>
-                <div class="account-actions" id="accountActions" hidden>
-                  <button class="btn btn-primary btn-sm" id="acctReset" type="button">Send password reset email</button>
-                  <button class="btn btn-ghost btn-sm" id="acctToggle" type="button">Deactivate account</button>
-                  <button class="btn btn-ghost btn-sm" id="acctRecheck" type="button">Re-check account status</button>
-                  <button class="btn btn-danger btn-sm" id="acctDelete" type="button" hidden>Delete Account</button>
-                  <button class="btn btn-ghost btn-sm" id="acctEmailBtn" type="button">Start sign-in email change</button>
-                </div>
-                <p class="role-note" id="accountNote"></p>
-                <p class="edit-hint" id="acctSecurityNote">Passwords are never shown, stored or chosen here. Supabase Authentication sends the recovery link and handles email verification.</p>
-              </div>
-            </div>
-
-            <div class="panel panel-span" id="profileEditPanel">
-              <div class="panel-head">Profile management</div>
-              <div class="panel-body">
-                <p class="role-note" id="profileEditNote"></p>
-                <div class="edit-grid" id="profileEditFields"></div>
-                <div class="edit-avatar" id="profileAvatarRow" hidden>
-                  <div class="field">
-                    <label for="avatarFile">Replace profile picture</label>
-                    <input id="avatarFile" type="file" accept="image/png,image/jpeg,image/webp" />
-                  </div>
-                  <p class="edit-hint">PNG, JPG or WebP up to 20&nbsp;MB. Stored in the same bucket the main website reads.</p>
-                </div>
-                <div class="edit-actions" id="profileEditActions" hidden>
-                  <button class="btn btn-primary btn-sm" id="profileSave" type="button">Review changes</button>
-                  <button class="btn btn-ghost btn-sm" id="profileReset" type="button">Discard</button>
-                </div>
-              </div>
-            </div>
-
-            <div class="panel panel-span">
-              <div class="panel-head">Other stored information</div>
-              <div class="panel-body panel-body-compact"><dl class="kv" id="kvUserOther"></dl></div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Attendance & timestamp correction -->
-      <section class="section" id="tab-attendance" hidden>
-        <div class="section-head">
-          <h2>Attendance &amp; timestamps</h2>
-          <span id="attCount">&nbsp;</span>
-        </div>
-
-        <div class="att-toolbar">
-          <div class="field search-field att-search">
-            <label for="attSearch">Search staff</label>
-            <input id="attSearch" type="search" placeholder="Search by name, email or staff ID" autocomplete="off" />
-            <div class="att-staff-results" id="attStaffResults" hidden></div>
-          </div>
-          <button class="btn btn-ghost btn-sm" id="attRefresh" type="button">Refresh</button>
-        </div>
-
-        <div class="att-selected" id="attSelected" hidden>
-          <div class="att-selected-person">
-            <div class="avatar avatar-sm" id="attSelectedAvatar"></div>
-            <h3 id="attSelectedName">—</h3>
-          </div>
-          <button class="link-muted" id="attClear" type="button">Change staff member</button>
-        </div>
-
-        <div class="att-filters">
-          <div class="field"><label for="attDate">Exact date</label><input id="attDate" type="date" /></div>
-          <div class="field"><label for="attFrom">From</label><input id="attFrom" type="date" /></div>
-          <div class="field"><label for="attTo">To</label><input id="attTo" type="date" /></div>
-          <div class="field" id="attStatusField" hidden>
-            <label for="attStatus">Type</label>
-            <select id="attStatus"><option value="">All types</option></select>
-          </div>
-          <button class="btn btn-ghost btn-sm" id="attFilterReset" type="button">Clear filters</button>
-        </div>
-
-        <p class="users-state" id="attState">Search for a staff member to view their attendance records.</p>
-        <div class="att-records" id="attRecords"></div>
-        <p class="role-note" id="attNote"></p>
-      </section>
-
-      <!-- Leave -->
-      <section class="section support-leave-page" id="tab-leave" hidden></section>
-
-      <!-- System management (Phase 6) -->
-      <section class="section" id="tab-system" hidden>
-        <div class="section-head">
-          <h2>System management</h2>
-          <span id="sysScope">&nbsp;</span>
-        </div>
-
-        <p class="role-note" id="sysNote"></p>
-
-        <div class="sys-groups">
-          <div class="panel">
-            <div class="panel-head">Accounts &amp; access</div>
-            <div class="panel-body">
-              <ul class="sys-list">
-                <li>
-                  <h3>Staff accounts</h3>
-                  <p>Open a staff record to view the account, activate or deactivate access, and change the portal role.</p>
-                  <button class="btn btn-ghost btn-sm" data-goto="users" type="button">Open staff accounts</button>
-                </li>
-                <li>
-                  <h3>Profile details</h3>
-                  <p>Correct a name, phone number, position, department or profile picture. Changes write to the same profile record the website reads.</p>
-                  <button class="btn btn-ghost btn-sm" data-goto="users" type="button">Edit a profile</button>
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          <div class="panel">
-            <div class="panel-head">Records &amp; corrections</div>
-            <div class="panel-body">
-              <ul class="sys-list">
-                <li>
-                  <h3>Attendance corrections</h3>
-                  <p>Search staff, filter by date or date range, correct a clock-in, clock-out or record date, and enter a missing timestamp. A reason is always required.</p>
-                  <button class="btn btn-ghost btn-sm" data-goto="attendance" type="button">Open attendance tools</button>
-                </li>
-                <li>
-                  <h3>Supported records only</h3>
-                  <p>Only the fields listed in this portal can be changed. There is no free-form database or SQL access from here.</p>
-                </li>
-              </ul>
-            </div>
-          </div>
-
-
-        </div>
-      </section>
-
       <!-- Settings / System Configuration (Phase 8) -->
       <section class="section" id="tab-settings" hidden>
         <div class="section-head">
@@ -396,6 +163,24 @@
             <div class="panel-body">
               <p class="users-state" id="settingsState">Loading supported settings…</p>
               <div class="settings-list" id="settingsList"></div>
+
+              <section class="windows-settings-section" id="tab-windows">
+                <div class="section-head"><div><h3>Windows Application</h3><p class="overview-lede">Manage the current E-Attendance Windows download and release information.</p></div><button class="btn btn-ghost btn-sm" id="windowsUpdateRefresh" type="button">Refresh</button></div>
+                <div id="windowsUpdateState" class="users-state">Loading Windows application release…</div>
+                <div id="windowsUpdateCurrent"></div>
+                <form id="windowsUpdateForm" class="windows-admin-form" novalidate>
+                  <div class="form-grid">
+                    <div class="field"><label for="windowsVersion">Latest version</label><input id="windowsVersion" type="text" maxlength="40" placeholder="e.g. 1.3.0" required /></div>
+                    <div class="field"><label for="windowsDownloadUrl">Windows download / update link</label><input id="windowsDownloadUrl" type="url" maxlength="2000" placeholder="https://…" required /></div>
+                  </div>
+                  <div class="field"><label for="windowsChangelog">Update description / changelog</label><textarea id="windowsChangelog" rows="4" maxlength="2000" placeholder="Improved performance, bug fixes and other system improvements."></textarea></div>
+                  <label class="check windows-enabled-check" for="windowsEnabled"><input id="windowsEnabled" type="checkbox" checked /> Make this release available to users</label>
+                  <div class="form-foot"><button class="btn btn-primary" id="windowsPublishBtn" type="submit">Publish Windows Update</button></div>
+                  <div id="windowsUpdateMsg" class="alert" hidden></div>
+                </form>
+                <div id="windowsUpdateHistory" class="windows-admin-history"></div>
+              </section>
+
               <div class="edit-actions" id="settingsActions" hidden>
                 <button class="btn btn-primary btn-sm" id="settingsSave" type="button">Save changes</button>
                 <button class="btn btn-ghost btn-sm" id="settingsReload" type="button">Reload</button>
