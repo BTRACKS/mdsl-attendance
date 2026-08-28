@@ -111,6 +111,7 @@
           <button type="button" data-tab="users">Users</button>
           <button type="button" data-tab="attendance">Attendance</button>
           <button type="button" data-tab="system" id="navSystemBtn">System management</button>
+          <button type="button" data-tab="windows" id="navWindowsBtn">Windows app</button>
           <button type="button" data-tab="settings" id="navSettingsBtn">Settings</button>
           <button type="button" data-tab="leave">Leave</button>
           <button type="button" data-tab="tickets">Support Tickets <span id="supportTicketNavBadge" hidden></span></button>
@@ -147,6 +148,24 @@
           <div class="panel"><div class="panel-head">Today's attendance</div><div class="panel-body"><div class="mini-stats" id="attendanceSummary"><div><span>Clock-ins</span><strong>—</strong></div><div><span>Clock-outs</span><strong>—</strong></div><div><span>Missing clock-outs</span><strong>—</strong></div></div><p class="dashboard-state" id="dashboardAttendanceState">Loading today's attendance…</p></div></div>
       </section>
 
+
+      <!-- Windows application release management -->
+      <section class="section" id="tab-windows" hidden>
+        <div class="section-head"><div><h2>Windows Application</h2><p class="overview-lede">Manage the current E-Attendance Windows download and release information.</p></div><button class="btn btn-ghost btn-sm" id="windowsUpdateRefresh" type="button">Refresh</button></div>
+        <div id="windowsUpdateState" class="users-state">Loading Windows application release…</div>
+        <div id="windowsUpdateCurrent"></div>
+        <form id="windowsUpdateForm" class="windows-admin-form" novalidate>
+          <div class="grid-2">
+            <div class="field"><label for="windowsVersion">Latest version</label><input id="windowsVersion" type="text" maxlength="40" placeholder="e.g. 1.3.0" required /></div>
+            <div class="field"><label for="windowsDownloadUrl">Windows download / update link</label><input id="windowsDownloadUrl" type="url" maxlength="2000" placeholder="https://…" required /></div>
+          </div>
+          <div class="field"><label for="windowsChangelog">Update description / changelog</label><textarea id="windowsChangelog" rows="4" maxlength="2000" placeholder="Improved performance, bug fixes and other system improvements."></textarea></div>
+          <label class="check windows-enabled-check" for="windowsEnabled"><input id="windowsEnabled" type="checkbox" checked /> Make this release available to users</label>
+          <div class="form-foot"><button class="btn btn-primary" id="windowsPublishBtn" type="submit">Publish Windows Update</button></div>
+          <div id="windowsUpdateMsg" class="alert" hidden></div>
+        </form>
+        <div id="windowsUpdateHistory" class="windows-admin-history"></div>
+      </section>
 
       <!-- Users & profiles -->
       <section class="section" id="tab-tickets" hidden>

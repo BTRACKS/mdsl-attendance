@@ -40,6 +40,7 @@
   /* ------------------------- icons ------------------------- */
   var ICON = {
     download: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
+    windows: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M2 3.6 10.8 2.4v8.7H2V3.6Zm10.2-1.4L22 1v10.1h-9.8V2.2ZM2 12.9h8.8v8.7L2 20.4v-7.5Zm10.2 0H22V23l-9.8-1.3v-8.8Z"/></svg>',
     sheet: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>',
     grid: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>',
     list: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>',
@@ -88,7 +89,7 @@
      (sign up, sign in, submit attendance) await refreshData() before
      re-rendering, so the UI code below stays largely unchanged. */
   var db = { users: [], attendance: [], leaves: [], staffCount: null, hse: [], hseSettings: null, overview: null, overviewError: null,
-    learningTopics: [], learningLessons: [], learningLessonBlocks: [], learningQuizzes: [], learningProgress: [], learningAttempts: [], learningQuestions: [] };
+    learningTopics: [], learningLessons: [], learningLessonBlocks: [], learningQuizzes: [], learningProgress: [], learningAttempts: [], learningQuestions: [], windowsUpdate: null, windowsUpdateAcked: true };
   var authUser = null;     // the raw Supabase auth user (has .id, .email)
   var currentUser = null;  // the matching row from db.users (profile + role)
   /* Prevent route decisions while Supabase restores an existing session. */
@@ -167,6 +168,22 @@
       db.hse = (hseRes.error ? [] : (hseRes.data || [])).map(mapHse);
       var hseSetRes = await supabaseClient.from("hse_settings").select("*").limit(1);
       db.hseSettings = (!hseSetRes.error && hseSetRes.data && hseSetRes.data[0]) ? hseSetRes.data[0] : null;
+
+      // Central Windows desktop application release information. Missing tables are
+      // intentionally non-fatal so the attendance platform continues to work.
+      try {
+        var windowsRes = await supabaseClient.from("windows_app_updates").select("id,version,download_url,changelog,is_current,enabled,published_at,created_at").eq("is_current", true).eq("enabled", true).maybeSingle();
+        db.windowsUpdate = (!windowsRes.error && windowsRes.data) ? windowsRes.data : null;
+        db.windowsUpdateAcked = true;
+        if (db.windowsUpdate && authUser) {
+          var ackRes = await supabaseClient.from("windows_update_acknowledgements").select("id").eq("update_id", db.windowsUpdate.id).eq("user_id", authUser.id).maybeSingle();
+          db.windowsUpdateAcked = !ackRes.error && !!ackRes.data;
+        }
+      } catch (windowsErr) {
+        db.windowsUpdate = null;
+        db.windowsUpdateAcked = true;
+        console.warn("Windows update module data:", windowsErr);
+      }
 
       // Intern Learning data is isolated from the core attendance refresh.
       // Missing learning tables are non-fatal so the existing platform remains usable
@@ -811,6 +828,49 @@
       '<span class="error"></span></div>';
   }
 
+  /* ---------- Windows desktop application ---------- */
+  function windowsUpdateCard(u) {
+    var w = db.windowsUpdate;
+    var version = w ? String(w.version || "Latest") : "Not published yet";
+    var changelog = w ? String(w.changelog || "").trim() : "";
+    return '<section class="section windows-app-card" id="windowsUpdateCard">' +
+      '<div class="windows-app-main"><div class="windows-app-icon" aria-hidden="true">' + ICON.windows + '</div>' +
+      '<div class="windows-app-copy"><p class="eyebrow">Available on Windows</p><h2>Get the E-Attendance desktop experience on Windows.</h2>' +
+      (w ? '<p>Version <strong>' + esc(version) + '</strong> <span class="windows-latest">Latest version available.</span></p>' : '<p>The Windows desktop download will appear here when it is published by IT Support.</p>') +
+      (changelog ? '<div class="windows-changelog"><strong>What\'s New:</strong><p>' + esc(changelog) + '</p></div>' : '') +
+      '</div></div>' +
+      (w ? '<a class="btn btn-primary windows-download" href="' + esc(w.download_url) + '" target="_blank" rel="noopener noreferrer">' + ICON.download + '<span>Download for Windows</span></a>' : '<span class="btn btn-ghost windows-download windows-download-disabled" aria-disabled="true">Download unavailable</span>') +
+      '</section>';
+  }
+
+  function windowsUpdateNotice() {
+    var w = db.windowsUpdate;
+    if (!w || db.windowsUpdateAcked) return "";
+    return '<div class="windows-update-notice" role="status"><div><strong>New Windows Update Available</strong><p>A new version of E-Attendance is now available.</p></div><button type="button" class="btn btn-ghost btn-sm" data-windows-view>View Update</button></div>';
+  }
+
+  async function acknowledgeWindowsUpdate() {
+    var w = db.windowsUpdate, u = session();
+    if (!w || !u) return;
+    try {
+      var r = await supabaseClient.rpc("acknowledge_windows_update", { p_update_id: w.id });
+      if (r.error) throw r.error;
+      db.windowsUpdateAcked = true;
+    } catch (e) {
+      console.warn("Windows update acknowledgement:", e);
+    }
+    var card = document.getElementById("windowsUpdateCard");
+    if (card) card.scrollIntoView({ behavior: "smooth", block: "center" });
+    var n = document.querySelector(".windows-update-notice");
+    if (n) n.remove();
+  }
+
+  function bindWindowsUpdate() {
+    Array.prototype.forEach.call(document.querySelectorAll("[data-windows-view]"), function (b) {
+      b.addEventListener("click", acknowledgeWindowsUpdate);
+    });
+  }
+
   /* ---------- staff dashboard ---------- */
   function dashboardView(u) {
     var now = new Date(), key = dateKey(now);
@@ -821,7 +881,7 @@
 
 
     var greeting = greetingInfo(now);
-    return '<div class="page"><div class="page-head"><p class="eyebrow">Staff Dashboard</p>' +
+    return '<div class="page">' + windowsUpdateNotice() + '<div class="page-head"><p class="eyebrow">Staff Dashboard</p>' +
       '<h1 class="greeting-line">' +
       '<span class="greeting-salutation">' + esc(greeting.text) + ",</span>" +
       '<span class="greeting-name">' + esc(u.firstName || u.fullName.split(" ")[0]) +
@@ -843,6 +903,8 @@
       "</section>" +
 
       hseStaffCard(u) +
+
+      windowsUpdateCard(u) +
 
       '<section class="section dashboard-leave-card">' +
         '<div class="section-head"><h2>Leave</h2><span>' + (leave ? "Currently on leave" : "Time away") + '</span></div>' +
@@ -1771,7 +1833,7 @@
         }).join('') + '</tbody></table></div>';
     }
 
-    return '<div class="page"><div class="page-head"><p class="eyebrow">Administration</p><h1>Attendance Overview</h1></div>' +
+    return '<div class="page">' + windowsUpdateNotice() + '<div class="page-head"><p class="eyebrow">Administration</p><h1>Attendance Overview</h1></div>' +
       '<div class="stats">' +
       stat("Total Sign-Up Users", Number(db.overview.total_users || 0), "", ICON.users) + stat("Staff Present", morning.filter(function (a) {
         return staff.some(function (u) { return String(u.id) === String(a.userId); });
@@ -1780,6 +1842,7 @@
       stat("Evening Submitted", evening.filter(function (a) { return staff.some(function (u) { return String(u.id) === String(a.userId); }); }).length, "accent", ICON.sunset) +
       (dayState.open ? stat("Missing Attendance", missing.length, missing.length ? "danger" : "", ICON.alert) : stat("Missing Attendance", "—", "", ICON.alert)) + '</div>' +
       weekStatusPanel(now) +
+      windowsUpdateCard(null) +
       '<div class="layout"><div><section class="section"><div class="section-head"><h2>Today\'s Register</h2><span>' + longDate(now) + ' · ' + esc(dayStatus(now).reason) + '</span></div>' +
       (dayState.open ? '' : '<div class="day-lock compact ' + dayState.kind + '"><span class="day-lock-icon" aria-hidden="true">' + ICON.lock + '</span><div class="day-lock-body"><p class="day-lock-title">Attendance locked today</p><p class="day-lock-note">' + esc(dayState.kind === 'weekend' ? 'Weekend — attendance stamping is only available Monday–Friday.' : 'Public holiday: ' + dayState.reason + '. Staff cannot stamp attendance today.') + '</p></div></div>') +
       overviewTable(staff) + '</section></div>' +
@@ -4457,6 +4520,7 @@
       if (hPdf) hPdf.addEventListener("click", function () { downloadHistoryPdf(session()); });
     }
     bindHse();
+    bindWindowsUpdate();
   }
 
   function bindLeave() {
@@ -4814,6 +4878,25 @@
       }
     }
   }, 5000);
+  /* Keep the Windows release card current without changing any existing data refresh behavior. */
+  setInterval(async function () {
+    if (!session()) return;
+    try {
+      var r = await supabaseClient.from("windows_app_updates").select("id,version,download_url,changelog,is_current,enabled,published_at,created_at").eq("is_current", true).eq("enabled", true).maybeSingle();
+      var next = (!r.error && r.data) ? r.data : null;
+      var oldId = db.windowsUpdate && db.windowsUpdate.id;
+      db.windowsUpdate = next;
+      if (next && next.id !== oldId) {
+        db.windowsUpdateAcked = false;
+        if (authUser) {
+          var a = await supabaseClient.from("windows_update_acknowledgements").select("id").eq("update_id", next.id).eq("user_id", authUser.id).maybeSingle();
+          db.windowsUpdateAcked = !a.error && !!a.data;
+        }
+      }
+      if (location.hash === "#/dashboard") { render(); }
+    } catch (e) {}
+  }, 60000);
+
   init();
 })();
 

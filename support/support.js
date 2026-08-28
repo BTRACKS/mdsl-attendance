@@ -2566,6 +2566,7 @@
     initAddUser();
     initAttendance();
     initSystem();
+    initWindowsUpdate();
     initSettings();
     // Start the ticket count immediately so the Support Tickets badge is populated
     // during the initial portal load rather than waiting for a later refresh.
@@ -2578,6 +2579,76 @@
     if (head) document.documentElement.style.setProperty("--header-h", head.offsetHeight + "px");
   }
 
+
+  /* ------------------------- Windows application release management ------------------------- */
+  var WINDOWS_RELEASE = { current: null, history: [], loading: false };
+
+  function windowsReleaseDate(v) {
+    var d = new Date(v || "");
+    return isNaN(d) ? "—" : d.toLocaleString("en-GB", { day:"numeric", month:"short", year:"numeric", hour:"numeric", minute:"2-digit" });
+  }
+
+  function windowsReleaseState(text) { var e=$("windowsUpdateState"); if(e) e.textContent=text; }
+
+  async function loadWindowsUpdate() {
+    if (WINDOWS_RELEASE.loading) return;
+    WINDOWS_RELEASE.loading = true;
+    windowsReleaseState("Loading Windows application release…");
+    try {
+      var cur = await sb.from("windows_app_updates").select("id,version,download_url,changelog,is_current,enabled,published_at,created_at,published_by").order("created_at", {ascending:false}).limit(20);
+      if (cur.error) throw cur.error;
+      WINDOWS_RELEASE.history = cur.data || [];
+      WINDOWS_RELEASE.current = WINDOWS_RELEASE.history.find(function(x){ return x.is_current; }) || null;
+      renderWindowsUpdate();
+    } catch(e) {
+      windowsReleaseState("Windows application release data could not be loaded. Run the supplied windows-app-updates.sql migration first.");
+      toast(e.message || "Could not load Windows release data.", "bad");
+    } finally { WINDOWS_RELEASE.loading = false; }
+  }
+
+  function renderWindowsUpdate() {
+    var current = WINDOWS_RELEASE.current, box=$("windowsUpdateCurrent"), hist=$("windowsUpdateHistory");
+    windowsReleaseState(current ? "Current Windows release: Version " + current.version : "No Windows release is currently published.");
+    if (box) box.innerHTML = current ? '<div class="windows-current-card"><div><p class="eyebrow">Current release</p><h3>Version ' + esc(current.version) + '</h3><p>' + esc(current.changelog || "No changelog provided.") + '</p><a class="link-muted" href="' + esc(current.download_url) + '" target="_blank" rel="noopener noreferrer">Open current download link</a></div><div class="windows-current-meta"><strong>Active</strong><span>Published ' + esc(windowsReleaseDate(current.published_at || current.created_at)) + '</span><button type="button" class="btn btn-ghost btn-sm" id="windowsDisableBtn">Disable download</button></div></div>' : '<div class="settings-empty"><h3>No active release</h3><p>Publish a Windows release below to make the download available on staff dashboards.</p></div>';
+    var form=$("windowsUpdateForm");
+    if(form){ $("windowsVersion").value=current?current.version:""; $("windowsDownloadUrl").value=current?current.download_url:""; $("windowsChangelog").value=current?current.changelog||"":""; $("windowsEnabled").checked=true; }
+    if (hist) {
+      var rows=(WINDOWS_RELEASE.history||[]).filter(function(x){return !current || x.id!==current.id;});
+      hist.innerHTML=rows.length?'<h3>Release history</h3><div class="windows-history-list">'+rows.map(function(x){return '<div class="windows-history-row"><div><strong>Version '+esc(x.version)+'</strong><span>'+esc(x.enabled?'Available':'Disabled')+' · '+esc(windowsReleaseDate(x.published_at||x.created_at))+'</span></div><a class="link-muted" href="'+esc(x.download_url)+'" target="_blank" rel="noopener noreferrer">Open link</a></div>';}).join('')+'</div>':'';
+    }
+    var dis=$("windowsDisableBtn");
+    if(dis) dis.addEventListener("click", disableWindowsUpdate);
+  }
+
+  async function publishWindowsUpdate(e) {
+    if(e) e.preventDefault();
+    var version=$("windowsVersion").value.trim(), url=$("windowsDownloadUrl").value.trim(), changelog=$("windowsChangelog").value.trim(), enabled=$("windowsEnabled").checked, btn=$("windowsPublishBtn");
+    if(!version || !url){toast("Enter a version and Windows download link.","bad");return;}
+    if(!/^https?:\/\//i.test(url)){toast("The Windows download link must start with http:// or https://.","bad");return;}
+    setBtnLoading(btn,true); loader(true);
+    try {
+      var r=await sb.rpc("publish_windows_update",{p_version:version,p_download_url:url,p_changelog:changelog,p_enabled:enabled});
+      if(r.error) throw r.error;
+      toast("Windows Version "+version+" published successfully.","good");
+      await loadWindowsUpdate();
+    } catch(e2){toast(e2.message||"Windows update could not be published.","bad");}
+    finally{setBtnLoading(btn,false);loader(false);}
+  }
+
+  async function disableWindowsUpdate(){
+    var btn=$("windowsDisableBtn"); setBtnLoading(btn,true); loader(true);
+    try{var r=await sb.rpc("disable_windows_update");if(r.error)throw r.error;toast("Windows download disabled.","good");await loadWindowsUpdate();}
+    catch(e){toast(e.message||"Could not disable the Windows download.","bad");}
+    finally{setBtnLoading(btn,false);loader(false);}
+  }
+
+  function initWindowsUpdate(){
+    var root=$("tab-windows"); if(!root || root.getAttribute("data-ready")==="1") return;
+    root.setAttribute("data-ready","1");
+    var form=$("windowsUpdateForm"); if(form) form.addEventListener("submit",publishWindowsUpdate);
+    var refresh=$("windowsUpdateRefresh"); if(refresh) refresh.addEventListener("click",loadWindowsUpdate);
+    loadWindowsUpdate();
+  }
 
   /* ------------------------- Support Tickets ------------------------- */
   var SUPPORT_TICKET_BUCKET = "support-ticket-attachments";
@@ -2912,7 +2983,7 @@
     /* ------------------------- persistent portal section ------------------------- */
     var PORTAL_SECTION_KEY = "tech_support_active_section";
     function validPortalSection(name) {
-      return ["overview", "users", "attendance", "system", "leave", "settings", "tickets", "checks"].indexOf(name) !== -1;
+      return ["overview", "users", "attendance", "system", "windows", "leave", "settings", "tickets", "checks"].indexOf(name) !== -1;
     }
     function getPortalSection() {
       var hash = String(location.hash || "").replace(/^#\/?/, "").toLowerCase();
@@ -2942,6 +3013,7 @@
       });
       if (!options.skipPersist) setPortalSection(name, !!options.replace);
       if (name === "leave") renderSupportLeave();
+      if (name === "windows") loadWindowsUpdate();
       if (name === "tickets") loadSupportTickets();
       if (options.closeNav && typeof closeNav === "function") closeNav();
     }
