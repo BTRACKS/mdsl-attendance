@@ -1478,10 +1478,10 @@
       }
       var y = top + 14;
       ctx.font = "600 14px " + FONT;
-      ctx.fillStyle = INK;
+      ctx.fillStyle = attendancePdf ? "#777777" : INK;
       pdfCenteredText(ctx, r.name, tableX + col1 / 2, y, col1 - 28, 16, 2);
       ctx.font = "500 14px " + FONT;
-      ctx.fillStyle = INK_2;
+      ctx.fillStyle = attendancePdf ? "#777777" : INK_2;
       if (hseCompactTable) {
         pdfCenteredText(ctx, r.status, tableX + col1 + col2 / 2, y, col2 - 28, 16, 2);
       } else if (attendancePdf) {
