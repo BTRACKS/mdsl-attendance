@@ -512,7 +512,20 @@
     $("usersState").textContent = "Loading staff records…";
     $("usersGrid").innerHTML = "";
     loader(true);
-    var res = await sb.from("profiles").select("*").limit(1000);
+    /* Preferred: a security-definer RPC that re-checks the caller is an
+       authorized Admin/IT Support account and then returns EVERY row of
+       "profiles" — the same complete dataset for every authorized caller,
+       on every device and browser, regardless of who created which row.
+       This is the same "RPC first, RLS-protected direct query as fallback"
+       pattern already used by portal_role()/list_portal_roles() above and
+       by the write-side admin_* functions (see SUPABASE-USER-VISIBILITY.sql).
+       Without this, a direct select runs under the caller's own row-level
+       security policies, which is what caused different Admin/IT Support
+       accounts to see different, partial user lists. */
+    var res = await sb.rpc("list_portal_profiles");
+    if (res.error || !res.data) {
+      res = await sb.from("profiles").select("*").limit(1000);
+    }
     await loadRoles();
     await loadLeaves();
     loader(false);
