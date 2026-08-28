@@ -1206,7 +1206,13 @@
       else if (a && a.morning && a.evening) status = "COMPLETE";
       else if (a && a.morning) status = "AWAITING CLOSING";
       else status = "INCOMPLETE";
-      return { name: pdfNameOnly(u), date: prettyDate(key), status: status };
+      return {
+        name: pdfNameOnly(u),
+        date: prettyDate(key),
+        status: status,
+        signIn: a && a.morning ? csvTime(a.morning.time) : "",
+        signOut: a && a.evening ? csvTime(a.evening.time) : ""
+      };
     });
   }
 
@@ -1279,21 +1285,42 @@
     }).format(date));
   }
 
-  function pdfDrawDecorativeBorder(ctx, W, H) {
-    /* Modern, minimal black-and-white frame: hairline outer rule + strong
-       inner rule. Clean, print-safe and free of decorative colour. */
-    ctx.save();
-    ctx.strokeStyle = "#c8c8c8";
-    ctx.lineWidth = 1;
-    ctx.strokeRect(30.5, 30.5, W - 61, H - 61);
+  function pdfFormatAttendanceDate(key) {
+    return pdfFormatGenerationDate(dateFromKey(key));
+  }
 
+  function pdfFormatAttendancePeriod(range) {
+    if (!range || !range.from || !range.to) return "";
+    var from = pdfFormatAttendanceDate(range.from);
+    var to = pdfFormatAttendanceDate(range.to);
+    return from === to ? from : from + " - " + to;
+  }
+
+  function pdfAttendanceFilename(range) {
+    var period = pdfFormatAttendancePeriod(range);
+    var safePeriod = period
+      .replace(/ - /g, "_-_")
+      .replace(/[^A-Z0-9_-]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+    return "Attendance_Record_" + safePeriod + ".pdf";
+  }
+
+  function pdfDrawDecorativeBorder(ctx, W, H, attendancePdf) {
+    /* Attendance Records uses only the strong frame. Other PDF layouts keep
+       their existing frame treatment unchanged. */
+    ctx.save();
+    if (!attendancePdf) {
+      ctx.strokeStyle = "#c8c8c8";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(30.5, 30.5, W - 61, H - 61);
+    }
     ctx.strokeStyle = "#000000";
     ctx.lineWidth = 2;
     ctx.strokeRect(40, 40, W - 80, H - 80);
     ctx.restore();
   }
 
-  function pdfPageCanvas(rows, pageIndex, pageTotal, logoImg, authorisedName, generationDate, hseTopic, meetingDate, hseSpeaker, hseCompactTable) {
+  function pdfPageCanvas(rows, pageIndex, pageTotal, logoImg, authorisedName, generationDate, hseTopic, meetingDate, hseSpeaker, hseCompactTable, attendancePdf, attendancePeriod) {
     var W = 1240, H = 1754, canvas = document.createElement("canvas");
     canvas.width = W; canvas.height = H;
     var ctx = canvas.getContext("2d");
@@ -1305,7 +1332,7 @@
 
     ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, W, H);
     ctx.textBaseline = "top";
-    pdfDrawDecorativeBorder(ctx, W, H);
+    pdfDrawDecorativeBorder(ctx, W, H, !!attendancePdf);
 
     /* ---------------- HEADER (generous, vertically balanced) ---------------- */
     var headerTop = 112, logoBox = 104;
@@ -1335,59 +1362,89 @@
     ctx.beginPath(); ctx.moveTo(margin, dividerY + 0.5); ctx.lineTo(right, dividerY + 0.5); ctx.stroke();
 
     /* ---------------- HSE TOPIC / AUTHORISATION ---------------- */
-    /* Keep the four session-identification/sign-off sections on one consistent
-       vertical rhythm. The label-to-label spacing is identical for Topic,
-       Meeting Date, Authorised Person and Signature. */
+    /* Attendance Records gets its own title/date presentation. HSE keeps its
+       existing layout and content unchanged. */
     var sectionGap = 80;
     var topicY = dividerY + 40;
     var speakerY = topicY + sectionGap;
     var infoLastY = hseTopic ? topicY : null;
     if (hseSpeaker) infoLastY = speakerY;
     var meetingY = infoLastY != null ? infoLastY + sectionGap : topicY + sectionGap;
-    var authY = infoLastY != null ? meetingY + sectionGap : topicY;
-    var signY = authY + sectionGap;
+    var authY, signY, labelY;
 
-    if (hseTopic) {
+    if (attendancePdf) {
+      var titleY = dividerY + 32;
+      ctx.textAlign = "center";
+      ctx.fillStyle = BLACK; ctx.font = "800 27px " + FONT;
+      ctx.fillText("ATTENDANCE RECORD", W / 2, titleY);
+      ctx.textAlign = "left";
+
+      authY = titleY + 70;
+      var attendanceDateY = authY + 80;
+      signY = attendanceDateY + 80;
+      labelY = signY + 78;
+
       ctx.fillStyle = INK_3; ctx.font = "600 12px " + FONT;
-      ctx.fillText("HSE TOPIC", margin, topicY);
+      ctx.fillText("NAME OF AUTHORISED", margin, authY);
       ctx.fillStyle = BLACK; ctx.font = "700 20px " + FONT;
-      ctx.fillText(pdfUpper(hseTopic), margin, topicY + 24);
-    }
+      ctx.fillText(pdfUpper(authorisedName || "ADMINISTRATOR"), margin, authY + 24);
 
-    if (hseSpeaker) {
       ctx.fillStyle = INK_3; ctx.font = "600 12px " + FONT;
-      ctx.fillText("SPEAKER", margin, speakerY);
+      ctx.fillText("ATTENDANCE DATE", margin, attendanceDateY);
       ctx.fillStyle = BLACK; ctx.font = "700 20px " + FONT;
-      ctx.fillText(pdfUpper(hseSpeaker), margin, speakerY + 24);
-    }
+      ctx.fillText(pdfUpper(attendancePeriod || ""), margin, attendanceDateY + 24);
 
-    if (hseTopic || hseSpeaker) {
+      ctx.fillStyle = INK; ctx.font = "600 15px " + FONT;
+      ctx.fillText("SIGNATURE:", margin, signY);
+      /* No line, box or underscores — clean blank signing space follows. */
+    } else {
+      var authY = infoLastY != null ? meetingY + sectionGap : topicY;
+      var signY = authY + sectionGap;
+
+      if (hseTopic) {
+        ctx.fillStyle = INK_3; ctx.font = "600 12px " + FONT;
+        ctx.fillText("HSE TOPIC", margin, topicY);
+        ctx.fillStyle = BLACK; ctx.font = "700 20px " + FONT;
+        ctx.fillText(pdfUpper(hseTopic), margin, topicY + 24);
+      }
+
+      if (hseSpeaker) {
+        ctx.fillStyle = INK_3; ctx.font = "600 12px " + FONT;
+        ctx.fillText("SPEAKER", margin, speakerY);
+        ctx.fillStyle = BLACK; ctx.font = "700 20px " + FONT;
+        ctx.fillText(pdfUpper(hseSpeaker), margin, speakerY + 24);
+      }
+
+      if (hseTopic || hseSpeaker) {
+        ctx.fillStyle = INK_3; ctx.font = "600 12px " + FONT;
+        ctx.fillText("MEETING DATE", margin, meetingY);
+        ctx.fillStyle = BLACK; ctx.font = "700 20px " + FONT;
+        ctx.fillText(pdfUpper(meetingDate || ""), margin, meetingY + 24);
+      }
+
       ctx.fillStyle = INK_3; ctx.font = "600 12px " + FONT;
-      ctx.fillText("MEETING DATE", margin, meetingY);
+      ctx.fillText("NAME OF AUTHORISED", margin, authY);
       ctx.fillStyle = BLACK; ctx.font = "700 20px " + FONT;
-      ctx.fillText(pdfUpper(meetingDate || ""), margin, meetingY + 24);
+      ctx.fillText(pdfUpper(authorisedName || "ADMINISTRATOR"), margin, authY + 24);
+
+      ctx.fillStyle = INK; ctx.font = "600 15px " + FONT;
+      ctx.fillText("SIGNATURE:", margin, signY);
+      labelY = signY + 118;
+      ctx.fillStyle = INK_4; ctx.font = "600 12px " + FONT;
+      ctx.fillText("ATTENDANCE RECORD", margin, labelY);
     }
-
-    ctx.fillStyle = INK_3; ctx.font = "600 12px " + FONT;
-    ctx.fillText("NAME OF AUTHORISED", margin, authY);
-    ctx.fillStyle = BLACK; ctx.font = "700 20px " + FONT;
-    ctx.fillText(pdfUpper(authorisedName || "ADMINISTRATOR"), margin, authY + 24);
-
-    ctx.fillStyle = INK; ctx.font = "600 15px " + FONT;
-    ctx.fillText("SIGNATURE:", margin, signY);
-    /* No line, box or underscores — clean blank signing space follows. */
 
     /* ---------------- ATTENDANCE TABLE ---------------- */
-    var labelY = signY + 118;
-    ctx.fillStyle = INK_4; ctx.font = "600 12px " + FONT;
-    ctx.fillText("ATTENDANCE RECORD", margin, labelY);
-
     var tableX = margin, tableY = labelY + 30;
     var col1, col2, col3;
     if (hseCompactTable) {
       col1 = Math.round(tableW * 0.70);
       col2 = tableW - col1;
       col3 = 0;
+    } else if (attendancePdf) {
+      col1 = Math.round(tableW / 3);
+      col2 = Math.round(tableW / 3);
+      col3 = tableW - col1 - col2;
     } else {
       col1 = Math.round(tableW * 0.40);
       col2 = Math.round(tableW * 0.30);
@@ -1403,6 +1460,9 @@
     pdfCenteredText(ctx, "STAFF NAME", tableX + col1 / 2, tableY + 18, col1 - 30, 17, 1);
     if (hseCompactTable) {
       pdfCenteredText(ctx, "STATUS", tableX + col1 + col2 / 2, tableY + 18, col2 - 30, 17, 1);
+    } else if (attendancePdf) {
+      pdfCenteredText(ctx, "SIGN IN", tableX + col1 + col2 / 2, tableY + 18, col2 - 30, 17, 1);
+      pdfCenteredText(ctx, "SIGN OUT", tableX + col1 + col2 + col3 / 2, tableY + 18, col3 - 30, 17, 1);
     } else {
       pdfCenteredText(ctx, "DATE", tableX + col1 + col2 / 2, tableY + 18, col2 - 30, 17, 1);
       pdfCenteredText(ctx, "STATUS", tableX + col1 + col2 + col3 / 2, tableY + 18, col3 - 30, 17, 1);
@@ -1424,6 +1484,9 @@
       ctx.fillStyle = INK_2;
       if (hseCompactTable) {
         pdfCenteredText(ctx, r.status, tableX + col1 + col2 / 2, y, col2 - 28, 16, 2);
+      } else if (attendancePdf) {
+        pdfCenteredText(ctx, r.signIn || "—", tableX + col1 + col2 / 2, y, col2 - 28, 16, 2);
+        pdfCenteredText(ctx, r.signOut || "—", tableX + col1 + col2 + col3 / 2, y, col3 - 28, 16, 2);
       } else {
         pdfCenteredText(ctx, r.date, tableX + col1 + col2 / 2, y, col2 - 28, 16, 2);
         ctx.fillStyle = INK_2;
@@ -1441,14 +1504,14 @@
     }
     ctx.stroke();
 
-    /* ---------------- FOOTER — black container, white text ---------------- */
+    /* ---------------- FOOTER — gray only for Attendance Records ---------------- */
     var footY = 1524, footH = 138, fw = tableW / 4;
-    ctx.fillStyle = BLACK;
+    ctx.fillStyle = attendancePdf ? "#777777" : BLACK;
     ctx.fillRect(tableX, footY, tableW, footH);
-    ctx.strokeStyle = BLACK; ctx.lineWidth = 1;
+    ctx.strokeStyle = attendancePdf ? "#777777" : BLACK; ctx.lineWidth = 1;
     ctx.strokeRect(tableX + 0.5, footY + 0.5, tableW - 1, footH - 1);
     ctx.fillStyle = "#ffffff"; ctx.fillRect(tableX, footY, tableW, 2);
-    ctx.strokeStyle = "#333333";
+    ctx.strokeStyle = attendancePdf ? "#9a9a9a" : "#333333";
     for (var c = 1; c < 4; c++) {
       ctx.beginPath(); ctx.moveTo(tableX + fw * c + 0.5, footY + 22); ctx.lineTo(tableX + fw * c + 0.5, footY + footH - 22); ctx.stroke();
     }
@@ -1464,7 +1527,7 @@
       pdfCenteredText(ctx, f[0], cx, footY + 26, fw - 24, 13, 2);
       ctx.fillStyle = "#cccccc"; ctx.font = "500 10px " + FONT;
       f[1].forEach(function (line, idx) {
-        pdfCenteredText(ctx, line, cx, footY + 60 + idx * 20, fw - 24, 12, 1);
+        pdfCenteredText(ctx, line, cx, footY + (attendancePdf ? 50 : 60) + idx * 20, fw - 24, 12, 1);
       });
     });
 
@@ -1551,15 +1614,16 @@
       });
       var total = pages.length;
       var jpgs = pages.map(function (p, idx) {
-        return jpegDataUrlToBytes(pdfPageCanvas(p.rows, idx + 1, total, logo, authorisedName, generationDate).toDataURL("image/jpeg", 0.90));
+        return jpegDataUrlToBytes(pdfPageCanvas(
+          p.rows, idx + 1, total, logo, authorisedName, generationDate,
+          null, null, null, false, true, pdfFormatAttendancePeriod(range)
+        ).toDataURL("image/jpeg", 0.90));
       });
       var pdf = pdfBytesFromJpegs(jpgs, pageWidth, pageHeight);
       var blob = new Blob([pdf], { type: "application/pdf" });
       var url = URL.createObjectURL(blob), link = document.createElement("a");
       link.href = url;
-      link.download = range.from === range.to
-        ? "Attendance_Report_" + range.from + ".pdf"
-        : "Attendance_Report_" + range.from.split("-").reverse().join("-") + "_to_" + range.to.split("-").reverse().join("-") + ".pdf";
+      link.download = pdfAttendanceFilename(range);
       document.body.appendChild(link); link.click(); link.remove();
       setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
       toast("Attendance PDF generated successfully.");
