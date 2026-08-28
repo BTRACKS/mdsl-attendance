@@ -1453,8 +1453,8 @@
     var headerH = 54, rowH = 46;
     var tableH = headerH + rows.length * rowH;
 
-    /* Header band in solid black */
-    ctx.fillStyle = BLACK;
+    /* Header band: gray for Attendance Records, black for HSE/other PDFs */
+    ctx.fillStyle = attendancePdf ? "#777777" : BLACK;
     ctx.fillRect(tableX, tableY, tableW, headerH);
     ctx.fillStyle = "#ffffff"; ctx.font = "700 15px " + FONT;
     pdfCenteredText(ctx, "STAFF NAME", tableX + col1 / 2, tableY + 18, col1 - 30, 17, 1);
