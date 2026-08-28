@@ -1376,10 +1376,10 @@
       ctx.fillText("ATTENDANCE RECORD", W / 2, titleY);
       ctx.textAlign = "left";
 
-      authY = titleY + 70;
-      var attendanceDateY = authY + 80;
-      signY = attendanceDateY + 80;
-      labelY = signY + 78;
+      authY = titleY + 62;
+      var attendanceDateY = authY + 58;
+      signY = attendanceDateY + 58;
+      labelY = signY + 70;
 
       ctx.fillStyle = INK_3; ctx.font = "600 12px " + FONT;
       ctx.fillText("NAME OF AUTHORISED", margin, authY);
@@ -1400,7 +1400,7 @@
       var hseTitleY = dividerY + 32;
       ctx.textAlign = "center";
       ctx.fillStyle = BLACK; ctx.font = "800 27px " + FONT;
-      ctx.fillText("ATTENDANCE RECORD", W / 2, hseTitleY);
+      ctx.fillText("HSE ATTENDANCE RECORD", W / 2, hseTitleY);
       ctx.textAlign = "left";
 
       var hseInfoTop = hseTitleY + 62;
@@ -1487,8 +1487,11 @@
         if (ctx.measureText(pdfUpper(r.name)).width <= col1 - 28 || nameFontSize <= 10) break;
         nameFontSize -= 1;
       } while (nameFontSize >= 10);
-      ctx.textAlign = "center";
-      ctx.fillText(pdfUpper(r.name), tableX + col1 / 2, y);
+      /* Staff names use a fixed left edge within the Staff Name column so
+         every row starts on the same vertical line. The column remains
+         visually balanced, while status/sign-in/sign-out values stay centered. */
+      ctx.textAlign = "left";
+      ctx.fillText(pdfUpper(r.name), tableX + 28, y);
       ctx.textAlign = "left";
       ctx.font = "500 14px " + FONT;
       ctx.fillStyle = (attendancePdf || hseCompactTable) ? "#777777" : INK_2;
