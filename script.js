@@ -1591,7 +1591,7 @@
 
     ctx.textAlign = "center";
     ctx.fillStyle = INK_4; ctx.font = "500 10px " + FONT;
-    ctx.fillText("Signed by MULTIDIGITAL SERVICES LIMITED", W / 2, footY + 132);
+    ctx.fillText("SIGNED BY MULTIDIGITAL SERVICES LIMITED", W / 2, footY + 132);
     ctx.textAlign = "left";
 
     if (pageTotal > 1) {
