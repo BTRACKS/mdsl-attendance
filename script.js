@@ -703,6 +703,7 @@
   window.addEventListener("resize", function () {
     syncHeaderHeight();
     if (window.innerWidth > 760) closeNav();
+    scheduleAlignDashboardAside();
   });
 
   el("menuToggle").addEventListener("click", function (e) {
@@ -868,6 +869,45 @@
   function bindWindowsUpdate() {
     Array.prototype.forEach.call(document.querySelectorAll("[data-windows-view]"), function (b) {
       b.addEventListener("click", acknowledgeWindowsUpdate);
+    });
+  }
+
+  /* ---------- Dashboard desktop alignment ----------
+     Belt-and-suspenders fix so the Windows download card's bottom edge
+     always lines up with the bottom of the main column (Learning
+     Management), even if a browser/engine handles the CSS grid-stretch +
+     flex auto-margin approach differently. Purely additive: does nothing
+     below the two-column breakpoint, and does nothing if the dashboard
+     markup isn't present. */
+  function alignDashboardAside() {
+    var layout = document.querySelector(".dashboard-layout");
+    if (!layout) return;
+    var main = layout.firstElementChild;
+    var aside = layout.querySelector(".dashboard-aside");
+    var card = aside && aside.querySelector(".windows-app-card");
+    if (!main || !aside || !card) return;
+    /* Use the last visible card in the main column, not the wrapping div —
+       the wrapper can be taller than its content (CSS grid stretch), which
+       would throw off the measurement. */
+    var mainLast = main.lastElementChild;
+    if (!mainLast) return;
+
+    if (window.innerWidth < 1121) { card.style.marginTop = ""; return; }
+
+    card.style.marginTop = "0px";
+    var mainBottom = mainLast.getBoundingClientRect().bottom;
+    var cardTop = card.getBoundingClientRect().top;
+    var cardHeight = card.getBoundingClientRect().height;
+    var minGap = 20;
+    var neededMargin = (mainBottom - cardHeight) - cardTop;
+    card.style.marginTop = Math.max(minGap, neededMargin) + "px";
+  }
+
+  var __alignAsideRaf = null;
+  function scheduleAlignDashboardAside() {
+    if (__alignAsideRaf) window.cancelAnimationFrame(__alignAsideRaf);
+    __alignAsideRaf = window.requestAnimationFrame(function () {
+      alignDashboardAside();
     });
   }
 
@@ -4519,6 +4559,7 @@
     }
     bindHse();
     bindWindowsUpdate();
+    scheduleAlignDashboardAside();
   }
 
   function bindLeave() {
