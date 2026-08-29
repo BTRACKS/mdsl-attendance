@@ -703,7 +703,6 @@
   window.addEventListener("resize", function () {
     syncHeaderHeight();
     if (window.innerWidth > 760) closeNav();
-    scheduleAlignDashboardAside();
   });
 
   el("menuToggle").addEventListener("click", function (e) {
@@ -872,45 +871,6 @@
     });
   }
 
-  /* ---------- Dashboard desktop alignment ----------
-     Belt-and-suspenders fix so the Windows download card's bottom edge
-     always lines up with the bottom of the main column (Learning
-     Management), even if a browser/engine handles the CSS grid-stretch +
-     flex auto-margin approach differently. Purely additive: does nothing
-     below the two-column breakpoint, and does nothing if the dashboard
-     markup isn't present. */
-  function alignDashboardAside() {
-    var layout = document.querySelector(".dashboard-layout");
-    if (!layout) return;
-    var main = layout.firstElementChild;
-    var aside = layout.querySelector(".dashboard-aside");
-    var card = aside && aside.querySelector(".windows-app-card");
-    if (!main || !aside || !card) return;
-    /* Use the last visible card in the main column, not the wrapping div —
-       the wrapper can be taller than its content (CSS grid stretch), which
-       would throw off the measurement. */
-    var mainLast = main.lastElementChild;
-    if (!mainLast) return;
-
-    if (window.innerWidth < 1121) { card.style.marginTop = ""; return; }
-
-    card.style.marginTop = "0px";
-    var mainBottom = mainLast.getBoundingClientRect().bottom;
-    var cardTop = card.getBoundingClientRect().top;
-    var cardHeight = card.getBoundingClientRect().height;
-    var minGap = 20;
-    var neededMargin = (mainBottom - cardHeight) - cardTop;
-    card.style.marginTop = Math.max(minGap, neededMargin) + "px";
-  }
-
-  var __alignAsideRaf = null;
-  function scheduleAlignDashboardAside() {
-    if (__alignAsideRaf) window.cancelAnimationFrame(__alignAsideRaf);
-    __alignAsideRaf = window.requestAnimationFrame(function () {
-      alignDashboardAside();
-    });
-  }
-
   /* ---------- staff dashboard ---------- */
   function dashboardView(u) {
     var now = new Date(), key = dateKey(now);
@@ -957,6 +917,8 @@
 
       '<section class="section dashboard-learning-card"><div class="dashboard-learning-content"><div class="dashboard-learning-icon" aria-hidden="true">' + ICON.cap + '</div><div class="dashboard-learning-copy"><p class="eyebrow">Learn</p><h2>' + (normalizeRole(u.role) === "admin" ? 'Learning Management' : 'Continue your learning') + '</h2><p>' + (normalizeRole(u.role) === "admin" ? 'Manage technical and operations learning content.' : 'Explore lessons, build your technical knowledge, and complete quizzes.') + '</p></div><a class="btn ' + (normalizeRole(u.role) === "admin" ? 'btn-ghost' : 'btn-primary') + '" href="learn/learn.html">' + (normalizeRole(u.role) === "admin" ? 'Manage Learning' : 'Go to Learning') + ' <span aria-hidden="true">→</span></a></div></section>' +
 
+      windowsUpdateCard(u) +
+
       "</div>" + profilePanel(u) + "</div></div>";
   }
 
@@ -985,7 +947,7 @@
       '<a class="btn btn-ghost btn-sm btn-block" style="margin-top:16px" href="#/settings">' + ICON.settings + "<span>Profile &amp; settings</span></a>" +
       "</div></div>" +
       '<div class="panel" style="margin-top:20px"><div class="panel-head">' + ICON.activity + 'This Month</div><div class="panel-body">' +
-      monthSummary(u) + "</div></div>" + windowsUpdateCard(u) + '</aside>';
+      monthSummary(u) + "</div></div>" + '</aside>';
   }
   function row(k, v) { return "<div><dt>" + esc(k) + "</dt><dd>" + esc(v) + "</dd></div>"; }
 
@@ -4559,7 +4521,6 @@
     }
     bindHse();
     bindWindowsUpdate();
-    scheduleAlignDashboardAside();
   }
 
   function bindLeave() {
