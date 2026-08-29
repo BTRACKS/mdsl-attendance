@@ -1379,6 +1379,57 @@
     ctx.restore();
   }
 
+  /* ---------------- Official document stamp (Attendance / Attendance
+     History / HSE Attendance PDFs) -----------------------------------
+     A small, subtle circular seal used to give the generated document an
+     official, verified appearance. Purely decorative — it never covers or
+     shifts any attendance data, table, or signature content. */
+  function pdfDrawArcText(ctx, text, cx, cy, radius, startAngle, endAngle, font, color) {
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.font = font;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    var chars = text.split("");
+    var totalAngle = endAngle - startAngle;
+    var step = chars.length > 1 ? totalAngle / (chars.length - 1) : 0;
+    chars.forEach(function (ch, i) {
+      var angle = startAngle + step * i;
+      ctx.save();
+      ctx.translate(cx + radius * Math.cos(angle), cy + radius * Math.sin(angle));
+      ctx.rotate(angle + Math.PI / 2);
+      ctx.fillText(ch, 0, 0);
+      ctx.restore();
+    });
+    ctx.restore();
+  }
+
+  function pdfDrawStamp(ctx, cx, cy, FONT) {
+    ctx.save();
+    ctx.globalAlpha = 0.6;
+    var seal = "#123a6b";
+    var rOuter = 60, rInner = 48;
+
+    ctx.strokeStyle = seal; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(cx, cy, rOuter, 0, Math.PI * 2); ctx.stroke();
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(cx, cy, rInner, 0, Math.PI * 2); ctx.stroke();
+
+    pdfDrawArcText(ctx, "MULTIDIGITAL SERVICES LIMITED", cx, cy, (rOuter + rInner) / 2, -Math.PI * 0.92, -Math.PI * 0.08, "700 7.5px " + FONT, seal);
+    pdfDrawArcText(ctx, "OFFICIAL RECORD", cx, cy, (rOuter + rInner) / 2, Math.PI * 0.18, Math.PI * 0.82, "700 7.5px " + FONT, seal);
+
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillStyle = seal;
+    ctx.font = "800 15px " + FONT;
+    ctx.fillText("MDSL", cx, cy - 6);
+    ctx.strokeStyle = seal; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(cx - 18, cy + 3); ctx.lineTo(cx + 18, cy + 3); ctx.stroke();
+    ctx.font = "600 7px " + FONT;
+    ctx.fillText("VERIFIED", cx, cy + 14);
+
+    ctx.restore();
+  }
+
   function pdfPageCanvas(rows, pageIndex, pageTotal, logoImg, authorisedName, generationDate, hseTopic, meetingDate, hseSpeaker, hseCompactTable, attendancePdf, attendancePeriod) {
     var W = 1240, H = 1754, canvas = document.createElement("canvas");
     canvas.width = W; canvas.height = H;
@@ -1440,7 +1491,7 @@
 
       authY = titleY + 62;
       var attendanceDateY = authY + 58;
-      signY = attendanceDateY + 58;
+      signY = attendanceDateY + 50;
       labelY = signY + 70;
 
       ctx.fillStyle = INK_3; ctx.font = "600 12px " + FONT;
@@ -1454,7 +1505,7 @@
       ctx.fillText(pdfUpper(attendancePeriod || ""), margin, attendanceDateY + 24);
 
       ctx.fillStyle = INK; ctx.font = "600 15px " + FONT;
-      ctx.fillText("SIGNATURE:", margin, signY);
+      ctx.fillText("SIGNATURE", margin, signY);
       /* No line, box or underscores — clean blank signing space follows. */
     } else {
       /* HSE keeps its topic and speaker information, while adopting the same
@@ -1470,7 +1521,7 @@
       var hseSpeakerY = hseTopic ? hseInfoTop + 58 : hseInfoTop;
       /* HSE PDF: authorised person's name is intentionally omitted. */
       var hseDateY = hseSpeaker ? hseSpeakerY + 58 : (hseTopic ? hseTopicY + 58 : hseInfoTop);
-      var hseSignY = hseDateY + 58;
+      var hseSignY = hseDateY + 50;
 
       if (hseTopic) {
         ctx.fillStyle = INK_3; ctx.font = "600 12px " + FONT;
@@ -1492,7 +1543,7 @@
       ctx.fillText(pdfUpper(attendancePeriod || meetingDate || ""), margin, hseDateY + 24);
 
       ctx.fillStyle = INK; ctx.font = "600 15px " + FONT;
-      ctx.fillText("SIGNATURE:", margin, hseSignY);
+      ctx.fillText("SIGNATURE", margin, hseSignY);
       labelY = hseSignY + 78;
     }
 
@@ -1579,37 +1630,24 @@
     }
     ctx.stroke();
 
-    /* ---------------- FOOTER — gray for Attendance Records and HSE ---------------- */
-    var footY = 1524, footH = 138, fw = tableW / 4;
-    ctx.fillStyle = (attendancePdf || hseCompactTable) ? "#777777" : BLACK;
-    ctx.fillRect(tableX, footY, tableW, footH);
-    ctx.strokeStyle = (attendancePdf || hseCompactTable) ? "#777777" : BLACK; ctx.lineWidth = 1;
-    ctx.strokeRect(tableX + 0.5, footY + 0.5, tableW - 1, footH - 1);
-    ctx.fillStyle = "#ffffff"; ctx.fillRect(tableX, footY, tableW, 2);
-    ctx.strokeStyle = (attendancePdf || hseCompactTable) ? "#9a9a9a" : "#333333";
-    for (var c = 1; c < 4; c++) {
-      ctx.beginPath(); ctx.moveTo(tableX + fw * c + 0.5, footY + 22); ctx.lineTo(tableX + fw * c + 0.5, footY + footH - 22); ctx.stroke();
-    }
-    var foot = [
-      ["OFFICE ADDRESS", ["PLOT 135, GRA PHASE 8,", "G.U. AKE ROAD,", "PORT HARCOURT, RIVERS STATE, NIGERIA"]],
-      ["OFFICE ADDRESS", ["VGB COURT, PENTHOUSE 2,", "86A ODUDUWA CRESCENT,", "GRA, IKEJA, LAGOS STATE, NIGERIA"]],
-      ["ADMIN / GENERAL ENQUIRIES", ["INFO@MULTIDIGITALNG.COM", "ENQUIRES@MULTIDIGITALNG.COM", "TEL: +2348067184912"]],
-      ["TECHNICAL / SERVICES", ["SERVICE@MULTIDIGITALNG.COM", "TECHNICAL@MULTIDIGITALNG.COM"]]
-    ];
-    foot.forEach(function (f, i) {
-      var cx = tableX + i * fw + fw / 2;
-      ctx.fillStyle = "#ffffff"; ctx.font = "700 11px " + FONT;
-      pdfCenteredText(ctx, f[0], cx, footY + 26, fw - 24, 13, 2);
-      ctx.fillStyle = "#cccccc"; ctx.font = "500 10px " + FONT;
-      f[1].forEach(function (line, idx) {
-        pdfCenteredText(ctx, line, cx, footY + ((attendancePdf || hseCompactTable) ? 50 : 60) + idx * 20, fw - 24, 12, 1);
-      });
-    });
+    /* ---------------- SIGNATURE / AUTHORISATION — no footer band ----------------
+       The previous gray footer band and office-details block have been
+       removed for a cleaner, more professional look. Every generated PDF
+       (Attendance, Attendance History, HSE Attendance) now closes with a
+       small centered authorisation line and a subtle official document
+       stamp, positioned clear of the attendance table and signature area. */
+    var footY = 1524;
+    pdfDrawStamp(ctx, right - 118, footY + 56, FONT);
+
+    ctx.textAlign = "center";
+    ctx.fillStyle = INK_4; ctx.font = "500 10px " + FONT;
+    ctx.fillText("Signed by MULTIDIGITAL SERVICES LIMITED", W / 2, footY + 132);
+    ctx.textAlign = "left";
 
     if (pageTotal > 1) {
       ctx.fillStyle = INK_4; ctx.font = "500 10px " + FONT;
       ctx.textAlign = "right";
-      ctx.fillText("PAGE " + pageIndex + " OF " + pageTotal, right, footY + footH + 20);
+      ctx.fillText("PAGE " + pageIndex + " OF " + pageTotal, right, footY + 132);
       ctx.textAlign = "left";
     }
     return canvas;
