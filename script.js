@@ -2142,11 +2142,27 @@
     return db.hse.filter(function (r) { return r.date === key; })
       .sort(function (a, b) { return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1; });
   }
+  /* HSE Attendance History: a rolling list of Monday sessions, anchored on
+     the most recent completed/ongoing Monday ("last Monday" — which is
+     today's date whenever today itself is Monday). We always show a
+     consistent run of Mondays going back HSE_HISTORY_WEEKS, in addition to
+     any earlier week that happens to already have real records, so the
+     history never silently hides an existing record just because it falls
+     outside the default window. A week with no check-ins yet is still
+     listed and can be opened — it just renders as an empty session. */
+  var HSE_HISTORY_WEEKS = 12;
+
   function hseSessionDates() {
     var seen = {};
     db.hse.forEach(function (r) { if (r.date) seen[r.date] = (seen[r.date] || 0) + 1; });
-    var cur = currentHseDate();
-    if (!seen[cur]) seen[cur] = 0;
+
+    var anchor = mondayOf(new Date()); /* "last Monday": this week's Monday */
+    for (var i = 0; i < HSE_HISTORY_WEEKS; i++) {
+      var k = dateKey(anchor);
+      if (!seen[k]) seen[k] = 0;
+      anchor.setDate(anchor.getDate() - 7);
+    }
+
     return Object.keys(seen).sort().reverse().map(function (d) { return { date: d, count: seen[d] }; });
   }
 
@@ -2234,6 +2250,8 @@
     var missing = staff.filter(function (u) { return !presentIds[u.id]; });
     var pct = staff.length ? Math.round((recs.length / staff.length) * 100) : 0;
 
+    var isHistorical = key !== currentHseDate();
+
     return '<div class="page"><div class="page-head"><p class="eyebrow">Administration</p><h1>HSE Attendance</h1></div>' +
 
       '<div class="stats">' +
@@ -2242,8 +2260,11 @@
       stat("Not Checked In", missing.length, missing.length ? "danger" : "", ICON.alert) +
       stat("Attendance", pct + "%", "accent", ICON.activity) + "</div>" +
 
-      '<section class="section"><div class="section-head"><h2>Session Records</h2>' +
+      '<section class="section"><div class="section-head"><h2>Session Records' +
+      '<span class="hse-session-badge' + (isHistorical ? " historical" : " live") + '">' +
+      (isHistorical ? "Historical — " : "Live — ") + esc(prettyDate(key)) + "</span></h2>" +
       '<div class="section-head-actions"><span>' + recs.length + " record" + (recs.length === 1 ? "" : "s") + "</span>" +
+      (isHistorical ? '<button class="btn btn-ghost btn-sm" type="button" id="hseBackToCurrent">Back to current session</button>' : "") +
       '<button class="btn btn-primary" type="button" id="hsePdfBtn">' + ICON.download + "<span>Download PDF</span></button>" +
        '<button class="btn btn-ghost btn-sm" type="button" id="hseCsvBtn">' + ICON.download + "<span>Download CSV</span></button>" +
       "</div></div>" +
@@ -2251,10 +2272,10 @@
       hseTable(recs) + "</section>" +
 
       '<div class="layout"><div>' +
-      '<section class="section"><div class="section-head"><h2>HSE Attendance History</h2><span>Previous Mondays</span></div>' +
+      '<section class="section"><div class="section-head"><h2>HSE Attendance History</h2><span>Every Monday, most recent first</span></div>' +
       '<div class="hse-history">' + hseSessionDates().map(function (d) {
         return '<button type="button" class="hse-session' + (d.date === key ? " active" : "") + '" data-hse-date="' + esc(d.date) + '">' +
-          "<span>" + esc(prettyDate(d.date)) + "</span><b>" + d.count + " Present</b></button>";
+          "<span>" + esc(prettyDate(d.date)) + "</span><b>" + (d.count ? d.count + " Present" : "No records") + "</b></button>";
       }).join("") + "</div></section></div>" +
 
       '<aside><div class="panel"><div class="panel-head">' + ICON.settings + "HSE Session Settings</div>" +
@@ -2373,6 +2394,12 @@
         hseAdmin.date = b.getAttribute("data-hse-date");
         render();
       });
+    });
+
+    var backToCurrent = el("hseBackToCurrent");
+    if (backToCurrent) backToCurrent.addEventListener("click", function () {
+      hseAdmin.date = "";
+      render();
     });
 
     var pdfBtn = el("hsePdfBtn");
