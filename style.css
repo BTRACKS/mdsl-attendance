@@ -1917,7 +1917,7 @@ aside .panel:has(#hseSettingsForm){overflow:visible}
   box-sizing:border-box;
   position:relative;
   overflow:hidden;
-  margin-top:16px;
+  margin-top:20px;
 }
 /* Desktop dashboard only: stretch the profile column to match the main
    column's height, then pin the Windows card to the bottom of it so it
@@ -2033,7 +2033,7 @@ aside .panel:has(#hseSettingsForm){overflow:visible}
 .windows-update-notice .btn{flex:0 0 auto}
 
 @media(max-width:1120px){
-  .windows-app-card{margin-top:16px}
+  .windows-app-card{margin-top:20px}
 }
 
 @media(max-width:720px){
