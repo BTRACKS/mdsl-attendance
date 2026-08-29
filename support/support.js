@@ -442,9 +442,9 @@
     $("usersCount").textContent = USERS.rows.length + " total";
 
     grid.innerHTML = rows.map(function (r) {
-      var idx = USERS.rows.indexOf(r);
+      var id = rowId(r);
       var name = displayName(r);
-      return '<button type="button" class="user-card" data-user-index="' + idx +
+      return '<button type="button" class="user-card" data-user-id="' + esc(id) +
         '" aria-label="Open ' + esc(name) + ' profile">' +
         avatarHtml(r) +
         '<span class="u-body"><span class="u-name">' + esc(name) + "</span></span>" +
@@ -456,8 +456,10 @@
        the exact record represented by that card. */
     Array.prototype.forEach.call(grid.querySelectorAll(".user-card"), function (card) {
       card.addEventListener("click", function () {
-        var idx = Number(card.getAttribute("data-user-index"));
-        var row = USERS.rows[idx];
+        var id = card.getAttribute("data-user-id");
+        var row = USERS.rows.find(function (candidate) {
+          return String(rowId(candidate)) === String(id);
+        });
         if (row) openUserProfile(row);
       });
     });
