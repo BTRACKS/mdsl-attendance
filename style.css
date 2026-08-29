@@ -1919,6 +1919,14 @@ aside .panel:has(#hseSettingsForm){overflow:visible}
   overflow:hidden;
   margin-top:16px;
 }
+/* Desktop dashboard only: stretch the profile column to match the main
+   column's height, then pin the Windows card to the bottom of it so it
+   ends flush with the last card on the left (Learning Management). */
+@media(min-width:1121px){
+  .dashboard-layout{align-items:stretch}
+  .dashboard-aside{display:flex;flex-direction:column}
+  .dashboard-aside .windows-app-card{margin-top:auto}
+}
 .windows-app-main{
   display:flex;
   flex-direction:column;

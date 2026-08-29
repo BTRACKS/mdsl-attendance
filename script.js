@@ -887,7 +887,7 @@
       '<span class="greeting-name">' + esc(u.firstName || u.fullName.split(" ")[0]) +
       '<span class="greeting-icon" aria-hidden="true">' + greeting.icon + "</span></span>" +
       "</h1></div>" +
-      '<div class="layout"><div>' +
+      '<div class="layout dashboard-layout"><div>' +
 
       '<section class="section"><div class="section-head"><h2>Today\'s Attendance</h2><span>' + longDate(now) + " · " + esc(dayState.reason) + "</span></div>" +
       (leave
@@ -934,7 +934,7 @@
   }
 
   function profilePanel(u) {
-    return '<aside><div class="panel"><div class="panel-head">' + ICON.userCard + 'Staff Profile</div><div class="panel-body">' +
+    return '<aside class="dashboard-aside"><div class="panel"><div class="panel-head">' + ICON.userCard + 'Staff Profile</div><div class="panel-body">' +
       '<div class="identity">' + avatarHtml(u) +
       "<div><h3>" + esc(profileDisplayName(u)) + "</h3></div></div>" +
       '<dl class="dl">' +
