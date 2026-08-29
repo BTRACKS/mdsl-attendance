@@ -1679,7 +1679,7 @@
       var jpgs = pages.map(function (p, idx) {
         return jpegDataUrlToBytes(pdfPageCanvas(
           p.rows, idx + 1, total, logo, authorisedName, generationDate,
-          null, null, null, false, true, pdfFormatAttendancePeriod(range)
+          null, null, null, false, true, pdfFormatAttendanceDate(p.key)
         ).toDataURL("image/jpeg", 0.90));
       });
       var pdf = pdfBytesFromJpegs(jpgs, pageWidth, pageHeight);
