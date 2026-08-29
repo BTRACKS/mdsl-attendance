@@ -416,7 +416,7 @@
 
   function matchesQuery(row, q) {
     if (!q) return true;
-    var hay = [displayName(row), pick(row, EMAIL_KEYS), pick(row, STAFF_KEYS)]
+    var hay = [displayName(row), pick(row, TITLE_NAME_KEYS), pick(row, FIRST_NAME_KEYS), pick(row, LAST_NAME_KEYS)]
       .map(function (v) { return String(v == null ? "" : v).toLowerCase(); }).join(" ");
     return hay.indexOf(q) !== -1;
   }
@@ -441,21 +441,16 @@
       : "Showing " + rows.length + " staff record" + (rows.length === 1 ? "" : "s") + " from the database.";
     $("usersCount").textContent = USERS.rows.length + " total";
 
-    grid.innerHTML = rows.map(function (r, i) {
+    grid.innerHTML = rows.map(function (r) {
       var idx = USERS.rows.indexOf(r);
-      var email = pick(r, EMAIL_KEYS);
-      var dept = pick(r, DEPT_KEYS);
-      var role = roleLabel(roleOf(r));
-      var status = statusText(r);
-      return '<button type="button" class="user-card" data-user="' + idx + '" aria-label="Open details for ' + esc(displayName(r)) + '">' +
-        avatarHtml(r) +
-        '<span class="u-body">' +
-          '<span class="u-name">' + esc(displayName(r)) + '</span>' +
-          (email ? '<span class="u-line">' + esc(email) + '</span>' : '') +
-          '<span class="u-line-2">' + esc([role, status, dept].filter(Boolean).join(' · ')) + '</span>' +
-        '</span>' +
-        '<span class="user-card-arrow" aria-hidden="true">›</span>' +
-        '</button>';
+      var title = pick(r, TITLE_NAME_KEYS);
+      var first = pick(r, FIRST_NAME_KEYS);
+      var last = pick(r, LAST_NAME_KEYS);
+      var simpleName = [title, first, last].filter(function (v) { return v != null && String(v).trim() !== ""; }).join(" ").trim();
+      if (!simpleName) simpleName = displayName(r);
+      return '<button type="button" class="user-card" data-user="' + idx + '" aria-label="Open ' + esc(simpleName) + ' profile">' +
+        '<span class="u-body"><span class="u-name">' + esc(simpleName) + "</span></span>" +
+        "</button>";
     }).join("");
   }
 
@@ -464,11 +459,7 @@
     var name = displayName(row);
     $("profileAvatar").outerHTML = avatarHtml(row, true).replace('class="avatar avatar-lg"', 'class="avatar avatar-lg" id="profileAvatar"');
     $("profileName").textContent = name;
-    $("profileMeta").textContent = [
-      pick(row, EMAIL_KEYS),
-      roleLabel(roleOf(row)),
-      statusText(row)
-    ].filter(Boolean).join(" · ");
+    $("profileMeta").textContent = "";
 
     kv("kvUserIdentity", [
       ["Title", fmtValue(pick(row, TITLE_NAME_KEYS))],
@@ -709,11 +700,6 @@
     closeConfirm();
     ROLES[job.userId] = job.to;
     ADMIN_COUNT = ADMIN_COUNT + (job.to === "admin" ? 1 : 0) - (job.from === "admin" ? 1 : 0);
-    if (USERS.current && rowId(USERS.current) === job.userId) {
-      USERS.current.role = job.to;
-      if (USERS.current.user_role !== undefined) USERS.current.user_role = job.to;
-      if (USERS.current.account_role !== undefined) USERS.current.account_role = job.to;
-    }
     toast(job.name + " is now " + roleLabel(job.to) + ".", "good");
 
     /* If an administrator changed their own role, re-run the access gate. */
@@ -725,11 +711,7 @@
 
     await loadRoles();
     renderUsers();
-    if (USERS.current) {
-      renderRolePanel(USERS.current);
-      renderAccountPanel(USERS.current);
-      $("profileMeta").textContent = [pick(USERS.current, EMAIL_KEYS), roleLabel(roleOf(USERS.current)), statusText(USERS.current)].filter(Boolean).join(" · ");
-    }
+    if (USERS.current) renderRolePanel(USERS.current);
   }
 
   function initRoleUi() {
