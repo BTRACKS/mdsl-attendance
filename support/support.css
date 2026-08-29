@@ -734,6 +734,7 @@ img{max-width:100%;display:block}
   align-items:start;
   grid-template-columns:repeat(3, minmax(0, 1fr));
   gap:20px;
+  margin-top:20px;
 }
 @media (max-width:1024px){
   .profile-grid{grid-template-columns:repeat(2, minmax(0, 1fr))}
@@ -742,7 +743,7 @@ img{max-width:100%;display:block}
   .profile-grid > .panel:nth-child(3){grid-column:1 / -1}
 }
 @media (max-width:760px){
-  .profile-grid{grid-template-columns:1fr;gap:16px}
+  .profile-grid{grid-template-columns:1fr;gap:16px;margin-top:16px}
 }
 /* Role management and "Other stored information" span the full row so their
    card never leaves empty space beside it, but their content (a short kv
@@ -950,12 +951,6 @@ body.modal-open{overflow:hidden}
 
 /* ---------- Phase 8: Settings / System Configuration ---------- */
 .settings-groups{display:grid;gap:20px;margin-top:20px}
-.settings-groups>.settings-card,.settings-groups>.windows-update-card{min-width:0}
-.settings-groups>.windows-update-card .windows-settings-section{margin-top:0;padding-top:0;border-top:0}
-@media(max-width:720px){
-  .settings-groups{gap:16px}
-  .settings-groups>.settings-card,.settings-groups>.windows-update-card{border-radius:var(--radius-lg)}
-}
 .settings-category{display:grid;gap:12px}
 .settings-category>h3{
   font-size:14px;color:var(--navy);padding-bottom:8px;border-bottom:1px solid var(--rule)
