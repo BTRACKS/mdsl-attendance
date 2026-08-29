@@ -443,10 +443,19 @@
 
     grid.innerHTML = rows.map(function (r, i) {
       var idx = USERS.rows.indexOf(r);
-      return '<button type="button" class="user-card" data-user="' + idx + '">' +
+      var email = pick(r, EMAIL_KEYS);
+      var dept = pick(r, DEPT_KEYS);
+      var role = roleLabel(roleOf(r));
+      var status = statusText(r);
+      return '<button type="button" class="user-card" data-user="' + idx + '" aria-label="Open details for ' + esc(displayName(r)) + '">' +
         avatarHtml(r) +
-        '<span class="u-body"><span class="u-name">' + esc(displayName(r)) + "</span></span>" +
-        "</button>";
+        '<span class="u-body">' +
+          '<span class="u-name">' + esc(displayName(r)) + '</span>' +
+          (email ? '<span class="u-line">' + esc(email) + '</span>' : '') +
+          '<span class="u-line-2">' + esc([role, status, dept].filter(Boolean).join(' · ')) + '</span>' +
+        '</span>' +
+        '<span class="user-card-arrow" aria-hidden="true">›</span>' +
+        '</button>';
     }).join("");
   }
 
@@ -455,7 +464,11 @@
     var name = displayName(row);
     $("profileAvatar").outerHTML = avatarHtml(row, true).replace('class="avatar avatar-lg"', 'class="avatar avatar-lg" id="profileAvatar"');
     $("profileName").textContent = name;
-    $("profileMeta").textContent = "";
+    $("profileMeta").textContent = [
+      pick(row, EMAIL_KEYS),
+      roleLabel(roleOf(row)),
+      statusText(row)
+    ].filter(Boolean).join(" · ");
 
     kv("kvUserIdentity", [
       ["Title", fmtValue(pick(row, TITLE_NAME_KEYS))],
@@ -696,6 +709,11 @@
     closeConfirm();
     ROLES[job.userId] = job.to;
     ADMIN_COUNT = ADMIN_COUNT + (job.to === "admin" ? 1 : 0) - (job.from === "admin" ? 1 : 0);
+    if (USERS.current && rowId(USERS.current) === job.userId) {
+      USERS.current.role = job.to;
+      if (USERS.current.user_role !== undefined) USERS.current.user_role = job.to;
+      if (USERS.current.account_role !== undefined) USERS.current.account_role = job.to;
+    }
     toast(job.name + " is now " + roleLabel(job.to) + ".", "good");
 
     /* If an administrator changed their own role, re-run the access gate. */
@@ -707,7 +725,11 @@
 
     await loadRoles();
     renderUsers();
-    if (USERS.current) renderRolePanel(USERS.current);
+    if (USERS.current) {
+      renderRolePanel(USERS.current);
+      renderAccountPanel(USERS.current);
+      $("profileMeta").textContent = [pick(USERS.current, EMAIL_KEYS), roleLabel(roleOf(USERS.current)), statusText(USERS.current)].filter(Boolean).join(" · ");
+    }
   }
 
   function initRoleUi() {

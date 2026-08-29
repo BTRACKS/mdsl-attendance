@@ -1325,3 +1325,41 @@ body.modal-open{overflow:hidden}
 .windows-settings-section> .section-head{margin-bottom:14px}
 .windows-settings-section h3{font-size:17px}
 @media(max-width:720px){.windows-settings-section{margin-top:22px;padding-top:20px}}
+
+/* ---------- User details + Settings presentation updates ---------- */
+.user-card-arrow{
+  flex:0 0 auto;width:30px;height:30px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  color:var(--navy);background:var(--paper-2);border:1px solid var(--rule);
+  font-size:24px;line-height:1;transition:background var(--t),transform var(--t)
+}
+.user-card:hover .user-card-arrow{background:var(--amber-soft);transform:translateX(2px)}
+.user-card:focus-visible{outline:none;border-color:var(--navy);box-shadow:0 0 0 4px rgba(18,58,107,.12)}
+.user-card .u-line,.user-card .u-line-2{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Keep the existing dedicated user view feeling like a focused details workspace. */
+#userProfileView{background:var(--paper-2);border:1px solid var(--rule);border-radius:var(--radius-lg);padding:24px;box-shadow:var(--shadow-sm)}
+#userProfileView .profile-head{padding:4px 4px 22px;margin-bottom:22px}
+#userProfileView .panel{background:var(--paper)}
+#userProfileView .users-back{margin-left:4px}
+
+.settings-groups-split{grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start;gap:24px}
+.settings-card{min-width:0;overflow:hidden}
+.settings-card>.panel-head{padding:18px 22px}
+.settings-card>.panel-body{padding:22px}
+.settings-information-card .settings-list{margin-top:8px}
+.settings-windows-card .windows-settings-section{margin:0;padding:0;border:0}
+.settings-windows-card .windows-settings-section>.section-head{margin-bottom:16px}
+.settings-windows-card .windows-current-card{margin-top:4px}
+.settings-windows-card .windows-admin-form{margin-top:20px}
+.settings-windows-card .windows-admin-history{margin-top:22px}
+@media(max-width:900px){
+  .settings-groups-split{grid-template-columns:1fr;gap:20px}
+}
+@media(max-width:640px){
+  #userProfileView{padding:18px}
+  .settings-card>.panel-head{padding:16px 18px}
+  .settings-card>.panel-body{padding:18px}
+  .user-card{padding:14px}
+  .user-card-arrow{width:28px;height:28px;font-size:22px}
+}

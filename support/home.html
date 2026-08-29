@@ -370,13 +370,23 @@
 
         <p class="role-note" id="settingsNote"></p>
 
-        <div class="settings-groups">
-          <div class="panel">
-            <div class="panel-head">Supported configuration</div>
+        <div class="settings-groups settings-groups-split">
+          <div class="panel settings-card settings-information-card">
+            <div class="panel-head">Information</div>
             <div class="panel-body">
               <p class="users-state" id="settingsState">Loading supported settings…</p>
               <div class="settings-list" id="settingsList"></div>
+              <div class="edit-actions" id="settingsActions" hidden>
+                <button class="btn btn-primary btn-sm" id="settingsSave" type="button">Save changes</button>
+                <button class="btn btn-ghost btn-sm" id="settingsReload" type="button">Reload</button>
+              </div>
+              <p class="edit-hint">Only settings explicitly registered as supported by the application are shown here. This page never exposes raw database tables, SQL, credentials or secrets.</p>
+            </div>
+          </div>
 
+          <div class="panel settings-card settings-windows-card">
+            <div class="panel-head">Windows Application</div>
+            <div class="panel-body">
               <section class="windows-settings-section" id="tab-windows">
                 <div class="section-head"><div><h3>Windows Application</h3><p class="overview-lede">Manage the current E-Attendance Windows download and release information.</p></div><button class="btn btn-ghost btn-sm" id="windowsUpdateRefresh" type="button">Refresh</button></div>
                 <div id="windowsUpdateState" class="users-state">Loading Windows application release…</div>
@@ -393,12 +403,6 @@
                 </form>
                 <div id="windowsUpdateHistory" class="windows-admin-history"></div>
               </section>
-
-              <div class="edit-actions" id="settingsActions" hidden>
-                <button class="btn btn-primary btn-sm" id="settingsSave" type="button">Save changes</button>
-                <button class="btn btn-ghost btn-sm" id="settingsReload" type="button">Reload</button>
-              </div>
-              <p class="edit-hint">Only settings explicitly registered as supported by the application are shown here. This page never exposes raw database tables, SQL, credentials or secrets.</p>
             </div>
           </div>
         </div>
