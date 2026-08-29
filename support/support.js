@@ -443,15 +443,24 @@
 
     grid.innerHTML = rows.map(function (r) {
       var idx = USERS.rows.indexOf(r);
-      var title = pick(r, TITLE_NAME_KEYS);
-      var first = pick(r, FIRST_NAME_KEYS);
-      var last = pick(r, LAST_NAME_KEYS);
-      var simpleName = [title, first, last].filter(function (v) { return v != null && String(v).trim() !== ""; }).join(" ").trim();
-      if (!simpleName) simpleName = displayName(r);
-      return '<button type="button" class="user-card" data-user="' + idx + '" aria-label="Open ' + esc(simpleName) + ' profile">' +
-        '<span class="u-body"><span class="u-name">' + esc(simpleName) + "</span></span>" +
+      var name = displayName(r);
+      return '<button type="button" class="user-card" data-user-index="' + idx +
+        '" aria-label="Open ' + esc(name) + ' profile">' +
+        avatarHtml(r) +
+        '<span class="u-body"><span class="u-name">' + esc(name) + "</span></span>" +
         "</button>";
     }).join("");
+
+    /* Bind directly to the newly-rendered cards. This avoids relying on event
+       delegation/closest() and guarantees a click anywhere on the card opens
+       the exact record represented by that card. */
+    Array.prototype.forEach.call(grid.querySelectorAll(".user-card"), function (card) {
+      card.addEventListener("click", function () {
+        var idx = Number(card.getAttribute("data-user-index"));
+        var row = USERS.rows[idx];
+        if (row) openUserProfile(row);
+      });
+    });
   }
 
   function openUserProfile(row) {
@@ -559,12 +568,6 @@
     if (!grid) return; // Users markup may be unavailable on a reduced/conditional portal view.
     if (grid.getAttribute("data-ready") === "1") return;
     grid.setAttribute("data-ready", "1");
-    grid.addEventListener("click", function (e) {
-      var card = e.target.closest("[data-user]");
-      if (!card) return;
-      var row = USERS.rows[Number(card.getAttribute("data-user"))];
-      if (row) openUserProfile(row);
-    });
     var back = $("userBack");
     if (back) back.addEventListener("click", closeUserProfile);
     var refresh = $("usersRefresh");
