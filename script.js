@@ -1086,7 +1086,10 @@
       });
       var total = pages.length;
       var jpgs = pages.map(function (pg, idx) {
-        return jpegDataUrlToBytes(pdfPageCanvas(pg.rows, idx + 1, total, logo, authorisedName, generationDate).toDataURL('image/jpeg', 0.90));
+        return jpegDataUrlToBytes(pdfPageCanvas(
+          pg.rows, idx + 1, total, logo, authorisedName, generationDate,
+          null, null, null, false, true, pdfFormatAttendanceDate(pg.key)
+        ).toDataURL('image/jpeg', 0.90));
       });
       var pdf = pdfBytesFromJpegs(jpgs, pageWidth, pageHeight);
       var blob = new Blob([pdf], { type: 'application/pdf' });
@@ -1379,57 +1382,6 @@
     ctx.restore();
   }
 
-  /* ---------------- Official document stamp (Attendance / Attendance
-     History / HSE Attendance PDFs) -----------------------------------
-     A small, subtle circular seal used to give the generated document an
-     official, verified appearance. Purely decorative — it never covers or
-     shifts any attendance data, table, or signature content. */
-  function pdfDrawArcText(ctx, text, cx, cy, radius, startAngle, endAngle, font, color) {
-    ctx.save();
-    ctx.fillStyle = color;
-    ctx.font = font;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    var chars = text.split("");
-    var totalAngle = endAngle - startAngle;
-    var step = chars.length > 1 ? totalAngle / (chars.length - 1) : 0;
-    chars.forEach(function (ch, i) {
-      var angle = startAngle + step * i;
-      ctx.save();
-      ctx.translate(cx + radius * Math.cos(angle), cy + radius * Math.sin(angle));
-      ctx.rotate(angle + Math.PI / 2);
-      ctx.fillText(ch, 0, 0);
-      ctx.restore();
-    });
-    ctx.restore();
-  }
-
-  function pdfDrawStamp(ctx, cx, cy, FONT) {
-    ctx.save();
-    ctx.globalAlpha = 0.6;
-    var seal = "#123a6b";
-    var rOuter = 60, rInner = 48;
-
-    ctx.strokeStyle = seal; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(cx, cy, rOuter, 0, Math.PI * 2); ctx.stroke();
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.arc(cx, cy, rInner, 0, Math.PI * 2); ctx.stroke();
-
-    pdfDrawArcText(ctx, "MULTIDIGITAL SERVICES LIMITED", cx, cy, (rOuter + rInner) / 2, -Math.PI * 0.92, -Math.PI * 0.08, "700 7.5px " + FONT, seal);
-    pdfDrawArcText(ctx, "OFFICIAL RECORD", cx, cy, (rOuter + rInner) / 2, Math.PI * 0.18, Math.PI * 0.82, "700 7.5px " + FONT, seal);
-
-    ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillStyle = seal;
-    ctx.font = "800 15px " + FONT;
-    ctx.fillText("MDSL", cx, cy - 6);
-    ctx.strokeStyle = seal; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(cx - 18, cy + 3); ctx.lineTo(cx + 18, cy + 3); ctx.stroke();
-    ctx.font = "600 7px " + FONT;
-    ctx.fillText("VERIFIED", cx, cy + 14);
-
-    ctx.restore();
-  }
-
   function pdfPageCanvas(rows, pageIndex, pageTotal, logoImg, authorisedName, generationDate, hseTopic, meetingDate, hseSpeaker, hseCompactTable, attendancePdf, attendancePeriod) {
     var W = 1240, H = 1754, canvas = document.createElement("canvas");
     canvas.width = W; canvas.height = H;
@@ -1491,7 +1443,7 @@
 
       authY = titleY + 62;
       var attendanceDateY = authY + 58;
-      signY = attendanceDateY + 50;
+      signY = attendanceDateY + 58;
       labelY = signY + 70;
 
       ctx.fillStyle = INK_3; ctx.font = "600 12px " + FONT;
@@ -1504,7 +1456,7 @@
       ctx.fillStyle = BLACK; ctx.font = "700 20px " + FONT;
       ctx.fillText(pdfUpper(attendancePeriod || ""), margin, attendanceDateY + 24);
 
-      ctx.fillStyle = INK; ctx.font = "600 15px " + FONT;
+      ctx.fillStyle = INK_3; ctx.font = "600 12px " + FONT;
       ctx.fillText("SIGNATURE", margin, signY);
       /* No line, box or underscores — clean blank signing space follows. */
     } else {
@@ -1521,7 +1473,7 @@
       var hseSpeakerY = hseTopic ? hseInfoTop + 58 : hseInfoTop;
       /* HSE PDF: authorised person's name is intentionally omitted. */
       var hseDateY = hseSpeaker ? hseSpeakerY + 58 : (hseTopic ? hseTopicY + 58 : hseInfoTop);
-      var hseSignY = hseDateY + 50;
+      var hseSignY = hseDateY + 58;
 
       if (hseTopic) {
         ctx.fillStyle = INK_3; ctx.font = "600 12px " + FONT;
@@ -1542,7 +1494,7 @@
       ctx.fillStyle = BLACK; ctx.font = "700 20px " + FONT;
       ctx.fillText(pdfUpper(attendancePeriod || meetingDate || ""), margin, hseDateY + 24);
 
-      ctx.fillStyle = INK; ctx.font = "600 15px " + FONT;
+      ctx.fillStyle = INK_3; ctx.font = "600 12px " + FONT;
       ctx.fillText("SIGNATURE", margin, hseSignY);
       labelY = hseSignY + 78;
     }
@@ -1634,10 +1586,8 @@
        The previous gray footer band and office-details block have been
        removed for a cleaner, more professional look. Every generated PDF
        (Attendance, Attendance History, HSE Attendance) now closes with a
-       small centered authorisation line and a subtle official document
-       stamp, positioned clear of the attendance table and signature area. */
+       small centered authorisation line only — no stamp/seal. */
     var footY = 1524;
-    pdfDrawStamp(ctx, right - 118, footY + 56, FONT);
 
     ctx.textAlign = "center";
     ctx.fillStyle = INK_4; ctx.font = "500 10px " + FONT;
