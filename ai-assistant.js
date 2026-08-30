@@ -6,6 +6,15 @@
 (function () {
   "use strict";
 
+  // Branded E-Attendance AI avatar. Keep ai-assistant-avatar.png beside this file.
+  var AI_AVATAR_SRC = (function () {
+    var currentScript = document.currentScript;
+    if (currentScript && currentScript.src) {
+      return new URL("ai-assistant-avatar.png", currentScript.src).href;
+    }
+    return "ai-assistant-avatar.png";
+  })();
+
   var SUPABASE_URL = "https://wdrgcavxwamwqgxkdscn.supabase.co";
   var SUPABASE_PUBLISHABLE_KEY =
     "sb_publishable_XlL1WvosmoBvl3vttrT-xw_nVvtMrQo";
@@ -47,14 +56,16 @@
       align-items: center;
       gap: 10px;
 
-      min-height: 54px;
-      padding: 0 18px;
+      width: 62px;
+      height: 62px;
+      min-height: 62px;
+      padding: 4px;
 
       border: 1px solid rgba(18, 58, 107, 0.14);
-      border-radius: 999px;
+      border-radius: 50%;
 
-      background: #123a6b;
-      color: #ffffff;
+      background: #ffffff;
+      color: #123a6b;
 
       font: inherit;
       font-size: 14px;
@@ -74,7 +85,7 @@
 
     .ea-ai-launcher:hover {
       transform: translateY(-2px);
-      background: #0d2a4d;
+      background: #ffffff;
       box-shadow:
         0 18px 40px rgba(18, 58, 107, 0.27),
         0 4px 10px rgba(16, 24, 40, 0.12);
@@ -85,21 +96,25 @@
     }
 
     .ea-ai-launcher-icon {
-      width: 22px;
-      height: 22px;
+      width: 100%;
+      height: 100%;
       display: grid;
       place-items: center;
       flex: 0 0 auto;
+      overflow: hidden;
+      border-radius: 50%;
     }
 
-    .ea-ai-launcher-icon svg {
-      width: 21px;
-      height: 21px;
+    .ea-ai-launcher-avatar {
+      width: 100%;
+      height: 100%;
       display: block;
+      object-fit: contain;
+      object-position: center;
     }
 
     .ea-ai-launcher-text {
-      white-space: nowrap;
+      display: none;
     }
 
     /* Chat window */
@@ -175,23 +190,25 @@
     }
 
     .ea-ai-logo {
-      width: 40px;
-      height: 40px;
+      width: 46px;
+      height: 46px;
 
       display: grid;
       place-items: center;
       flex: 0 0 auto;
 
-      border-radius: 12px;
-      background: rgba(255, 255, 255, 0.76);
-      border: 1px solid rgba(255, 255, 255, 0.92);
-
-      color: #123a6b;
+      border-radius: 50%;
+      background: transparent;
+      border: 0;
+      overflow: hidden;
     }
 
-    .ea-ai-logo svg {
-      width: 22px;
-      height: 22px;
+    .ea-ai-logo-avatar {
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: contain;
+      object-position: center;
     }
 
     .ea-ai-heading {
@@ -307,8 +324,68 @@
       font-size: 13.5px;
       line-height: 1.55;
 
-      white-space: pre-wrap;
+      white-space: normal;
       overflow-wrap: anywhere;
+    }
+
+    .ea-ai-bubble .ea-ai-paragraph {
+      margin: 0;
+    }
+
+    .ea-ai-bubble .ea-ai-paragraph + .ea-ai-paragraph {
+      margin-top: 7px;
+    }
+
+    .ea-ai-bubble .ea-ai-spacer {
+      height: 6px;
+    }
+
+    .ea-ai-bubble .ea-ai-heading {
+      margin: 2px 0 7px;
+      color: #101828;
+      font-weight: 800;
+      line-height: 1.35;
+    }
+
+    .ea-ai-bubble .ea-ai-heading-1 {
+      font-size: 16px;
+    }
+
+    .ea-ai-bubble .ea-ai-heading-2 {
+      font-size: 15px;
+    }
+
+    .ea-ai-bubble .ea-ai-heading-3 {
+      font-size: 14px;
+    }
+
+    .ea-ai-bubble .ea-ai-list {
+      margin: 6px 0 8px;
+      padding-left: 20px;
+    }
+
+    .ea-ai-bubble .ea-ai-list li {
+      margin: 3px 0;
+      padding-left: 2px;
+    }
+
+    .ea-ai-bubble .ea-ai-numbered-item {
+      margin: 5px 0;
+    }
+
+    .ea-ai-bubble code {
+      padding: 1px 5px;
+      border-radius: 5px;
+      background: #f2f4f7;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.92em;
+    }
+
+    .ea-ai-bubble .ea-ai-divider {
+      width: 100%;
+      height: 1px;
+      margin: 10px 0;
+      background: #e6e9f0;
     }
 
     .ea-ai-message.ai .ea-ai-bubble {
@@ -326,6 +403,15 @@
 
     .ea-ai-welcome {
       margin-bottom: 18px;
+    }
+
+    .ea-ai-welcome-avatar {
+      width: 64px;
+      height: 64px;
+      display: block;
+      object-fit: contain;
+      object-position: center;
+      margin: 0 auto 10px;
     }
 
     .ea-ai-welcome-title {
@@ -533,8 +619,10 @@
       .ea-ai-launcher {
         right: 16px;
         bottom: 16px;
-        min-height: 52px;
-        padding: 0 16px;
+        width: 56px;
+        height: 56px;
+        min-height: 56px;
+        padding: 3px;
       }
 
       .ea-ai-panel {
@@ -547,12 +635,6 @@
         max-height: calc(100dvh - 16px);
 
         border-radius: 18px;
-
-        /*
-         * Keep the panel itself fixed. Only the message area scrolls.
-         * This prevents the header/composer from moving while reading
-         * a long AI response.
-         */
         overflow: hidden;
       }
 
@@ -567,7 +649,6 @@
 
         overflow-x: hidden;
         overflow-y: auto;
-
         -webkit-overflow-scrolling: touch;
         overscroll-behavior-y: contain;
         touch-action: pan-y;
@@ -665,9 +746,13 @@
         aria-expanded="false"
       >
         <span class="ea-ai-launcher-icon">
-          ${ICON_SPARK}
+          <img
+            class="ea-ai-launcher-avatar"
+            src="${AI_AVATAR_SRC}"
+            alt=""
+            aria-hidden="true"
+          />
         </span>
-        <span class="ea-ai-launcher-text">AI Assistant</span>
       </button>
 
       <section
@@ -679,7 +764,12 @@
         <header class="ea-ai-header">
           <div class="ea-ai-header-left">
             <div class="ea-ai-logo">
-              ${ICON_SPARK}
+              <img
+                class="ea-ai-logo-avatar"
+                src="${AI_AVATAR_SRC}"
+                alt=""
+                aria-hidden="true"
+              />
             </div>
 
             <div class="ea-ai-heading">
@@ -782,6 +872,12 @@
 
     messages.innerHTML = `
       <div class="ea-ai-welcome">
+        <img
+          class="ea-ai-welcome-avatar"
+          src="${AI_AVATAR_SRC}"
+          alt=""
+          aria-hidden="true"
+        />
         <h3 class="ea-ai-welcome-title">How can I help?</h3>
 
         <p class="ea-ai-welcome-copy">
@@ -830,6 +926,100 @@
      Chat messages
      ------------------------------------------------------------------------ */
 
+  function formatAIResponse(text) {
+    var source = String(text || "").replace(/\r\n?/g, "\n");
+    var lines = source.split("\n");
+    var html = [];
+    var inList = false;
+
+    function closeList() {
+      if (inList) {
+        html.push("</ul>");
+        inList = false;
+      }
+    }
+
+    function inlineMarkdown(value) {
+      var safe = escapeHtml(value);
+
+      // Inline code
+      safe = safe.replace(/`([^`]+)`/g, "<code>$1</code>");
+
+      // Bold + italic
+      safe = safe.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+      safe = safe.replace(/__(.+?)__/g, "<strong>$1</strong>");
+      safe = safe.replace(/\*([^*\n]+)\*/g, "<em>$1</em>");
+      safe = safe.replace(/_([^_\n]+)_/g, "<em>$1</em>");
+
+      return safe;
+    }
+
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      var trimmed = line.trim();
+
+      // Horizontal rules such as ---, ***, or ___
+      if (/^(?:[-*_])(?:\s*[-*_]){2,}$/.test(trimmed)) {
+        closeList();
+        html.push('<div class="ea-ai-divider" aria-hidden="true"></div>');
+        continue;
+      }
+
+      // Headings
+      var heading = trimmed.match(/^(#{1,3})\s+(.+)$/);
+      if (heading) {
+        closeList();
+        var level = heading[1].length;
+        html.push(
+          '<div class="ea-ai-heading ea-ai-heading-' +
+            level +
+            '">' +
+            inlineMarkdown(heading[2]) +
+            "</div>"
+        );
+        continue;
+      }
+
+      // Unordered list
+      var bullet = trimmed.match(/^[*-]\s+(.+)$/);
+      if (bullet) {
+        if (!inList) {
+          html.push('<ul class="ea-ai-list">');
+          inList = true;
+        }
+        html.push("<li>" + inlineMarkdown(bullet[1]) + "</li>");
+        continue;
+      }
+
+      // Ordered list
+      var numbered = trimmed.match(/^\d+[.)]\s+(.+)$/);
+      if (numbered) {
+        closeList();
+        // Use a normal ordered list for consecutive numbered content.
+        html.push(
+          '<div class="ea-ai-numbered-item">' +
+            inlineMarkdown(trimmed) +
+            "</div>"
+        );
+        continue;
+      }
+
+      closeList();
+
+      // Empty line = spacing between paragraphs.
+      if (!trimmed) {
+        html.push('<div class="ea-ai-spacer"></div>');
+        continue;
+      }
+
+      html.push('<div class="ea-ai-paragraph">' + inlineMarkdown(line) + "</div>");
+    }
+
+    closeList();
+
+    return html.join("");
+  }
+
   function addMessage(role, text) {
     var messages = get("eaAiMessages");
     if (!messages) return;
@@ -839,7 +1029,14 @@
 
     var bubble = document.createElement("div");
     bubble.className = "ea-ai-bubble";
-    bubble.textContent = text;
+
+    // Only AI responses are rendered as Markdown. User messages remain
+    // plain text so their input can never become HTML.
+    if (role === "ai") {
+      bubble.innerHTML = formatAIResponse(text);
+    } else {
+      bubble.textContent = text;
+    }
 
     row.appendChild(bubble);
     messages.appendChild(row);
@@ -1195,9 +1392,66 @@
     });
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init);
+  /* Start only after the browser has loaded AND the dashboard has finished
+     its asynchronous attendance-data load. */
+  function startAfterAttendanceLoad() {
+    if (window.__EA_AI_INITIALIZED__) return;
+
+    /*
+     * Create the assistant immediately after the browser has finished
+     * loading the page, but keep it hidden until the dashboard's
+     * asynchronous attendance loader has disappeared.
+     *
+     * IMPORTANT: createInterface() must happen BEFORE we look for the
+     * assistant root. The previous implementation looked for the root
+     * first, found nothing, and returned — which removed the launcher
+     * completely.
+     */
+    createInterface();
+
+    var root = get("ea-ai-root");
+    if (!root) return;
+
+    root.hidden = true;
+
+    var attempts = 0;
+    var maxAttempts = 600; // 60 seconds maximum.
+
+    function waitForDashboard() {
+      if (window.__EA_AI_INITIALIZED__) return;
+
+      var view = get("view");
+      var loader = view && view.querySelector(".page-loader");
+
+      if (loader) {
+        attempts++;
+
+        if (attempts < maxAttempts) {
+          window.setTimeout(waitForDashboard, 100);
+        } else {
+          // Fail open: never permanently remove the AI assistant if the
+          // attendance loader gets stuck for an unrelated reason.
+          window.__EA_AI_INITIALIZED__ = true;
+          init();
+        }
+
+        return;
+      }
+
+      window.__EA_AI_INITIALIZED__ = true;
+      init();
+    }
+
+    waitForDashboard();
+  }
+
+  function startAfterFullPageLoad() {
+    startAfterAttendanceLoad();
+  }
+
+  if (document.readyState === "complete") {
+    startAfterFullPageLoad();
   } else {
-    init();
+    window.addEventListener("load", startAfterFullPageLoad, { once: true });
   }
 })();
