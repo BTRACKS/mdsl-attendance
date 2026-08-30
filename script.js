@@ -1830,7 +1830,6 @@
       stat("Evening Submitted", evening.filter(function (a) { return staff.some(function (u) { return String(u.id) === String(a.userId); }); }).length, "accent", ICON.sunset) +
       (dayState.open ? stat("Missing Attendance", missing.length, missing.length ? "danger" : "", ICON.alert) : stat("Missing Attendance", "—", "", ICON.alert)) + '</div>' +
       weekStatusPanel(now) +
-      windowsUpdateCard(null) +
       '<div class="layout"><div><section class="section"><div class="section-head"><h2>Today\'s Register</h2><span>' + longDate(now) + ' · ' + esc(dayStatus(now).reason) + '</span></div>' +
       (dayState.open ? '' : '<div class="day-lock compact ' + dayState.kind + '"><span class="day-lock-icon" aria-hidden="true">' + ICON.lock + '</span><div class="day-lock-body"><p class="day-lock-title">Attendance locked today</p><p class="day-lock-note">' + esc(dayState.kind === 'weekend' ? 'Weekend — attendance stamping is only available Monday–Friday.' : 'Public holiday: ' + dayState.reason + '. Staff cannot stamp attendance today.') + '</p></div></div>') +
       overviewTable(staff) + '</section></div>' +
