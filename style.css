@@ -2016,7 +2016,7 @@ aside .panel:has(#hseSettingsForm){overflow:visible}
 }
 .windows-update-notice{
   max-width:var(--maxw);
-  margin:20px auto 0;
+  margin:20px auto 20px;
   padding:14px 18px;
   border:1px solid var(--rule-strong);
   border-radius:14px;
@@ -2090,7 +2090,7 @@ aside .panel:has(#hseSettingsForm){overflow:visible}
     white-space:nowrap;
   }
   .windows-update-notice{
-    margin:14px 16px 0;
+    margin:14px 16px 16px;
     align-items:flex-start;
   }
   .windows-update-notice .btn{margin-top:2px}
