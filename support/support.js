@@ -463,6 +463,24 @@
     }
   }
 
+  function showSupportLeaveCancelModal(row, name) {
+    var backdrop = $("leaveCancelBackdrop");
+    if (!backdrop) return Promise.resolve(false);
+    $("leaveCancelBody").textContent =
+      "Are you sure you want to cancel " + leaveTypeLabel(row.leave_type) + " for " + name + "?";
+    backdrop.hidden = false;
+
+    return new Promise(function(resolve) {
+      var done = function(value) {
+        backdrop.hidden = true;
+        resolve(value);
+      };
+      $("leaveCancelNo").onclick = function(){ done(false); };
+      $("leaveCancelYes").onclick = function(){ done(true); };
+      backdrop.onclick = function(e){ if (e.target === backdrop) done(false); };
+    });
+  }
+
   async function cancelLeave(row) {
     if (!leaveCanModify(row)) {
       toast("This leave record is already cancelled or completed.", "bad");
@@ -470,7 +488,8 @@
     }
     var person = leavePersonFor(row);
     var name = person ? displayName(person) : "this staff member";
-    if (!window.confirm("Cancel " + leaveTypeLabel(row.leave_type) + " for " + name + "?\\n\\nThe record will remain in the leave history as Cancelled.")) return;
+    var confirmed = await showSupportLeaveCancelModal(row, name);
+    if (!confirmed) return;
 
     loader(true);
     try {

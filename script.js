@@ -370,7 +370,7 @@
 
   async function enforceCurrentAccountStatus(showMessage) {
     if (!authUser) return true;
-    var res = await supabaseClient.from("profiles").select("id,status,account_status,is_active,active").eq("id", authUser.id).maybeSingle();
+    var res = await supabaseClient.from("profiles").select("id,is_active").eq("id", authUser.id).maybeSingle();
     if (res.error || !res.data) return true;
     var active = isAccountActive({
       isActive: res.data.is_active,
@@ -1188,6 +1188,42 @@
     }
   }
 
+  function showStaffLeaveCancelModal(row) {
+    ensureStaffLeaveModal();
+    return new Promise(function(resolve) {
+      var backdrop = el("staffLeaveCancelBackdrop");
+      if (!backdrop) {
+        var wrap = document.createElement("div");
+        wrap.innerHTML =
+          '<div class="modal-backdrop staff-leave-modal" id="staffLeaveCancelBackdrop" hidden>' +
+            '<div class="modal" role="dialog" aria-modal="true" aria-labelledby="staffLeaveCancelTitle">' +
+              '<p class="eyebrow">Leave management</p>' +
+              '<h2 id="staffLeaveCancelTitle">Cancel leave?</h2>' +
+              '<p class="att-confirm-lede" id="staffLeaveCancelBody"></p>' +
+              '<div class="alert alert-error" id="staffLeaveCancelWarning">This will mark the leave as Cancelled. The record will remain in your leave history.</div>' +
+              '<div class="modal-actions">' +
+                '<button class="btn btn-ghost btn-sm" id="staffLeaveCancelNo" type="button">Keep leave</button>' +
+                '<button class="btn btn-danger btn-sm" id="staffLeaveCancelYes" type="button">Yes, cancel leave</button>' +
+              '</div>' +
+            '</div>' +
+          '</div>';
+        document.body.appendChild(wrap.firstElementChild);
+        backdrop = el("staffLeaveCancelBackdrop");
+      }
+      el("staffLeaveCancelBody").textContent =
+        "Are you sure you want to cancel your " + leaveTypeLabel(row.leaveType) + "?";
+      backdrop.hidden = false;
+
+      var done = function(value) {
+        backdrop.hidden = true;
+        resolve(value);
+      };
+      el("staffLeaveCancelNo").onclick = function(){ done(false); };
+      el("staffLeaveCancelYes").onclick = function(){ done(true); };
+      backdrop.onclick = function(e){ if (e.target === backdrop) done(false); };
+    });
+  }
+
   async function cancelStaffLeave(row, u) {
     if (!row || String(row.userId) !== String(u.id)) {
       toast("You can only cancel your own leave.", "error");
@@ -1198,7 +1234,8 @@
       toast("This leave record cannot be cancelled.", "error");
       return;
     }
-    if (!window.confirm("Cancel your " + leaveTypeLabel(row.leaveType) + "?\\n\\nThe record will remain in your leave history as Cancelled.")) return;
+    var confirmed = await showStaffLeaveCancelModal(row);
+    if (!confirmed) return;
 
     pageLoader.show();
     try {

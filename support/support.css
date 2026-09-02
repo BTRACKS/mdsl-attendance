@@ -1542,3 +1542,19 @@ body.modal-open{overflow:hidden}
   #tab-leave .leave-table td::before{margin-bottom:1px}
   #tab-leave .leave-row-actions .btn{flex:1 1 100%}
 }
+
+
+/* Leave cancellation confirmation uses the same modal language as the rest of the UI. */
+.staff-leave-modal #staffLeaveCancelWarning{
+  margin:16px 0 4px;
+  color:var(--ink-2);
+}
+@media(max-width:760px){
+  .staff-leave-modal .modal-actions{
+    flex-direction:column-reverse;
+    align-items:stretch;
+  }
+  .staff-leave-modal .modal-actions .btn{
+    width:100%;
+  }
+}

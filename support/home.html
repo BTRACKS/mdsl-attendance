@@ -599,6 +599,20 @@
     </div>
   </div>
 
+  <!-- ===================== LEAVE CANCEL CONFIRMATION ===================== -->
+  <div class="modal-backdrop" id="leaveCancelBackdrop" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="leaveCancelTitle">
+      <p class="eyebrow">Leave management</p>
+      <h2 id="leaveCancelTitle">Cancel leave?</h2>
+      <p class="att-confirm-lede" id="leaveCancelBody">Are you sure you want to cancel this leave?</p>
+      <div class="alert alert-error">This will mark the leave as <strong>Cancelled</strong>. The record will remain in leave history.</div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost btn-sm" id="leaveCancelNo" type="button">Keep leave</button>
+        <button class="btn btn-danger btn-sm" id="leaveCancelYes" type="button">Yes, cancel leave</button>
+      </div>
+    </div>
+  </div>
+
   <div class="toasts" id="toasts"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
