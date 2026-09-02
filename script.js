@@ -370,7 +370,7 @@
 
   async function enforceCurrentAccountStatus(showMessage) {
     if (!authUser) return true;
-    var res = await supabaseClient.from("profiles").select("id,is_active").eq("id", authUser.id).maybeSingle();
+    var res = await supabaseClient.from("profiles").select("id,status,account_status,is_active,active").eq("id", authUser.id).maybeSingle();
     if (res.error || !res.data) return true;
     var active = isAccountActive({
       isActive: res.data.is_active,
@@ -995,11 +995,260 @@
       .sort(function(a,b){ return String(b.startDate).localeCompare(String(a.startDate)); });
   }
 
+
+  function ensureStaffLeaveStyles() {
+    if (el("staffLeaveResponsiveStyles")) return;
+    var style = document.createElement("style");
+    style.id = "staffLeaveResponsiveStyles";
+    style.textContent =
+      ".leave-management-page{width:100%;min-width:0}" +
+      ".leave-management-page .leave-history-wrap{width:100%;max-width:100%;overflow-x:auto;overflow-y:hidden;border:1px solid var(--rule);border-radius:14px;-webkit-overflow-scrolling:touch}" +
+      ".leave-management-page .leave-history-table{width:100%;min-width:760px;border-collapse:separate;border-spacing:0;table-layout:auto}" +
+      ".leave-management-page .leave-history-table th,.leave-management-page .leave-history-table td{padding:13px 14px;text-align:left;vertical-align:middle;border-bottom:1px solid var(--rule);font-size:13px;line-height:1.35}" +
+      ".leave-management-page .leave-history-table th{background:var(--paper-2);color:var(--ink-2);font-size:11.5px;font-weight:800;white-space:nowrap}" +
+      ".leave-management-page .leave-history-table tbody tr:last-child td{border-bottom:0}" +
+      ".leave-management-page .leave-history-table tbody tr:hover td{background:#fcfcfd}" +
+      ".leave-management-page .leave-reason-cell{max-width:240px;overflow-wrap:anywhere}" +
+      ".leave-management-page .leave-row-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-width:140px}" +
+      ".leave-management-page .leave-row-actions .btn{margin:0}" +
+      ".leave-management-page .leave-action-muted{font-size:12px;color:var(--ink-4);white-space:nowrap}" +
+      ".staff-leave-modal .leave-modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px}" +
+      ".staff-leave-modal .leave-modal-head h2{font-size:22px}" +
+      ".staff-leave-modal .modal-close{flex:0 0 auto;width:36px;height:36px;border:1px solid var(--rule-strong);border-radius:50%;background:var(--paper);color:var(--ink-2);font-size:24px;line-height:1;cursor:pointer}" +
+      ".staff-leave-modal .leave-edit-person{display:flex;align-items:center;gap:11px;padding:12px 14px;margin-bottom:4px;border:1px solid var(--rule);border-radius:12px;background:var(--paper-2)}" +
+      ".staff-leave-modal .leave-edit-person strong{display:block;font-size:14px}" +
+      ".staff-leave-modal .leave-edit-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 16px}" +
+      ".staff-leave-modal .leave-edit-reason{grid-column:1/-1}" +
+      "@media(max-width:760px){" +
+        ".leave-management-page .section{padding:18px 16px}" +
+        ".leave-management-page .page-head{padding:24px 22px}" +
+        ".leave-management-page .leave-history-wrap{border:0;overflow:visible}" +
+        ".leave-management-page .leave-history-table,.leave-management-page .leave-history-table thead,.leave-management-page .leave-history-table tbody,.leave-management-page .leave-history-table tr,.leave-management-page .leave-history-table td{display:block;width:100%;min-width:0}" +
+        ".leave-management-page .leave-history-table{min-width:0}" +
+        ".leave-management-page .leave-history-table thead{display:none}" +
+        ".leave-management-page .leave-history-table tbody{display:grid;gap:12px}" +
+        ".leave-management-page .leave-history-table tr{overflow:hidden;border:1px solid var(--rule);border-radius:14px;background:var(--paper);box-shadow:var(--shadow-xs)}" +
+        ".leave-management-page .leave-history-table td{display:grid;grid-template-columns:minmax(82px,30%) minmax(0,1fr);gap:12px;padding:10px 13px;border-bottom:1px solid var(--rule);font-size:13px}" +
+        ".leave-management-page .leave-history-table td:last-child{border-bottom:0}" +
+        ".leave-management-page .leave-history-table td::before{content:attr(data-label);color:var(--ink-4);font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em}" +
+        ".leave-management-page .leave-history-table .leave-row-actions{width:100%;min-width:0}" +
+        ".leave-management-page .leave-history-table .leave-actions-cell{display:block}" +
+        ".leave-management-page .leave-history-table .leave-actions-cell::before{display:block;margin-bottom:8px}" +
+        ".leave-management-page .leave-row-actions .btn{flex:1 1 110px}" +
+        ".staff-leave-modal .modal{max-width:100%;max-height:calc(100vh - 24px);overflow:auto}" +
+        ".staff-leave-modal .leave-edit-grid{grid-template-columns:1fr}" +
+        ".staff-leave-modal .leave-edit-reason{grid-column:auto}" +
+      "}" +
+      "@media(max-width:430px){" +
+        ".leave-management-page .page-head{padding:22px 18px}" +
+        ".leave-management-page .section{padding:16px 13px}" +
+        ".leave-management-page .leave-history-table td{grid-template-columns:1fr;gap:5px}" +
+        ".leave-management-page .leave-row-actions .btn{flex:1 1 100%}" +
+      "}";
+    document.head.appendChild(style);
+  }
+
+  function staffLeaveCanModify(row, today) {
+    if (!row || !row.id || String(row.status || "").toLowerCase() === "cancelled") return false;
+    return !(row.startDate < today && row.endDate < today);
+  }
+
+  function ensureStaffLeaveModal() {
+    if (el("staffLeaveEditBackdrop")) return;
+    var wrap = document.createElement("div");
+    wrap.innerHTML =
+      '<div class="modal-backdrop staff-leave-modal" id="staffLeaveEditBackdrop" hidden>' +
+        '<div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="staffLeaveEditTitle">' +
+          '<div class="leave-modal-head"><div><p class="eyebrow">Leave management</p><h2 id="staffLeaveEditTitle">Edit leave</h2><p class="att-confirm-lede">Update your leave details below.</p></div>' +
+          '<button class="modal-close" id="staffLeaveEditClose" type="button" aria-label="Close">×</button></div>' +
+          '<form id="staffLeaveEditForm" novalidate>' +
+            '<input type="hidden" id="staffLeaveEditId" />' +
+            '<div class="leave-edit-person"><div class="avatar" id="staffLeaveEditAvatar">?</div><div><strong id="staffLeaveEditName">Your leave</strong><span id="staffLeaveEditMeta"></span></div></div>' +
+            '<div class="leave-edit-grid">' +
+              '<div class="field"><label for="staffLeaveEditType">Leave type</label><select id="staffLeaveEditType"></select></div>' +
+              '<div class="field"><label for="staffLeaveEditStart">Start date</label><input id="staffLeaveEditStart" type="date" required /></div>' +
+              '<div class="field"><label for="staffLeaveEditEnd">End date</label><input id="staffLeaveEditEnd" type="date" required /></div>' +
+              '<div class="field leave-edit-reason"><label for="staffLeaveEditReason">Reason</label><textarea id="staffLeaveEditReason" rows="3" maxlength="1000" placeholder="Optional reason"></textarea></div>' +
+            '</div>' +
+            '<div class="alert alert-error" id="staffLeaveEditError" hidden></div>' +
+            '<div class="modal-actions"><button class="btn btn-ghost btn-sm" id="staffLeaveEditCancel" type="button">Close</button><button class="btn btn-primary btn-sm" id="staffLeaveEditSave" type="submit">Save changes</button></div>' +
+          '</form>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(wrap.firstElementChild);
+
+    el("staffLeaveEditClose").addEventListener("click", closeStaffLeaveModal);
+    el("staffLeaveEditCancel").addEventListener("click", closeStaffLeaveModal);
+    el("staffLeaveEditBackdrop").addEventListener("click", function(e){
+      if (e.target === el("staffLeaveEditBackdrop")) closeStaffLeaveModal();
+    });
+    el("staffLeaveEditForm").addEventListener("submit", saveStaffLeaveEdit);
+  }
+
+  function closeStaffLeaveModal() {
+    var b = el("staffLeaveEditBackdrop");
+    if (b) b.hidden = true;
+    var err = el("staffLeaveEditError");
+    if (err) { err.hidden = true; err.textContent = ""; }
+  }
+
+  function openStaffLeaveEdit(row, u) {
+    var today = dateKey(new Date());
+    if (!staffLeaveCanModify(row, today)) {
+      toast("Only scheduled or active leave can be edited.", "error");
+      return;
+    }
+    ensureStaffLeaveModal();
+    el("staffLeaveEditId").value = String(row.id);
+    el("staffLeaveEditType").innerHTML = LEAVE_TYPES.map(function(t){
+      return '<option value="' + esc(t) + '"' + (t === row.leaveType ? " selected" : "") + '>' + esc(t) + '</option>';
+    }).join("");
+    el("staffLeaveEditStart").value = row.startDate || "";
+    el("staffLeaveEditEnd").value = row.endDate || "";
+    el("staffLeaveEditReason").value = row.reason || "";
+    el("staffLeaveEditName").textContent = profileDisplayName(u);
+    el("staffLeaveEditMeta").textContent = "Only your own leave can be edited or cancelled.";
+    var av = el("staffLeaveEditAvatar");
+    if (av) {
+      av.outerHTML = avatarHtmlForLeave(u);
+    }
+    el("staffLeaveEditBackdrop").hidden = false;
+    el("staffLeaveEditStart").focus();
+  }
+
+  function avatarHtmlForLeave(u) {
+    var name = profileDisplayName(u);
+    var raw = u && (u.avatarUrl || u.avatar_url);
+    if (raw) return '<div class="avatar" id="staffLeaveEditAvatar"><img src="' + esc(raw) + '" alt="' + esc(name) + '" /></div>';
+    var initials = String(name || "Staff member").trim().split(/\s+/).slice(0,2).map(function(x){return x.charAt(0).toUpperCase();}).join("") || "?";
+    return '<div class="avatar" id="staffLeaveEditAvatar">' + esc(initials) + '</div>';
+  }
+
+  async function saveStaffLeaveEdit(e) {
+    if (e) e.preventDefault();
+    var u = session();
+    if (!u) return;
+    var id = el("staffLeaveEditId").value;
+    var existing = (db.leaves || []).find(function(l){ return String(l.id) === String(id) && String(l.userId) === String(u.id); });
+    if (!existing) { toast("Your leave record could not be found. Refresh and try again.", "error"); return; }
+
+    var type = el("staffLeaveEditType").value;
+    var start = el("staffLeaveEditStart").value;
+    var end = el("staffLeaveEditEnd").value;
+    var reason = el("staffLeaveEditReason").value.trim();
+    var err = el("staffLeaveEditError");
+    if (err) { err.hidden = true; err.textContent = ""; }
+
+    var today = dateKey(new Date());
+    if (!type || !start || !end) {
+      if (err) { err.hidden = false; err.textContent = "Leave type, start date and end date are required."; }
+      return;
+    }
+    if (start < today) {
+      if (err) { err.hidden = false; err.textContent = "Leave cannot start in the past."; }
+      return;
+    }
+    if (end < start) {
+      if (err) { err.hidden = false; err.textContent = "The end date cannot be before the start date."; }
+      return;
+    }
+    var overlap = (db.leaves || []).some(function(l){
+      return String(l.userId) === String(u.id) &&
+        String(l.id) !== String(existing.id) &&
+        l.status !== "cancelled" &&
+        start <= l.endDate && end >= l.startDate;
+    });
+    if (overlap) {
+      if (err) { err.hidden = false; err.textContent = "These dates overlap another non-cancelled leave record."; }
+      return;
+    }
+
+    var btn = el("staffLeaveEditSave");
+    setBtnLoading(btn, true);
+    pageLoader.show();
+    try {
+      var res = await supabaseClient.from("staff_leave")
+        .update({ leave_type:type, start_date:start, end_date:end, reason:reason || null })
+        .eq("id", existing.id)
+        .eq("staff_id", u.id)
+        .select("*")
+        .maybeSingle();
+      if (res.error) throw res.error;
+      if (!res.data) throw new Error("The leave was not updated. Your account may not have permission to edit this leave.");
+      await refreshData();
+      closeStaffLeaveModal();
+      toast("Leave updated successfully.", "success");
+      render();
+    } catch (ex) {
+      if (err) { err.hidden = false; err.textContent = ex.message || "The leave could not be updated."; }
+      toast(ex.message || "The leave could not be updated.", "error");
+    } finally {
+      setBtnLoading(btn, false);
+      pageLoader.hide();
+    }
+  }
+
+  async function cancelStaffLeave(row, u) {
+    if (!row || String(row.userId) !== String(u.id)) {
+      toast("You can only cancel your own leave.", "error");
+      return;
+    }
+    var today = dateKey(new Date());
+    if (!staffLeaveCanModify(row, today)) {
+      toast("This leave record cannot be cancelled.", "error");
+      return;
+    }
+    if (!window.confirm("Cancel your " + leaveTypeLabel(row.leaveType) + "?\\n\\nThe record will remain in your leave history as Cancelled.")) return;
+
+    pageLoader.show();
+    try {
+      var res = await supabaseClient.from("staff_leave")
+        .update({ status:"cancelled" })
+        .eq("id", row.id)
+        .eq("staff_id", u.id)
+        .select("*")
+        .maybeSingle();
+      if (res.error) throw res.error;
+      if (!res.data) throw new Error("The leave was not cancelled. Your account may not have permission to cancel this leave.");
+      await refreshData();
+      toast("Leave cancelled successfully.", "success");
+      render();
+    } catch (ex) {
+      toast(ex.message || "The leave could not be cancelled.", "error");
+    } finally {
+      pageLoader.hide();
+    }
+  }
+
   function leaveView(u) {
+    ensureStaffLeaveStyles();
+    ensureStaffLeaveModal();
+
     var rows = leaveHistoryFor(u.id);
     var today = dateKey(new Date());
     var active = rows.find(function(l){ return l.status !== "cancelled" && l.startDate <= today && today <= l.endDate; });
-    return '<div class="page"><div class="page-head"><p class="eyebrow">Time Away</p><h1>Leave Management</h1></div>' +
+
+    var history = rows.length
+      ? '<div class="leave-history-wrap"><table class="leave-history-table"><thead><tr><th>Type</th><th>Start</th><th>End</th><th>Reason</th><th>Status</th><th>Actions</th></tr></thead><tbody>' +
+        rows.map(function(l){
+          var activeNow=l.status!=="cancelled"&&l.startDate<=today&&today<=l.endDate;
+          var future=l.status!=="cancelled"&&l.startDate>today;
+          var st=l.status==="cancelled"?"Cancelled":activeNow?"Active":future?"Scheduled":"Completed";
+          var canModify=staffLeaveCanModify(l,today);
+          var actions=canModify
+            ? '<div class="leave-row-actions"><button type="button" class="btn btn-ghost btn-sm" data-staff-leave-edit="' + esc(l.id) + '">Edit</button><button type="button" class="btn btn-danger btn-sm" data-staff-leave-cancel="' + esc(l.id) + '">Cancel</button></div>'
+            : '<span class="leave-action-muted">No actions</span>';
+          return '<tr><td data-label="Type">'+esc(leaveTypeLabel(l.leaveType))+'</td>' +
+            '<td data-label="Start">'+esc(prettyDate(l.startDate))+'</td>' +
+            '<td data-label="End">'+esc(prettyDate(l.endDate))+'</td>' +
+            '<td data-label="Reason" class="leave-reason-cell">'+esc(l.reason||"—")+'</td>' +
+            '<td data-label="Status">'+esc(st)+'</td>' +
+            '<td data-label="Actions" class="leave-actions-cell">'+actions+'</td></tr>';
+        }).join("") +
+        '</tbody></table></div>'
+      : '<p class="empty">No leave records yet.</p>';
+
+    return '<div class="page leave-management-page"><div class="page-head"><p class="eyebrow">Time Away</p><h1>Leave Management</h1><p class="dateline">Manage your own leave requests. Scheduled and active leave can be edited or cancelled.</p></div>' +
       (active ? '<section class="section leave-active-card"><div class="section-head"><h2>You are currently on leave</h2><span>Leave</span></div>' +
         '<div class="leave-detail-grid"><div><span>Type</span><strong>' + esc(leaveTypeLabel(active.leaveType)) + '</strong></div><div><span>Start</span><strong>' + esc(prettyDate(active.startDate)) + '</strong></div><div><span>End</span><strong>' + esc(prettyDate(active.endDate)) + '</strong></div></div>' +
         (active.reason ? '<p class="dateline leave-reason">Reason: ' + esc(active.reason) + '</p>' : '') + '</section>' : '') +
@@ -1013,11 +1262,9 @@
       '<div class="field full"><label for="leaveReason">Reason (optional)</label><textarea id="leaveReason" name="reason" rows="4" maxlength="1000" placeholder="Optional reason"></textarea><span class="error"></span></div>' +
       '</div><div class="form-foot"><button class="btn btn-primary" type="submit">Activate leave</button></div></form></section>' +
       '<section class="section"><div class="section-head"><h2>Leave History</h2><span>'+rows.length+' record'+(rows.length===1?'':'s')+'</span></div>' +
-      (rows.length ? '<div class="table-wrap"><table><thead><tr><th>Type</th><th>Start</th><th>End</th><th>Reason</th><th>Status</th></tr></thead><tbody>' +
-        rows.map(function(l){ var activeNow=l.status!=="cancelled"&&l.startDate<=today&&today<=l.endDate; var future=l.status!=="cancelled"&&l.startDate>today; var st=l.status==="cancelled"?"Cancelled":activeNow?"Active":future?"Scheduled":"Completed"; return '<tr><td>'+esc(leaveTypeLabel(l.leaveType))+'</td><td>'+esc(prettyDate(l.startDate))+'</td><td>'+esc(prettyDate(l.endDate))+'</td><td>'+esc(l.reason||"—")+'</td><td>'+esc(st)+'</td></tr>'; }).join("") +
-        '</tbody></table></div>' : '<p class="empty">No leave records yet.</p>') +
-      '</section></div>';
+      history + '</section></div>';
   }
+
 
   async function submitLeave() {
     var u=session(); if(!u) return;
@@ -4540,6 +4787,20 @@
   function bindLeave() {
     var form=el("leaveForm");
     if(form) form.addEventListener("submit",function(e){e.preventDefault();submitLeave();});
+    var u=session();
+    if(!u) return;
+    Array.prototype.forEach.call(document.querySelectorAll("[data-staff-leave-edit]"),function(btn){
+      btn.addEventListener("click",function(){
+        var row=(db.leaves||[]).find(function(l){return String(l.id)===String(btn.getAttribute("data-staff-leave-edit"));});
+        if(row) openStaffLeaveEdit(row,u);
+      });
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("[data-staff-leave-cancel]"),function(btn){
+      btn.addEventListener("click",function(){
+        var row=(db.leaves||[]).find(function(l){return String(l.id)===String(btn.getAttribute("data-staff-leave-cancel"));});
+        if(row) cancelStaffLeave(row,u);
+      });
+    });
   }
 
   function bindAuth() {

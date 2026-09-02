@@ -558,6 +558,47 @@
     </div>
   </div>
 
+  <!-- ===================== LEAVE MANAGEMENT ===================== -->
+  <div class="modal-backdrop" id="leaveBackdrop" hidden>
+    <div class="modal modal-wide leave-modal" role="dialog" aria-modal="true" aria-labelledby="leaveModalTitle">
+      <div class="leave-modal-head">
+        <div>
+          <p class="eyebrow" id="leaveModalEyebrow">Leave management</p>
+          <h2 id="leaveModalTitle">Edit leave</h2>
+          <p class="att-confirm-lede" id="leaveModalLede">Update the leave details below.</p>
+        </div>
+        <button class="modal-close" id="leaveModalClose" type="button" aria-label="Close">×</button>
+      </div>
+      <form id="leaveEditForm" novalidate>
+        <input type="hidden" id="leaveEditId" />
+        <div class="leave-edit-person" id="leaveEditPerson"></div>
+        <div class="leave-edit-grid">
+          <div class="field">
+            <label for="leaveEditType">Leave type</label>
+            <select id="leaveEditType"></select>
+          </div>
+          <div class="field">
+            <label for="leaveEditStart">Start date</label>
+            <input id="leaveEditStart" type="date" required />
+          </div>
+          <div class="field">
+            <label for="leaveEditEnd">End date</label>
+            <input id="leaveEditEnd" type="date" required />
+          </div>
+          <div class="field leave-edit-reason">
+            <label for="leaveEditReason">Reason</label>
+            <textarea id="leaveEditReason" rows="3" maxlength="1000" placeholder="Optional reason"></textarea>
+          </div>
+        </div>
+        <div class="alert alert-error" id="leaveEditError" hidden></div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost btn-sm" id="leaveEditCancel" type="button">Close</button>
+          <button class="btn btn-primary btn-sm" id="leaveEditSave" type="submit">Save changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div class="toasts" id="toasts"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>

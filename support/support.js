@@ -337,6 +337,156 @@
     return "Completed";
   }
 
+  function leaveCanModify(row) {
+    if (!row || !row.id) return false;
+    var status = String(row.status || "active").toLowerCase();
+    if (status === "cancelled") return false;
+    var today = localDateIso();
+    return !(row.start_date < today && row.end_date < today);
+  }
+
+  function leavePersonFor(row) {
+    var id = row && (row.staff_id || row.user_id);
+    return (USERS.rows || []).find(function(u){ return String(rowId(u)) === String(id); }) || null;
+  }
+
+  function leaveOverlapExists(candidate, excludeId) {
+    var staffId = candidate.staff_id || candidate.user_id;
+    return (LEAVES.rows || []).some(function(l) {
+      if (String(l.id) === String(excludeId)) return false;
+      if (String(l.staff_id || l.user_id) !== String(staffId)) return false;
+      if (String(l.status || "").toLowerCase() === "cancelled") return false;
+      return String(candidate.start_date) <= String(l.end_date) &&
+             String(candidate.end_date) >= String(l.start_date);
+    });
+  }
+
+  function closeLeaveModal() {
+    var backdrop = $("leaveBackdrop");
+    if (backdrop) backdrop.hidden = true;
+    var form = $("leaveEditForm");
+    if (form) form.reset();
+    var err = $("leaveEditError");
+    if (err) { err.hidden = true; err.textContent = ""; }
+  }
+
+  function openLeaveEdit(row) {
+    if (!leaveCanModify(row)) {
+      toast("Only scheduled or active leave can be edited.", "bad");
+      return;
+    }
+    var person = leavePersonFor(row);
+    var backdrop = $("leaveBackdrop");
+    if (!backdrop) return;
+
+    $("leaveEditId").value = String(row.id);
+    $("leaveEditPerson").innerHTML =
+      (person ? avatarHtml(person) : '<div class="avatar">?</div>') +
+      '<div><strong>' + esc(person ? displayName(person) : "Staff member") + '</strong>' +
+      (person && pick(person, STAFF_KEYS) ? '<span>' + esc(pick(person, STAFF_KEYS)) + '</span>' : '') +
+      '</div>';
+
+    var type = $("leaveEditType");
+    type.innerHTML = LEAVE_TYPES.map(function(x) {
+      return '<option value="' + esc(x) + '"' + (String(row.leave_type || "") === x ? " selected" : "") + '>' + esc(x) + '</option>';
+    }).join("");
+    $("leaveEditStart").value = row.start_date || "";
+    $("leaveEditEnd").value = row.end_date || "";
+    $("leaveEditReason").value = row.reason || "";
+    $("leaveModalTitle").textContent = "Edit leave";
+    $("leaveModalLede").textContent = "Update the leave details and save the changes.";
+    $("leaveEditSave").disabled = false;
+    backdrop.hidden = false;
+    $("leaveEditStart").focus();
+  }
+
+  async function saveLeaveEdit(e) {
+    if (e) e.preventDefault();
+    var id = $("leaveEditId").value;
+    var existing = (LEAVES.rows || []).find(function(l){ return String(l.id) === String(id); });
+    if (!existing) { toast("That leave record could not be found. Refresh the page and try again.", "bad"); return; }
+
+    var type = $("leaveEditType").value;
+    var start = $("leaveEditStart").value;
+    var end = $("leaveEditEnd").value;
+    var reason = $("leaveEditReason").value.trim();
+    var err = $("leaveEditError");
+    if (err) { err.hidden = true; err.textContent = ""; }
+
+    if (!type || !start || !end) {
+      if (err) { err.hidden = false; err.textContent = "Leave type, start date and end date are required."; }
+      return;
+    }
+    if (end < start) {
+      if (err) { err.hidden = false; err.textContent = "The end date cannot be before the start date."; }
+      return;
+    }
+
+    var candidate = {
+      id: existing.id,
+      staff_id: existing.staff_id || existing.user_id,
+      user_id: existing.user_id,
+      leave_type: type,
+      start_date: start,
+      end_date: end,
+      reason: reason || null,
+      status: existing.status || "active"
+    };
+    if (leaveOverlapExists(candidate, existing.id)) {
+      if (err) { err.hidden = false; err.textContent = "This date range overlaps another non-cancelled leave record for the same staff member."; }
+      return;
+    }
+
+    var btn = $("leaveEditSave");
+    setBtnLoading(btn, true);
+    loader(true);
+    try {
+      var patch = {
+        leave_type: type,
+        start_date: start,
+        end_date: end,
+        reason: reason || null
+      };
+      var res = await sb.from("staff_leave").update(patch).eq("id", existing.id).select("*").maybeSingle();
+      if (res.error) throw res.error;
+      if (!res.data) throw new Error("The leave record was not updated. Check the leave permissions/RLS policy.");
+      await loadLeaves();
+      closeLeaveModal();
+      toast("Leave updated successfully.", "good");
+      renderSupportLeave();
+    } catch (ex) {
+      if (err) { err.hidden = false; err.textContent = ex.message || "The leave could not be updated."; }
+      toast(ex.message || "The leave could not be updated.", "bad");
+    } finally {
+      setBtnLoading(btn, false);
+      loader(false);
+    }
+  }
+
+  async function cancelLeave(row) {
+    if (!leaveCanModify(row)) {
+      toast("This leave record is already cancelled or completed.", "bad");
+      return;
+    }
+    var person = leavePersonFor(row);
+    var name = person ? displayName(person) : "this staff member";
+    if (!window.confirm("Cancel " + leaveTypeLabel(row.leave_type) + " for " + name + "?\\n\\nThe record will remain in the leave history as Cancelled.")) return;
+
+    loader(true);
+    try {
+      var res = await sb.from("staff_leave").update({ status: "cancelled" }).eq("id", row.id).select("*").maybeSingle();
+      if (res.error) throw res.error;
+      if (!res.data) throw new Error("The leave record was not cancelled. Check the leave permissions/RLS policy.");
+      await loadLeaves();
+      toast("Leave cancelled successfully.", "good");
+      renderSupportLeave();
+    } catch (ex) {
+      toast(ex.message || "The leave could not be cancelled.", "bad");
+    } finally {
+      loader(false);
+    }
+  }
+
   async function renderSupportLeave() {
     var root = ensureLeavePortalTab();
     if (!root) return;
@@ -348,7 +498,7 @@
     }
 
     if (LEAVES.error) {
-      root.innerHTML = '<div class="page-head"><p class="eyebrow">Time Away</p><h1>Leave</h1><p class="dateline">View-only leave information for Tech Support.</p></div>' +
+      root.innerHTML = '<div class="page-head"><p class="eyebrow">Time Away</p><h1>Leave</h1><p class="dateline">Manage staff leave requests.</p></div>' +
         '<section class="leave-empty-state leave-error-state"><strong>Leave records could not be loaded</strong><p>' + esc(LEAVES.error) + '</p><button type="button" class="btn btn-secondary" id="leaveRetry">Retry</button></section>';
       var retry = $("leaveRetry");
       if (retry) retry.addEventListener("click", async function(){ LEAVES.loaded=false; await renderSupportLeave(); });
@@ -376,12 +526,8 @@
       return !q || hay.indexOf(q) !== -1;
     });
 
-    var activeCount = (LEAVES.rows || []).filter(function(l){
-      return leavePortalStatus(l, today) === "Active";
-    }).length;
-    var scheduledCount = (LEAVES.rows || []).filter(function(l){
-      return leavePortalStatus(l, today) === "Scheduled";
-    }).length;
+    var activeCount = (LEAVES.rows || []).filter(function(l){ return leavePortalStatus(l, today) === "Active"; }).length;
+    var scheduledCount = (LEAVES.rows || []).filter(function(l){ return leavePortalStatus(l, today) === "Scheduled"; }).length;
 
     var body;
     if (!LEAVES.rows.length) {
@@ -389,30 +535,57 @@
     } else if (!rows.length) {
       body = '<div class="leave-empty-state"><strong>No leave records found</strong><p>No staff leave records match your search.</p></div>';
     } else {
-      body = '<div class="table-wrap"><table><thead><tr><th>Staff</th><th>Leave type</th><th>Start</th><th>End</th><th>Reason</th><th>Status</th></tr></thead><tbody>' +
+      body = '<div class="table-wrap leave-table-wrap"><table class="leave-table"><thead><tr>' +
+        '<th>Staff</th><th>Leave type</th><th>Start</th><th>End</th><th>Reason</th><th>Status</th><th class="leave-actions-heading">Actions</th>' +
+        '</tr></thead><tbody>' +
         rows.map(function(l){
           var id = l.staff_id || l.user_id;
           var user = (USERS.rows || []).find(function(u){ return String(rowId(u)) === String(id); });
           var name = user ? displayName(user) : "Staff member";
           var avatar = user ? avatarHtml(user) : '<div class="avatar">?</div>';
           var status = leavePortalStatus(l, today);
-          return '<tr><td><div class="leave-staff-cell">' + avatar + '<div><strong>' + esc(name) + '</strong>' + (user && pick(user, STAFF_KEYS) ? '<small>' + esc(pick(user, STAFF_KEYS)) + '</small>' : '') + '</div></div></td>' +
-            '<td>' + esc(leaveTypeLabel(l.leave_type)) + '</td>' +
-            '<td>' + esc(dashboardDateOnly(l.start_date)) + '</td>' +
-            '<td>' + esc(dashboardDateOnly(l.end_date)) + '</td>' +
-            '<td>' + esc(l.reason || "—") + '</td>' +
-            '<td><span class="leave-status leave-status-' + status.toLowerCase() + '">' + esc(status) + '</span></td></tr>';
+          var canModify = leaveCanModify(l);
+          var actions = canModify
+            ? '<div class="leave-row-actions"><button type="button" class="btn btn-ghost btn-sm leave-edit-btn" data-leave-id="' + esc(l.id) + '">Edit</button><button type="button" class="btn btn-danger btn-sm leave-cancel-btn" data-leave-id="' + esc(l.id) + '">Cancel</button></div>'
+            : '<span class="leave-action-muted">No actions</span>';
+          return '<tr><td data-label="Staff"><div class="leave-staff-cell">' + avatar + '<div><strong>' + esc(name) + '</strong>' + (user && pick(user, STAFF_KEYS) ? '<small>' + esc(pick(user, STAFF_KEYS)) + '</small>' : '') + '</div></div></td>' +
+            '<td data-label="Leave type">' + esc(leaveTypeLabel(l.leave_type)) + '</td>' +
+            '<td data-label="Start">' + esc(dashboardDateOnly(l.start_date)) + '</td>' +
+            '<td data-label="End">' + esc(dashboardDateOnly(l.end_date)) + '</td>' +
+            '<td data-label="Reason" class="leave-reason-cell">' + esc(l.reason || "—") + '</td>' +
+            '<td data-label="Status"><span class="leave-status leave-status-' + status.toLowerCase() + '">' + esc(status) + '</span></td>' +
+            '<td data-label="Actions" class="leave-actions-cell">' + actions + '</td></tr>';
         }).join("") + '</tbody></table></div>';
     }
 
-    root.innerHTML = '<div class="page-head"><p class="eyebrow">Time Away</p><h1>Leave</h1><p class="dateline">View-only staff leave information. Tech Support cannot approve, reject, edit or cancel leave.</p></div>' +
+    root.innerHTML = '<div class="page-head"><p class="eyebrow">Time Away</p><h1>Leave</h1><p class="dateline">Manage staff leave requests. Edit or cancel scheduled and active leave without leaving this page.</p></div>' +
       '<section class="section"><div class="leave-summary-grid"><div><span>Currently on leave</span><strong>' + activeCount + '</strong></div><div><span>Scheduled</span><strong>' + scheduledCount + '</strong></div><div><span>Total records</span><strong>' + LEAVES.rows.length + '</strong></div></div>' +
-      '<div class="leave-support-toolbar"><label class="search-field"><span>Search staff or leave</span><input id="leaveSupportSearch" type="search" placeholder="Search name, staff ID, department, leave type…" value="' + esc(q) + '"></label><span class="leave-view-note">View only</span></div>' +
+      '<div class="leave-support-toolbar"><label class="search-field"><span>Search staff for leave</span><input id="leaveSupportSearch" type="search" placeholder="Search name, staff ID, department, leave type…" value="' + esc(q) + '"></label><span class="leave-manage-note">IT Support &amp; Administrators can manage leave</span></div>' +
       body + '</section>';
 
     var search = $("leaveSupportSearch");
-    if (search) search.addEventListener("input", function(){ renderSupportLeave(); });
+    if (search) {
+      var timer;
+      search.addEventListener("input", function(){
+        clearTimeout(timer);
+        timer = setTimeout(function(){ renderSupportLeave(); }, 120);
+      });
+    }
+
+    Array.prototype.forEach.call(root.querySelectorAll(".leave-edit-btn"), function(btn){
+      btn.addEventListener("click", function(){
+        var row = (LEAVES.rows || []).find(function(x){ return String(x.id) === String(btn.getAttribute("data-leave-id")); });
+        if (row) openLeaveEdit(row);
+      });
+    });
+    Array.prototype.forEach.call(root.querySelectorAll(".leave-cancel-btn"), function(btn){
+      btn.addEventListener("click", function(){
+        var row = (LEAVES.rows || []).find(function(x){ return String(x.id) === String(btn.getAttribute("data-leave-id")); });
+        if (row) cancelLeave(row);
+      });
+    });
   }
+
 
   function matchesQuery(row, q) {
     if (!q) return true;
@@ -3081,6 +3254,14 @@
     }
     if (backdrop) backdrop.addEventListener("click", closeNav);
     ensureLeavePortalTab();
+    var leaveForm = $("leaveEditForm");
+    if (leaveForm) leaveForm.addEventListener("submit", saveLeaveEdit);
+    var leaveClose = $("leaveModalClose");
+    if (leaveClose) leaveClose.addEventListener("click", closeLeaveModal);
+    var leaveCancel = $("leaveEditCancel");
+    if (leaveCancel) leaveCancel.addEventListener("click", closeLeaveModal);
+    var leaveBackdrop = $("leaveBackdrop");
+    if (leaveBackdrop) leaveBackdrop.addEventListener("click", function(e){ if (e.target === leaveBackdrop) closeLeaveModal(); });
     activatePortalSection(getPortalSection(), { skipPersist: true });
     window.addEventListener("popstate", function () {
       activatePortalSection(getPortalSection(), { skipPersist: true, closeNav: true });
