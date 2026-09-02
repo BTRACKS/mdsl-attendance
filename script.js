@@ -370,7 +370,7 @@
 
   async function enforceCurrentAccountStatus(showMessage) {
     if (!authUser) return true;
-    var res = await supabaseClient.from("profiles").select("id,status,account_status,is_active,active").eq("id", authUser.id).maybeSingle();
+    var res = await supabaseClient.from("profiles").select("id,is_active").eq("id", authUser.id).maybeSingle();
     if (res.error || !res.data) return true;
     var active = isAccountActive({
       isActive: res.data.is_active,
@@ -1029,12 +1029,12 @@
     if(v.endDate < v.startDate){toast("End date must be on or after the start date.","error");return;}
     var overlap=(db.leaves||[]).some(function(l){return String(l.userId)===String(u.id)&&l.status!=="cancelled"&&v.startDate<=l.endDate&&v.endDate>=l.startDate;});
     if(overlap){toast("These dates overlap an existing leave record.","error");return;}
-    var btn=form.querySelector('button[type="submit"]'); setBtnLoading(btn,true); loader(true);
+    var btn=form.querySelector('button[type="submit"]'); setBtnLoading(btn,true); pageLoader.show();
     try{
       var res=await supabaseClient.from("staff_leave").insert({staff_id:u.id,leave_type:v.leaveType,start_date:v.startDate,end_date:v.endDate,reason:v.reason||null,status:"active"});
       if(res.error){toast(res.error.message,"error");return;}
       await refreshData(); toast("Leave activated successfully."); render();
-    }finally{setBtnLoading(btn,false);loader(false);}
+    }finally{setBtnLoading(btn,false);pageLoader.hide();}
   }
 
   function historyView(u) {
