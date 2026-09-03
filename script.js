@@ -4526,27 +4526,84 @@
   }
   async function saveLearningBlocks(topicId, lessonId, blocks) {
     if (!lessonId) throw new Error('The lesson was saved but no lesson ID was returned. Lesson content blocks cannot be saved without a lesson ID.');
+
     var existing = learningLessonBlocks(topicId);
     var keepIds = blocks.map(function(b){ return b.id; }).filter(Boolean);
-    var removeIds = existing.filter(function(b){ return keepIds.indexOf(String(b.id)) === -1; }).map(function(b){ return b.id; });
+    var removeIds = existing
+      .filter(function(b){ return keepIds.indexOf(String(b.id)) === -1; })
+      .map(function(b){ return b.id; });
+
     if (removeIds.length) {
-      var del = await supabaseClient.from('learning_lesson_blocks').delete().in('id', removeIds);
+      var del = await supabaseClient
+        .from('learning_lesson_blocks')
+        .delete()
+        .in('id', removeIds);
       if (del.error) throw del.error;
     }
+
     if (!blocks.length) return;
-    var rows = blocks.map(function(b){
-      return {
+
+    /*
+      IMPORTANT:
+      New blocks must be inserted WITHOUT an id property.
+      The database column has gen_random_uuid() as its DEFAULT.
+      Existing blocks are updated by their existing id.
+      This avoids sending id:null and avoids relying on upsert to
+      distinguish new rows from existing rows.
+    */
+    var newRows = [];
+    var existingRows = [];
+
+    blocks.forEach(function(b) {
+      var row = {
         lesson_id: lessonId,
         block_order: b.block_order,
-        heading: b.heading.trim() || null,
-        content: b.content.trim() || null,
+        heading: b.heading.trim(),
+        content: b.content.trim(),
         image_url: b.image_url.trim() || null,
-        image_alt: b.image_alt.trim() || null,
-        ...(b.id ? { id: b.id } : {})
+        image_alt: b.image_alt.trim() || null
       };
+
+      if (b.id) {
+        row.id = b.id;
+        existingRows.push(row);
+      } else {
+        newRows.push(row);
+      }
     });
-    var up = await supabaseClient.from('learning_lesson_blocks').upsert(rows, { onConflict:'id' });
-    if (up.error) throw up.error;
+
+    if (existingRows.length) {
+      var updatePromises = existingRows.map(function(row) {
+        return supabaseClient
+          .from('learning_lesson_blocks')
+          .update({
+            lesson_id: row.lesson_id,
+            block_order: row.block_order,
+            heading: row.heading,
+            content: row.content,
+            image_url: row.image_url,
+            image_alt: row.image_alt
+          })
+          .eq('id', row.id);
+      });
+
+      var updateResults = await Promise.all(updatePromises);
+      for (var i = 0; i < updateResults.length; i++) {
+        if (updateResults[i].error) throw updateResults[i].error;
+      }
+    }
+
+    if (newRows.length) {
+      /*
+        Deliberately do NOT add an id here.
+        PostgreSQL must generate it using gen_random_uuid().
+      */
+      var insertRes = await supabaseClient
+        .from('learning_lesson_blocks')
+        .insert(newRows);
+
+      if (insertRes.error) throw insertRes.error;
+    }
   }
   async function saveLearningTopic(form) {
     var v = readForm(form, { title:req('Topic title'), category:req('Category'), module_order:req('Module order') });
