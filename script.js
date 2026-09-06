@@ -4330,10 +4330,10 @@
     if (category === "Marine Communication") return "learning-cat-communication";
     return "learning-cat-electronics";
   }
-  function learningStatusTag(percent, completed) {
-    if (completed) return '<span class="tag tag-ok">Completed</span>';
-    if (percent > 0) return '<span class="tag tag-pending">In progress</span>';
-    return '<span class="tag tag-neutral">Not started</span>';
+  function learningStatusText(percent, completed) {
+    if (completed) return '<span class="learning-status-text">Completed</span>';
+    if (percent > 0) return '<span class="learning-status-text">In progress</span>';
+    return '<span class="learning-status-text">Not started</span>';
   }
   function learningTextHtml(text) {
     return String(text || "").trim().split(/\n\s*\n/).filter(Boolean).map(function(block){
@@ -4360,29 +4360,42 @@
   }
   function learningCard(t, index) {
     var pct = learningPercent(t.id), completed = learningCompleted(t.id), unlocked = learningUnlocked(t.id), quiz = learningQuiz(t.id);
-    var action = completed ? "Review Topic" : (pct ? "Continue Learning" : "Start Learning");
+    var action = completed ? "Review topic" : (pct ? "Continue learning" : "Start learning");
     if (!unlocked) action = "Locked";
     return '<article class="learning-topic-card ' + (unlocked ? "" : "is-locked") + '">' +
-      '<div class="learning-topic-top"><span class="learning-module">Module ' + esc(index + 1) + '</span>' + learningStatusTag(pct, completed) + '</div>' +
+      '<div class="learning-topic-top"><span class="learning-module">Module ' + esc(index + 1) + '</span>' + learningStatusText(pct, completed) + '</div>' +
+      '<div class="learning-topic-main">' +
       '<div class="learning-topic-icon ' + learningCategoryClass(t.category) + '">' + ICON.cap + '</div>' +
-      '<p class="learning-topic-category">' + esc(t.category) + '</p><h3>' + esc(t.title) + '</h3>' +
-      '<p class="learning-topic-description">' + esc(t.description || "") + '</p>' +
+      '<div class="learning-topic-copy"><p class="learning-topic-category">' + esc(t.category) + '</p><h3>' + esc(t.title) + '</h3>' +
+      '<p class="learning-topic-description">' + esc(t.description || "") + '</p></div></div>' +
       '<div class="learning-card-progress"><div><span>Progress</span><strong>' + pct + '%</strong></div><div class="learning-progress-track"><i style="width:' + pct + '%"></i></div></div>' +
-      '<div class="learning-topic-footer">' + (quiz ? '<span class="learning-quiz-mini">' + ICON.check + ' Quiz included</span>' : '<span class="learning-quiz-mini">Lesson</span>') +
+      '<div class="learning-topic-footer"><span class="learning-quiz-mini">' + (quiz ? ICON.check + ' Quiz included' : 'Lesson') + '</span>' +
       '<div class="learning-topic-footer-actions">' + (unlocked ? '<button class="btn btn-dark btn-sm" type="button" data-learning-open="' + esc(t.id) + '">' + action + '</button>' : '<span class="learning-locked-note">' + ICON.lock + ' Complete previous module</span>') +
       (quiz && unlocked ? '<button class="btn btn-ghost btn-sm" type="button" data-learning-quiz-open="' + esc(t.id) + '">Quiz</button>' : '') + '</div></div>' +
       '</article>';
   }
+
   function learningView(u) {
     if (!isIntern(u)) { go("#/dashboard"); return ""; }
     var topics = learningPublishedTopics(), overall = learningOverallPercent();
     var groups = ["Marine Navigation", "Marine Communication", "Marine Electronic Equipment"].map(function(category){
       var list = topics.filter(function(t){ return t.category === category; });
       if (!list.length) return "";
-      return '<section class="learning-section"><div class="learning-section-head"><div><p class="eyebrow">Technical &amp; Operations Learning</p><h2>' + esc(category) + '</h2></div><span>' + list.length + ' module' + (list.length === 1 ? '' : 's') + '</span></div><div class="learning-grid">' + list.map(function(t){ return learningCard(t, topics.indexOf(t)); }).join("") + '</div></section>';
+      return '<section class="learning-section">' +
+        '<div class="learning-section-head"><div><p class="eyebrow">Learning path</p><h2>' + esc(category) + '</h2></div><span>' + list.length + ' module' + (list.length === 1 ? '' : 's') + '</span></div>' +
+        '<div class="learning-grid">' + list.map(function(t){ return learningCard(t, topics.indexOf(t)); }).join("") + '</div></section>';
     }).join("");
-    return '<div class="page learning-page"><div class="page-head learning-hero"><div><p class="eyebrow">Technical &amp; Operations Learning</p><h1>Build your technical knowledge, step by step.</h1><p class="learning-hero-copy">Work through each module, complete the lesson and pass its quiz to unlock the next stage.</p></div><div class="learning-overall"><div class="learning-overall-number">' + overall + '%</div><span>Overall Progress</span><div class="learning-progress-track"><i style="width:' + overall + '%"></i></div></div></div>' +
-      (topics.length ? groups : '<section class="section"><div class="learning-empty"><div class="learning-empty-icon">' + ICON.cap + '</div><h2>No training has been published yet</h2><p>Your administrator will publish Technical &amp; Operations learning modules here when they are ready.</p></div></section>') + '</div>';
+    var firstAvailable = topics.find(function(t){ return learningUnlocked(t.id) && !learningCompleted(t.id); }) || topics.find(function(t){ return learningUnlocked(t.id); });
+    var completedCount = topics.filter(function(t){ return learningCompleted(t.id); }).length;
+    return '<div class="page learning-page">' +
+      '<div class="page-head learning-hero">' +
+        '<div class="learning-hero-copy-wrap"><h1>Build your technical knowledge, step by step.</h1><p class="learning-hero-copy">Work through each module, complete the lesson and pass its quiz to unlock the next stage.</p>' +
+        (firstAvailable ? '<button class="btn btn-dark learning-primary-action" type="button" data-learning-open="' + esc(firstAvailable.id) + '">' + (completedCount ? 'Continue learning' : 'Start learning') + ' <span aria-hidden="true">→</span></button>' : '') + '</div>' +
+        '<div class="learning-overall"><div class="learning-overall-top"><span>Your progress</span><strong>' + overall + '%</strong></div><div class="learning-progress-track"><i style="width:' + overall + '%"></i></div><small>' + completedCount + ' of ' + topics.length + ' module' + (topics.length === 1 ? '' : 's') + ' completed</small></div>' +
+      '</div>' +
+      (topics.length ? '<div class="learning-curriculum"><div class="learning-curriculum-intro"><div><p class="eyebrow">Curriculum</p><h2>Your learning path</h2><p class="learning-curriculum-guidance">Start with the first available module and work through the pathway in order.</p></div></div>' + groups + '</div>' :
+      '<section class="section"><div class="learning-empty"><div class="learning-empty-icon">' + ICON.cap + '</div><h2>No training has been published yet</h2><p>Your administrator will publish Technical &amp; Operations learning modules here when they are ready.</p></div></section>') +
+      '</div>';
   }
 
   function learningTopicView(u, topicId) {
@@ -4394,18 +4407,28 @@
     var idx = topics.findIndex(function(x){ return String(x.id) === String(topicId); });
     var next = idx >= 0 ? topics[idx + 1] : null;
     var prev = idx > 0 ? topics[idx - 1] : null;
-    return '<div class="page learning-page"><div class="learning-breadcrumb"><button type="button" class="link-muted" data-learning-back="1">Learning / Training</button><span>/</span><span>' + esc(t.title) + '</span></div>' +
-      '<div class="learning-topic-hero"><div><span class="learning-module">Module ' + (idx + 1) + '</span><p class="eyebrow">' + esc(t.category) + '</p><h1>' + esc(t.title) + '</h1><p>' + esc(t.description || "") + '</p></div><div class="learning-topic-hero-progress"><strong>' + pct + '%</strong><span>Topic progress</span><div class="learning-progress-track"><i style="width:' + pct + '%"></i></div></div></div>' +
-      '<div class="learning-detail-layout"><main>' +
-      '<section class="section learning-lesson"><div class="section-head"><h2>Lesson</h2>' + learningStatusTag(pct, learningCompleted(topicId)) + '</div>' +
-      (lesson.introduction ? '<div class="learning-introduction">' + esc(lesson.introduction) + '</div>' : '') +
-      (lesson.image_url ? '<figure class="learning-figure"><img src="' + esc(lesson.image_url) + '" alt="' + esc(lesson.image_alt || t.title) + '" loading="lazy" /><figcaption>' + esc(lesson.image_alt || "Learning illustration") + '</figcaption></figure>' : '') +
-      '<div class="learning-richtext">' + (learningLessonBlocks(topicId).length ? learningBlocksHtml(learningLessonBlocks(topicId)) : learningTextHtml(lesson.content || "Lesson content will be published here.")) + '</div>' +
-      (!p || !p.lesson_completed ? '<button class="btn btn-primary" type="button" id="learningLessonComplete">Mark lesson complete</button>' : '<div class="learning-complete-callout">' + ICON.check + '<div><strong>Lesson complete</strong><span>Continue to the quiz when you are ready.</span></div></div>') +
-      '</section>' +
-      (quiz ? '<section class="section learning-quiz" id="learningTopicQuiz"><div class="section-head"><div><p class="eyebrow">Knowledge check</p><h2>' + esc(quiz.title || 'Topic Quiz') + '</h2></div><span>Pass mark ' + Number(quiz.passing_score || 70) + '%</span></div><div id="learningQuizMount"><div class="learning-quiz-loading">Loading quiz…</div></div></section>' : '<section class="section"><div class="learning-no-quiz"><h2>No quiz attached</h2><p>Complete the lesson to finish this module.</p></div></section>') +
-      '</main><aside class="learning-sidebar"><section class="section"><div class="section-head"><h2>Your pathway</h2></div><div class="learning-path-list">' + topics.map(function(x,i){ var xp=learningPercent(x.id), done=learningCompleted(x.id), unlock=learningUnlocked(x.id); return '<button type="button" class="learning-path-item ' + (String(x.id)===String(topicId)?'active ':'') + (unlock?'':'locked') + '" data-learning-open="' + esc(x.id) + '"><span class="learning-path-number">' + (i+1) + '</span><span><strong>' + esc(x.title) + '</strong><small>' + (done?'Complete':xp+'%') + '</small></span>' + (done?ICON.check:(unlock?'':' ')) + '</button>'; }).join("") + '</div></section></aside></div>' +
-      '<div class="learning-next-row">' + (prev ? '<button class="btn btn-ghost" type="button" data-learning-open="' + esc(prev.id) + '">← Previous</button>' : '<span></span>') + (next && learningCompleted(topicId) ? '<button class="btn btn-dark" type="button" data-learning-open="' + esc(next.id) + '">Next module →</button>' : '<button class="btn btn-ghost" type="button" data-learning-back="1">Back to learning</button>') + '</div></div>';
+    var completed = learningCompleted(topicId);
+    return '<div class="page learning-page learning-topic-page">' +
+      '<div class="learning-breadcrumb"><button type="button" class="link-muted" data-learning-back="1">Learning / Training</button><span aria-hidden="true">/</span><strong>' + esc(t.title) + '</strong></div>' +
+      '<div class="learning-topic-hero"><div class="learning-topic-heading"><h1>' + esc(t.title) + '</h1><p>' + esc(t.description || "") + '</p></div>' +
+      '<div class="learning-topic-hero-progress"><div><span>Topic progress</span><strong>' + pct + '%</strong></div><div class="learning-progress-track"><i style="width:' + pct + '%"></i></div><small>' + (completed ? 'Module completed' : 'Complete the lesson to unlock the quiz') + '</small></div></div>' +
+      '<div class="learning-detail-layout">' +
+        '<main class="learning-detail-main">' +
+          '<section class="section learning-lesson"><div class="section-head"><div><p class="eyebrow">Step 1</p><h2>Lesson</h2></div>' + learningStatusText(pct, completed) + '</div>' +
+          (lesson.introduction ? '<div class="learning-introduction">' + esc(lesson.introduction) + '</div>' : '') +
+          (lesson.image_url ? '<figure class="learning-figure"><img src="' + esc(lesson.image_url) + '" alt="' + esc(lesson.image_alt || t.title) + '" loading="lazy" /><figcaption>' + esc(lesson.image_alt || "Learning illustration") + '</figcaption></figure>' : '') +
+          '<div class="learning-richtext">' + (learningLessonBlocks(topicId).length ? learningBlocksHtml(learningLessonBlocks(topicId)) : learningTextHtml(lesson.content || "Lesson content will be published here.")) + '</div>' +
+          (!p || !p.lesson_completed ? '<div class="learning-lesson-action"><button class="btn btn-primary" type="button" id="learningLessonComplete">Mark lesson complete</button></div>' : '<div class="learning-complete-callout">' + ICON.check + '<div><strong>Lesson complete</strong><span>Continue to the quiz when you are ready.</span></div></div>') +
+          '</section>' +
+          (quiz ? '<section class="section learning-quiz" id="learningTopicQuiz"><div class="section-head"><div><p class="eyebrow">Step 2 · Knowledge check</p><h2>' + esc(quiz.title || 'Topic Quiz') + '</h2></div><span>Pass mark ' + Number(quiz.passing_score || 70) + '%</span></div><div id="learningQuizMount"><div class="learning-quiz-loading">Loading quiz…</div></div></section>' :
+            '<section class="section learning-no-quiz"><p class="eyebrow">Step 2</p><h2>No quiz attached</h2><p>Complete the lesson to finish this module.</p></section>') +
+        '</main>' +
+        '<aside class="learning-sidebar"><section class="section"><div class="section-head"><div><p class="eyebrow">Course outline</p><h2>Your pathway</h2></div></div><div class="learning-path-list">' +
+          topics.map(function(x,i){ var xp=learningPercent(x.id), done=learningCompleted(x.id), unlock=learningUnlocked(x.id); return '<button type="button" class="learning-path-item ' + (String(x.id)===String(topicId)?'active ':'') + (unlock?'':'locked') + '" ' + (unlock?'data-learning-open="' + esc(x.id) + '"':'disabled') + '><span class="learning-path-number">' + (i+1) + '</span><span><strong>' + esc(x.title) + '</strong><small>' + (done?'Complete':xp+'%') + '</small></span>' + (done?ICON.check:'') + '</button>'; }).join("") +
+        '</div></section></aside>' +
+      '</div>' +
+      '<div class="learning-next-row">' + (prev ? '<button class="btn btn-ghost" type="button" data-learning-open="' + esc(prev.id) + '">← Previous</button>' : '<span></span>') + (next && completed ? '<button class="btn btn-dark" type="button" data-learning-open="' + esc(next.id) + '">Next module →</button>' : '<button class="btn btn-ghost" type="button" data-learning-back="1">Back to learning</button>') + '</div>' +
+      '</div>';
   }
 
   async function markLearningLessonComplete(topicId) {
@@ -4443,7 +4466,7 @@
         var result = submit.data || {};
         await refreshData();
         render();
-        toast(result.passed ? "Quiz passed — module completed." : "Quiz submitted. Review the lesson and try again.", result.passed ? undefined : "error");
+        toast(result.passed ? "Quiz passed, module completed." : "Quiz submitted. Review the lesson and try again.", result.passed ? undefined : "error");
       } finally { setBtnLoading(btn,false); }
     });
   }
@@ -4480,8 +4503,8 @@
     var lesson = editing ? learningLesson(editing.id) || {} : {};
     var quiz = quizTopic ? learningQuiz(quizTopic.id) : null;
     var blocks = learningAdminInitialBlocks(editing);
-    return '<div class="page learning-page"><div class="page-head learning-hero"><div><p class="eyebrow">Administration</p><h1>Learning Management</h1><p class="learning-hero-copy">Manage Technical &amp; Operations learning content, lessons and quizzes.</p></div><div class="learning-admin-summary"><strong>' + topics.filter(function(t){return t.published&&!t.archived;}).length + '</strong><span>Published modules</span></div></div>' +
-      '<div class="learning-admin-layout"><section class="section"><div class="section-head"><div><p class="eyebrow">Course builder</p><h2>' + (editing ? 'Edit topic' : 'Create topic') + '</h2></div>' + (editing ? '<button class="btn btn-ghost btn-sm" id="learningCancelEdit" type="button">New topic</button>' : '') + '</div>' +
+    return '<div class="page learning-page"><div class="page-head learning-hero"><div><h1>Learning Management</h1><p class="learning-hero-copy">Manage Technical &amp; Operations learning content, lessons and quizzes.</p></div><div class="learning-admin-summary"><strong>' + topics.filter(function(t){return t.published&&!t.archived;}).length + '</strong><span>Published modules</span></div></div>' +
+      '<div class="learning-admin-layout"><section class="section learning-admin-builder"><div class="section-head"><div><p class="eyebrow">Course builder</p><h2>' + (editing ? 'Edit topic' : 'Create topic') + '</h2></div>' + (editing ? '<button class="btn btn-ghost btn-sm" id="learningCancelEdit" type="button">New topic</button>' : '') + '</div>' +
       '<form id="learningTopicForm" class="learning-admin-form"><input type="hidden" name="id" value="' + esc(editing ? editing.id : '') + '" /><input type="hidden" name="employment_type" value="Intern" />' +
       '<div class="form-grid"><div class="field"><label>Topic title</label><input name="title" required value="' + esc(editing ? editing.title : '') + '" placeholder="e.g. Radar" /></div>' +
       '<div class="field"><label>Category</label><select name="category"><option' + (!editing||editing.category==='Marine Navigation'?' selected':'') + '>Marine Navigation</option><option' + (editing&&editing.category==='Marine Communication'?' selected':'') + '>Marine Communication</option><option' + (editing&&editing.category==='Marine Electronic Equipment'?' selected':'') + '>Marine Electronic Equipment</option></select></div>' +
@@ -4492,7 +4515,7 @@
       '<div class="field full"><label>Lesson Content</label>' + learningBlockEditorHtml(blocks) + '</div>' +
       '<div class="field"><label>Publishing</label><label class="learning-switch"><input type="checkbox" name="published" ' + (editing ? (editing.published?'checked':'') : '') + ' /><span>Publish this topic to interns</span></label></div></div>' +
       '<div class="learning-admin-actions"><button class="btn btn-primary" type="submit">' + (editing?'Save changes':'Create topic') + '</button>' + (editing ? '<button class="btn btn-dark" type="button" id="learningTopicQuizShortcut">Quiz</button><button class="btn btn-ghost" type="button" id="learningArchiveBtn">' + (editing.archived?'Restore topic':'Archive topic') + '</button><button class="btn btn-ghost" type="button" id="learningDeleteBtn">Delete topic</button>' : '') + '</div></form></section>' +
-      '<section class="section"><div class="section-head"><div><p class="eyebrow">Curriculum</p><h2>Modules</h2></div><span>' + topics.length + ' total</span></div><div class="learning-admin-list">' + (topics.length ? topics.map(function(t,i){ var q=learningQuiz(t.id); return '<div class="learning-admin-row ' + (t.archived?'is-archived':'') + '"><div class="learning-admin-row-number">' + Number(t.module_order||i+1) + '</div><div class="learning-admin-row-main"><strong>' + esc(t.title) + '</strong><span>' + esc(t.category) + ' · Intern · ' + (t.published?'Published':'Draft') + (t.archived?' · Archived':'') + '</span></div><div class="learning-admin-row-actions"><button class="btn btn-ghost btn-sm" type="button" data-learning-admin-edit="' + esc(t.id) + '">Edit</button><button class="btn btn-dark btn-sm" type="button" data-learning-admin-quiz="' + esc(t.id) + '">Quiz</button></div></div>'; }).join('') : '<div class="learning-empty"><h2>No modules yet</h2><p>Create the first training topic using the course builder.</p></div>') + '</div></section></div>' +
+      '<section class="section learning-admin-curriculum"><div class="section-head"><div><p class="eyebrow">Curriculum</p><h2>Modules</h2></div><span>' + topics.length + ' total</span></div><div class="learning-admin-list">' + (topics.length ? topics.map(function(t,i){ var q=learningQuiz(t.id); return '<div class="learning-admin-row ' + (t.archived?'is-archived':'') + '"><div class="learning-admin-row-number">' + Number(t.module_order||i+1) + '</div><div class="learning-admin-row-main"><strong>' + esc(t.title) + '</strong><span>' + esc(t.category) + ' · Intern · ' + (t.published?'Published':'Draft') + (t.archived?' · Archived':'') + '</span></div><div class="learning-admin-row-actions"><button class="btn btn-ghost btn-sm" type="button" data-learning-admin-edit="' + esc(t.id) + '">Edit</button><button class="btn btn-dark btn-sm" type="button" data-learning-admin-quiz="' + esc(t.id) + '">Quiz</button></div></div>'; }).join('') : '<div class="learning-empty"><h2>No modules yet</h2><p>Create the first training topic using the course builder.</p></div>') + '</div></section></div>' +
       (quizTopic ? adminLearningQuizEditor(quizTopic, quiz) : '') + '</div>';
   }
 
