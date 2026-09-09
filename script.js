@@ -2949,7 +2949,7 @@
       "<li>Instant history per staff member</li><li>Reports ready the moment they are needed</li></ul></div></div></section>" +
 
       '<section class="section"><div class="section-head"><h2>Our purpose</h2></div>' +
-      '<p class="about-purpose">We built this platform to make attendance effortless for staff and dependable for management — accurate records, fair reporting, and a culture of punctuality that runs on trust rather than paperwork.</p></section>' +
+      '<p class="about-purpose">We built this platform to make attendance effortless for staff and dependable for management accurate records, fair reporting, and a culture of punctuality that runs on trust rather than paperwork.</p></section>' +
 
       '<section class="creator"><p class="creator-kicker">Created by</p><div class="creator-grid">' +
       creatorCard("Oladapo Salami", "Computer Science Intern, University of Lagos", findCreatorProfile(["Oladapo Salami", "Dapo Salami"])) +
