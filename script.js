@@ -2158,6 +2158,9 @@
 
   var filters = { q: "", dept: "", type: "", date: "" };
   var historyCollapsed = true;
+  /* Individual Attendance History staff-picker state (admin only). */
+  var historyStaffQuery = "";
+  var historySelectedStaffId = "";
 
   function adminTable(staff, key) {
     if (!staff.length) return '<div class="table-wrap"><p class="empty">No staff match the selected filters.</p></div>';
@@ -2209,6 +2212,62 @@
     }
   }
 
+  /* Individual Attendance History: search-and-select staff picker.
+     Only the selected staff member's history is rendered. */
+  function staffHistoryPanel(u) {
+    var recs = db.attendance.filter(function (a) { return a.userId === u.id; }).sort(function (a, b) { return a.date < b.date ? 1 : -1; }).slice(0, 10);
+    return (leaveHistoryFor(u.id).length ? '<div class="leave-history-mini">' + leaveHistoryFor(u.id).slice(0,5).map(function(l){var today=dateKey(new Date());var st=l.status==="cancelled"?"Cancelled":(l.startDate<=today&&today<=l.endDate?"Active":(l.startDate>today?"Scheduled":"Completed"));return '<div><strong>'+esc(leaveTypeLabel(l.leaveType))+'</strong><span>'+esc(prettyDate(l.startDate))+' – '+esc(prettyDate(l.endDate))+' · '+esc(st)+(l.reason?' · '+esc(l.reason):'')+'</span></div>';}).join("") + '</div>' : '') +
+      (recs.length ? '<div class="history-list">' +
+        recs.map(function (a) {
+          return '<div class="history-row">' +
+            '<div class="history-item history-item-date"><span class="history-label">Attendance Date</span><span class="history-value">' + esc(prettyDate(a.date)) + "</span></div>" +
+            '<div class="history-item"><span class="history-label">Morning</span><span class="history-value num">' + (a.morning ? esc(a.morning.time) : "—") + "</span></div>" +
+            '<div class="history-item"><span class="history-label">Evening</span><span class="history-value num">' + (a.evening ? esc(a.evening.time) : "—") + "</span></div>" +
+            '<div class="history-item history-item-status"><span class="history-label">Status</span>' + statusOf(a) + "</div>" +
+            "</div>";
+        }).join("") + "</div>" : '<p class="empty">No records.</p>');
+  }
+
+  function individualHistoryHtml(staff) {
+    var selected = staff.find(function (u) { return String(u.id) === String(historySelectedStaffId); });
+    if (selected) {
+      return '<div class="history-detail">' +
+        '<div class="history-detail-head">' +
+        '<button class="btn btn-ghost btn-sm history-back" id="historyBack" type="button">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>' +
+        '<span>All staff</span></button>' +
+        '<div class="history-detail-id">' + avatarHtml(selected, "") +
+        '<div class="history-detail-meta"><h3>' + esc(profileDisplayName(selected)) + '</h3>' +
+        '<p>' + esc(selected.department) + ' · ' + esc(selected.staffId) + ' · ' + esc(selected.employmentType) + '</p></div></div>' +
+        '</div>' +
+        '<div class="panel"><div class="panel-body panel-body-history">' + staffHistoryPanel(selected) + '</div></div>' +
+        '</div>';
+    }
+
+    var q = historyStaffQuery.trim().toLowerCase();
+    var matches = staff.filter(function (u) {
+      return !q || u.fullName.toLowerCase().indexOf(q) > -1 ||
+        u.staffId.toLowerCase().indexOf(q) > -1 ||
+        String(u.email || "").toLowerCase().indexOf(q) > -1;
+    });
+
+    return '<div class="history-picker">' +
+      '<div class="field history-picker-search"><label for="historyStaffSearch">Find a staff member</label>' +
+      '<input type="search" id="historyStaffSearch" value="' + esc(historyStaffQuery) + '" placeholder="Search by name, staff ID or email…" autocomplete="off" /></div>' +
+      (matches.length
+        ? '<div class="history-staff-grid">' + matches.map(function (u) {
+            return '<button type="button" class="history-staff-option" data-history-staff="' + esc(u.id) + '">' +
+              avatarHtml(u, "avatar-sm") +
+              '<span class="history-staff-meta"><b>' + esc(profileDisplayName(u)) + '</b>' +
+              '<span>' + esc(u.department) + ' · ' + esc(u.staffId) + '</span></span>' +
+              '<span class="history-staff-go" aria-hidden="true">' +
+              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>' +
+              '</button>';
+          }).join("") + '</div>'
+        : '<p class="empty">No staff match your search.</p>') +
+      '</div>';
+  }
+
   function adminManagement() {
     var key = filters.date || dateKey(new Date());
     var staff = db.users.filter(function (u) { return !!u; }).filter(function (u) {
@@ -2238,22 +2297,7 @@
       exportPanel() +
       '<div class="history-content' + (historyCollapsed ? " collapsed" : "") + '" id="historyContent"' +
       (historyCollapsed ? ' style="max-height:0;opacity:0"' : "") + ">" +
-      staff.map(function (u) {
-        var recs = db.attendance.filter(function (a) { return a.userId === u.id; }).sort(function (a, b) { return a.date < b.date ? 1 : -1; }).slice(0, 10);
-        return '<div class="panel" style="margin-bottom:18px"><div class="panel-head panel-head-staff">' + avatarHtml(u, "avatar-sm") +
-          "<span>" + esc(profileDisplayName(u)) + "</span></div>" +
-          '<div class="panel-body panel-body-history">' +
-          (leaveHistoryFor(u.id).length ? '<div class="leave-history-mini">' + leaveHistoryFor(u.id).slice(0,5).map(function(l){var today=dateKey(new Date());var st=l.status==="cancelled"?"Cancelled":(l.startDate<=today&&today<=l.endDate?"Active":(l.startDate>today?"Scheduled":"Completed"));return '<div><strong>'+esc(leaveTypeLabel(l.leaveType))+'</strong><span>'+esc(prettyDate(l.startDate))+' – '+esc(prettyDate(l.endDate))+' · '+esc(st)+(l.reason?' · '+esc(l.reason):'')+'</span></div>';}).join("") + '</div>' : '') +
-          (recs.length ? '<div class="history-list">' +
-            recs.map(function (a) {
-              return '<div class="history-row">' +
-                '<div class="history-item history-item-date"><span class="history-label">Attendance Date</span><span class="history-value">' + esc(prettyDate(a.date)) + "</span></div>" +
-                '<div class="history-item"><span class="history-label">Morning</span><span class="history-value num">' + (a.morning ? esc(a.morning.time) : "—") + "</span></div>" +
-                '<div class="history-item"><span class="history-label">Evening</span><span class="history-value num">' + (a.evening ? esc(a.evening.time) : "—") + "</span></div>" +
-                '<div class="history-item history-item-status"><span class="history-label">Status</span>' + statusOf(a) + "</div>" +
-                "</div>";
-            }).join("") + "</div>" : '<p class="empty">No records.</p>') + "</div></div>";
-      }).join("") + "</div></section></div>";
+      individualHistoryHtml(staff) + "</div></section></div>";
   }
 
   /* ------------------------- actions ------------------------- */
@@ -4885,6 +4929,30 @@
     }
     var historyToggle = el("historyToggle");
     if (historyToggle) historyToggle.addEventListener("click", toggleHistoryContent);
+    /* Individual Attendance History staff picker */
+    var hSearch = el("historyStaffSearch");
+    if (hSearch) hSearch.addEventListener("input", function () {
+      historyStaffQuery = hSearch.value;
+      var pos = hSearch.selectionStart;
+      render();
+      var again = el("historyStaffSearch");
+      if (again) {
+        again.focus();
+        try { if (again.setSelectionRange && pos != null) again.setSelectionRange(pos, pos); } catch (e) { /* some input types disallow selection */ }
+      }
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("[data-history-staff]"), function (b) {
+      b.addEventListener("click", function () {
+        historySelectedStaffId = b.getAttribute("data-history-staff");
+        historyStaffQuery = "";
+        render();
+      });
+    });
+    var hBack = el("historyBack");
+    if (hBack) hBack.addEventListener("click", function () {
+      historySelectedStaffId = "";
+      render();
+    });
     bindExport();
     var historyCard = el("historyExportCard");
     if (historyCard) {

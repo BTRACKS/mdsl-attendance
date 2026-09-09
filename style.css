@@ -2112,3 +2112,38 @@ aside .panel:has(#hseSettingsForm){overflow:visible}
 .windows-settings-section> .section-head{margin-bottom:14px}
 .windows-settings-section h3{font-size:17px}
 @media(max-width:720px){.windows-settings-section{margin-top:22px;padding-top:20px}}
+
+/* ---------- Individual Attendance History: staff picker (Admin) ---------- */
+.history-picker{display:grid;gap:18px}
+.history-picker-search{margin:0}
+.history-picker-search input{width:100%;padding:12px 16px;border:1px solid var(--rule-strong);border-radius:var(--radius);background:var(--paper);transition:border-color var(--t),box-shadow var(--t)}
+.history-picker-search input:focus{outline:none;border-color:var(--navy);box-shadow:0 0 0 3px rgba(18,58,107,.12)}
+.history-staff-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+.history-staff-option{
+  display:flex;align-items:center;gap:12px;width:100%;min-width:0;text-align:left;
+  padding:12px 14px;background:var(--paper);border:1px solid var(--rule);border-radius:var(--radius);
+  cursor:pointer;transition:border-color var(--t),box-shadow var(--t),transform var(--t)
+}
+.history-staff-option:hover{border-color:var(--navy);box-shadow:var(--shadow-sm);transform:translateY(-1px)}
+.history-staff-option:active{transform:none}
+.history-staff-option .avatar{flex:0 0 auto}
+.history-staff-meta{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 auto}
+.history-staff-meta b{font-size:14px;font-weight:700;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.history-staff-meta span{font-size:12px;color:var(--ink-4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.history-staff-go{flex:0 0 auto;width:20px;height:20px;color:var(--ink-4);display:grid;place-items:center}
+.history-staff-go svg{width:18px;height:18px}
+.history-detail{display:grid;gap:16px}
+.history-detail-head{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.history-back{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto}
+.history-back svg{width:16px;height:16px}
+.history-detail-id{display:flex;align-items:center;gap:14px;min-width:0;flex:1 1 auto}
+.history-detail-id .avatar{flex:0 0 auto}
+.history-detail-meta{min-width:0}
+.history-detail-meta h3{font-size:17px;margin:0;overflow-wrap:break-word}
+.history-detail-meta p{font-size:13px;color:var(--ink-3);margin:2px 0 0;overflow-wrap:break-word}
+@media (max-width:640px){
+  .history-staff-grid{grid-template-columns:1fr;gap:10px}
+  .history-staff-option{padding:14px}
+  .history-detail-head{gap:12px}
+  .history-detail-id{width:100%}
+}
