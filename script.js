@@ -12,6 +12,50 @@
     SUPABASE_PUBLISHABLE_KEY
   );
 
+  /* ------------------------- Maintenance Mode ------------------------- */
+  /* This is a read-only public gate. It does not sign users out, alter their
+     session, or touch attendance records. The server-side RPC exposes only the
+     single maintenance flag. */
+  var MAINTENANCE = { active: false, known: false, checking: false, timer: null };
+  var MAINTENANCE_URL = "maintenance.html";
+
+  async function readMaintenanceMode() {
+    if (MAINTENANCE.checking) return MAINTENANCE.active;
+    MAINTENANCE.checking = true;
+    try {
+      var res = await supabaseClient.rpc("is_maintenance_mode");
+      if (res.error) {
+        /* Before the migration is deployed, fail open so the existing site
+           continues to work exactly as before. */
+        MAINTENANCE.known = false;
+        return MAINTENANCE.active;
+      }
+      MAINTENANCE.known = true;
+      MAINTENANCE.active = res.data === true || String(res.data).toLowerCase() === "true";
+      return MAINTENANCE.active;
+    } catch (e) {
+      MAINTENANCE.known = false;
+      return MAINTENANCE.active;
+    } finally {
+      MAINTENANCE.checking = false;
+    }
+  }
+
+  function enterMaintenanceMode() {
+    if (PAGE === "about") return;
+    if (location.pathname.endsWith("/" + MAINTENANCE_URL) || location.pathname.endsWith(MAINTENANCE_URL)) return;
+    location.replace(MAINTENANCE_URL);
+  }
+
+  function startMaintenanceWatcher() {
+    if (MAINTENANCE.timer) return;
+    MAINTENANCE.timer = setInterval(async function () {
+      if (PAGE === "about") return;
+      var active = await readMaintenanceMode();
+      if (active) enterMaintenanceMode();
+    }, 5000);
+  }
+
   /* ------------------------- routing ------------------------- */
   var PAGE = (document.body.getAttribute("data-page") || "app");
   /* The root app remains the source of truth. The Learn entry point reuses
@@ -5329,6 +5373,15 @@
   async function init() {
     el("view").innerHTML = loadingView();
     var initialHash = location.hash || "";
+
+    /* Check the public maintenance flag before bootstrapping the normal
+       attendance UI. Authentication is deliberately not signed out or changed. */
+    if (PAGE !== "about" && await readMaintenanceMode()) {
+      enterMaintenanceMode();
+      return;
+    }
+    startMaintenanceWatcher();
+
     /* Bootstrap Auth once before any route can decide whether Sign In is required. */
     authRestorePromise = supabaseClient.auth.getSession().then(function (authRes) {
       authUser = (authRes.data && authRes.data.session) ? authRes.data.session.user : null;

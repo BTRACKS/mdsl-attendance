@@ -2461,6 +2461,16 @@
     var val = settingValueText(value);
 
     if (type === "boolean") {
+      /* Maintenance Mode is an immediate, isolated control. It still uses the
+         existing app_settings row and the existing support_update_setting RPC. */
+      if (String(row.key || "") === "maintenance_mode") {
+        return '<label class="maintenance-toggle" for="' + id + '">' +
+          '<input id="' + id + '" data-setting="' + i + '" data-maintenance-toggle="1" type="checkbox"' +
+          (value === true ? " checked" : "") + dis + ' />' +
+          '<span class="maintenance-toggle-track" aria-hidden="true"><span class="maintenance-toggle-thumb"></span></span>' +
+          '<span class="maintenance-toggle-state">' + (value === true ? "ON" : "OFF") + '</span>' +
+          '</label>';
+      }
       return '<label class="setting-toggle" for="' + id + '">' +
         '<input id="' + id + '" data-setting="' + i + '" type="checkbox"' +
         (value === true ? " checked" : "") + dis + ' />' +
@@ -2706,6 +2716,37 @@
       var b = e.target.closest("[data-reset-setting]");
       if (!b) return;
       askSettingReset(Number(b.getAttribute("data-reset-setting")));
+    });
+
+    /* Maintenance Mode is saved immediately when its dedicated toggle changes.
+       Other settings continue using the existing Save changes workflow. */
+    $("settingsList").addEventListener("change", async function (e) {
+      var toggle = e.target.closest("[data-maintenance-toggle]");
+      if (!toggle) return;
+      var rowIndex = Number(toggle.getAttribute("data-setting"));
+      var row = SETTINGS.rows[rowIndex];
+      if (!row || !canEditSetting(row)) return;
+
+      var previous = row.value === true;
+      var next = !!toggle.checked;
+      var state = toggle.closest(".maintenance-toggle");
+      var stateText = state ? state.querySelector(".maintenance-toggle-state") : null;
+      toggle.disabled = true;
+      try {
+        var res = await writeSetting(row.key, next);
+        if (res.error) throw res.error;
+        row.value = next;
+        if (stateText) stateText.textContent = next ? "ON" : "OFF";
+        toast(next ? "Maintenance Mode is now ON." : "Maintenance Mode is now OFF.", "good");
+        /* Do not reload the whole Settings view: this keeps the change isolated
+           and avoids disturbing any other setting the administrator is editing. */
+      } catch (err) {
+        toggle.checked = previous;
+        if (stateText) stateText.textContent = previous ? "ON" : "OFF";
+        toast((err && err.message) || "Maintenance Mode could not be changed.", "bad");
+      } finally {
+        toggle.disabled = false;
+      }
     });
 
     loadSettings();
