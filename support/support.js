@@ -2465,7 +2465,8 @@
 
     if (type === "boolean") {
       var boolChecked = value === true || value === 1 || String(value).toLowerCase().trim() === "true";
-      return '<label class="setting-toggle" for="' + id + '" style="display:inline-flex;align-items:center;gap:10px;cursor:' + (disabled ? 'not-allowed' : 'pointer') + ';">' +
+      var maintenanceOnly = String(row.key || "").toLowerCase() === "maintenance_mode";
+      return '<label class="setting-toggle" for="' + id + '" style="display:inline-flex;align-items:center;gap:10px;cursor:' + (disabled ? 'not-allowed' : 'pointer') + ';' + (maintenanceOnly ? 'justify-content:flex-end;margin-left:auto;' : '') + '">' +
         '<input id="' + id + '" data-setting="' + i + '" type="checkbox"' +
         (boolChecked ? " checked" : "") + dis + ' style="position:absolute;opacity:0;width:1px;height:1px;pointer-events:none;" />' +
         '<span aria-hidden="true" style="position:relative;display:inline-block;width:46px;height:26px;border-radius:999px;background:' + (boolChecked ? '#111' : '#c9c9c9') + ';transition:background .2s ease;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12);">' +
@@ -2528,7 +2529,16 @@
     return input.value.trim();
   }
 
+  function ensureMaintenanceSettingsLayout() {
+    if (document.getElementById("maintenance-settings-layout")) return;
+    var style = document.createElement("style");
+    style.id = "maintenance-settings-layout";
+    style.textContent = ".maintenance-setting-row{grid-template-columns:minmax(0,1fr) minmax(0,320px)!important}.maintenance-setting-row .setting-reset{display:none!important}@media (max-width:760px){.maintenance-setting-row{grid-template-columns:1fr!important}.maintenance-setting-row .field{justify-self:stretch!important;width:auto!important;justify-content:flex-start!important}}";
+    document.head.appendChild(style);
+  }
+
   function renderSettings() {
+    ensureMaintenanceSettingsLayout();
     var list = $("settingsList");
     var rows = SETTINGS.rows || [];
     if (!rows.length) {
@@ -2562,14 +2572,17 @@
             !r.is_sensitive
           );
           var sensitive = r.is_sensitive ? '<p class="setting-security">Sensitive setting — Administrator only</p>' : "";
-          return '<div class="setting-row">' +
+          var isMaintenance = String(r.key || "").toLowerCase() === "maintenance_mode";
+          var hasDefault = editable && r.default_value !== null && r.default_value !== undefined;
+          var fieldStyle = isMaintenance ? ' style="justify-self:end;width:100%;display:flex;justify-content:flex-end;"' : '';
+          return '<div class="setting-row' + (isMaintenance ? ' maintenance-setting-row' : '') + '">' +
             '<div class="setting-meta"><h4>' + esc(r.label || labelize(String(r.key))) + '</h4>' +
             (r.description ? '<p>' + esc(r.description) + '</p>' : '') +
             '<p class="setting-current">Current value: <strong>' + esc(settingDisplayValue(r.value, r.data_type)) + '</strong></p>' +
             sensitive + '</div>' +
-            '<div class="field"><label for="st_' + i + '" class="sr-label">New value</label>' +
+            '<div class="field"' + fieldStyle + '><label for="st_' + i + '" class="sr-label">New value</label>' +
             settingInputHtml(r, i) + '</div>' +
-            (editable && r.default_value !== null && r.default_value !== undefined
+            (hasDefault && !isMaintenance
               ? '<button type="button" class="link-muted setting-reset" data-reset-setting="' + i + '">Restore default</button>'
               : '') +
             '</div>';
@@ -2577,7 +2590,35 @@
       '</div>';
     }).join("");
 
-    $("settingsActions").hidden = !rows.some(function (r) {
+    var actions = $("settingsActions");
+    var maintenanceIndex = rows.findIndex(function (r) {
+      return String(r.key || "").toLowerCase() === "maintenance_mode";
+    });
+    var maintenanceRow = maintenanceIndex >= 0 ? rows[maintenanceIndex] : null;
+    var canRestoreMaintenance = maintenanceRow && maintenanceRow.default_value !== null && maintenanceRow.default_value !== undefined && (
+      isAdmin() || (
+        ME.role === "it_support" &&
+        Array.isArray(maintenanceRow.editable_by) &&
+        maintenanceRow.editable_by.indexOf("it_support") !== -1 &&
+        !maintenanceRow.is_sensitive
+      )
+    );
+    var maintenanceRestore = actions.querySelector("[data-maintenance-reset]");
+    if (canRestoreMaintenance) {
+      if (!maintenanceRestore) {
+        maintenanceRestore = document.createElement("button");
+        maintenanceRestore.type = "button";
+        maintenanceRestore.className = "link-muted";
+        maintenanceRestore.setAttribute("data-maintenance-reset", "1");
+        maintenanceRestore.textContent = "Restore default";
+        actions.appendChild(maintenanceRestore);
+      }
+      maintenanceRestore.setAttribute("data-reset-setting", String(maintenanceIndex));
+    } else if (maintenanceRestore) {
+      maintenanceRestore.remove();
+    }
+
+    actions.hidden = !rows.some(function (r) {
       return isAdmin() || (
         ME.role === "it_support" &&
         Array.isArray(r.editable_by) &&
@@ -2716,6 +2757,11 @@
     $("settingsReload").addEventListener("click", loadSettings);
     $("settingsList").addEventListener("click", function (e) {
       var b = e.target.closest("[data-reset-setting]");
+      if (!b) return;
+      askSettingReset(Number(b.getAttribute("data-reset-setting")));
+    });
+    $("settingsActions").addEventListener("click", function (e) {
+      var b = e.target.closest("[data-maintenance-reset]");
       if (!b) return;
       askSettingReset(Number(b.getAttribute("data-reset-setting")));
     });
