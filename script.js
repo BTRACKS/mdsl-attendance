@@ -126,8 +126,17 @@
     var name = [u.firstName, u.lastName].filter(function (x) { return String(x || "").trim(); }).join(" ").trim() || u.fullName || "Staff member";
     return [u.title, name].filter(Boolean).join(" ").trim();
   }
+  function normalizeAttendanceDate(value) {
+    if (value == null) return "";
+    var raw = String(value).trim();
+    // Attendance uses a calendar DATE. Preserve YYYY-MM-DD without timezone conversion.
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+    var m = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+    return m ? m[1] : raw;
+  }
+
   function mapAttendance(a) {
-    return { userId: a.user_id, date: a.date, morning: a.morning || null, evening: a.evening || null };
+    return { userId: a.user_id, date: normalizeAttendanceDate(a.date), morning: a.morning || null, evening: a.evening || null };
   }
   function mapLeave(r) {
     return {
@@ -238,14 +247,16 @@
           // The RPC is independently secured and returns the complete records
           // for authorized Administration sessions only.
           db.users = Array.isArray(overviewRes.data.users) ? overviewRes.data.users.map(mapProfile) : db.users;
-          db.attendance = Array.isArray(overviewRes.data.attendance) ? overviewRes.data.attendance.map(mapAttendance) : db.attendance;
+          if (Array.isArray(overviewRes.data.attendance)) {
+            db.attendance = mergeAttendanceRecords(db.attendance, overviewRes.data.attendance.map(mapAttendance));
+          }
           db.leaves = Array.isArray(overviewRes.data.leaves) ? overviewRes.data.leaves.map(mapLeave) : db.leaves;
 
           try {
             var adminHseRes = await supabaseClient.rpc("admin_hse_data");
             if (!adminHseRes.error && adminHseRes.data) {
               if (Array.isArray(adminHseRes.data.users)) db.users = adminHseRes.data.users.map(mapProfile);
-              if (Array.isArray(adminHseRes.data.attendance)) db.attendance = adminHseRes.data.attendance.map(mapAttendance);
+              if (Array.isArray(adminHseRes.data.attendance)) db.attendance = mergeAttendanceRecords(db.attendance, adminHseRes.data.attendance.map(mapAttendance));
               if (Array.isArray(adminHseRes.data.leaves)) db.leaves = adminHseRes.data.leaves.map(mapLeave);
               if (Array.isArray(adminHseRes.data.hse)) db.hse = adminHseRes.data.hse.map(mapHse);
               if (adminHseRes.data.hse_settings) db.hseSettings = Object.assign({}, db.hseSettings || {}, adminHseRes.data.hse_settings);
@@ -583,7 +594,38 @@
   }
 
   function record(userId, key) {
-    return db.attendance.find(function (a) { return a.userId === userId && a.date === key; }) || null;
+    var uid = String(userId || "");
+    var date = normalizeAttendanceDate(key);
+    return (db.attendance || []).find(function (a) {
+      return String(a.userId || "") === uid && normalizeAttendanceDate(a.date) === date;
+    }) || null;
+  }
+
+  function mergeAttendanceRecords(baseRows, extraRows) {
+    var merged = [];
+    var index = {};
+    function add(row) {
+      if (!row || row.userId == null || !row.date) return;
+      var key = String(row.userId) + "|" + normalizeAttendanceDate(row.date);
+      if (index[key] == null) { index[key] = merged.length; merged.push(row); return; }
+      var current = merged[index[key]];
+      if (!current.morning && row.morning) current.morning = row.morning;
+      if (!current.evening && row.evening) current.evening = row.evening;
+    }
+    (baseRows || []).forEach(add);
+    (extraRows || []).forEach(add);
+    return merged;
+  }
+
+  async function fetchAttendanceRecord(userId, key) {
+    var normalizedKey = normalizeAttendanceDate(key);
+    try {
+      var res = await supabaseClient.from("attendance").select("*").eq("user_id", userId).eq("date", normalizedKey).maybeSingle();
+      if (res.error) return { row: null, error: res.error };
+      return { row: res.data ? mapAttendance(res.data) : null, error: null };
+    } catch (err) {
+      return { row: null, error: err };
+    }
   }
 
   function overviewUsers() {
@@ -2215,7 +2257,7 @@
   /* Individual Attendance History: search-and-select staff picker.
      Only the selected staff member's history is rendered. */
   function staffHistoryPanel(u) {
-    var recs = db.attendance.filter(function (a) { return a.userId === u.id; }).sort(function (a, b) { return a.date < b.date ? 1 : -1; }).slice(0, 10);
+    var recs = (db.attendance || []).filter(function (a) { return String(a.userId || "") === String(u.id || ""); }).sort(function (a, b) { return normalizeAttendanceDate(a.date) < normalizeAttendanceDate(b.date) ? 1 : -1; }).slice(0, 10);
     return (leaveHistoryFor(u.id).length ? '<div class="leave-history-mini">' + leaveHistoryFor(u.id).slice(0,5).map(function(l){var today=dateKey(new Date());var st=l.status==="cancelled"?"Cancelled":(l.startDate<=today&&today<=l.endDate?"Active":(l.startDate>today?"Scheduled":"Completed"));return '<div><strong>'+esc(leaveTypeLabel(l.leaveType))+'</strong><span>'+esc(prettyDate(l.startDate))+' – '+esc(prettyDate(l.endDate))+' · '+esc(st)+(l.reason?' · '+esc(l.reason):'')+'</span></div>';}).join("") + '</div>' : '') +
       (recs.length ? '<div class="history-list">' +
         recs.map(function (a) {
@@ -2314,7 +2356,10 @@
     }
 
     if (rec && rec[kind]) { toast("This attendance is locked and cannot be changed.", "error"); return; }
-    if (kind === "evening" && (!rec || !rec.morning)) { toast("Submit your morning resumption first.", "error"); return; }
+    // If the local cache does not contain today's row, do not conclude that
+    // evening attendance is impossible. The authoritative row is re-read just
+    // before the write below, which also handles records hidden by stale/RLS data.
+    if (kind === "evening" && rec && !rec.morning) { toast("Submit your morning resumption first.", "error"); return; }
 
     var time = clockTime(now);
     var isMorning = kind === "morning";
@@ -2326,17 +2371,61 @@
       "  Recorded time: " + time + ".",
       async function () {
         var payload = { time: time, at: Date.now() };
+
+        // Re-read the exact unique-key row immediately before writing. The in-memory
+        // cache may be stale or may not contain the row because of RLS/loading order.
+        var live = await fetchAttendanceRecord(u.id, key);
+        if (live.error) {
+          toast("Attendance could not be verified. Please refresh and try again.", "error");
+          return;
+        }
+
+        var existing = live.row;
         var writeRes;
-        if (!rec) {
+
+        if (existing) {
+          if (existing[kind]) {
+            db.attendance = mergeAttendanceRecords(db.attendance, [existing]);
+            toast("This attendance is already recorded for today.", "error");
+            render();
+            return;
+          }
+          var updateRow = {};
+          updateRow[kind] = payload;
+          writeRes = await supabaseClient.from("attendance").update(updateRow)
+            .eq("user_id", u.id).eq("date", key);
+        } else {
           var insertRow = { user_id: u.id, date: key, morning: null, evening: null };
           insertRow[kind] = payload;
           writeRes = await supabaseClient.from("attendance").insert(insertRow);
-        } else {
-          var updateRow = {};
-          updateRow[kind] = payload;
-          writeRes = await supabaseClient.from("attendance").update(updateRow).eq("user_id", u.id).eq("date", key);
+
+          // Handle a concurrent writer safely. The unique constraint stays enabled;
+          // re-read the winning row and update only the missing stamp if appropriate.
+          if (writeRes.error && /duplicate|unique/i.test(writeRes.error.message || "")) {
+            var afterConflict = await fetchAttendanceRecord(u.id, key);
+            if (afterConflict.error || !afterConflict.row) {
+              toast(writeRes.error.message, "error");
+              return;
+            }
+            if (afterConflict.row[kind]) {
+              db.attendance = mergeAttendanceRecords(db.attendance, [afterConflict.row]);
+              toast("This attendance is already recorded for today.", "error");
+              render();
+              return;
+            }
+            var retryRow = {};
+            retryRow[kind] = payload;
+            writeRes = await supabaseClient.from("attendance").update(retryRow)
+              .eq("user_id", u.id).eq("date", key);
+          }
         }
+
         if (writeRes.error) { toast(writeRes.error.message, "error"); return; }
+
+        var mergedRecord = existing || { userId: u.id, date: key, morning: null, evening: null };
+        mergedRecord[kind] = payload;
+        db.attendance = mergeAttendanceRecords(db.attendance, [mergedRecord]);
+
         await refreshData();
         toast(isMorning ? "Morning attendance submitted successfully." : "Evening attendance submitted successfully.");
         render();
