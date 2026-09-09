@@ -960,7 +960,7 @@
      full_name from First Name + Last Name (see below) whenever the form is
      showing split name fields but the "profiles" table still has a NOT NULL
      full_name column underneath. */
-  var ADD_USER = { fields: [], hasSplitName: false, fullNameCol: null, firstNameCol: null, lastNameCol: null };
+  var ADD_USER = { fields: [], hasSplitName: false, fullNameCol: null, firstNameCol: null, lastNameCol: null, employmentTypeCol: null, departmentCol: null };
 
   /* Work out which profile columns this database actually has, using the same
      column-detection approach as the profile editor (colOf against a real row),
@@ -996,8 +996,45 @@
     }
 
     var NAME_HANDLED = [TITLE_NAME_KEYS, FIRST_NAME_KEYS, LAST_NAME_KEYS];
+    var employmentTypeCol = colOf(sample, TYPE_KEYS) || (known ? null : TYPE_KEYS[0]);
+    var departmentCol = colOf(sample, DEPT_KEYS) || (known ? null : DEPT_KEYS[0]);
+    ADD_USER.employmentTypeCol = employmentTypeCol;
+    ADD_USER.departmentCol = departmentCol;
+
+    /* Add New User deliberately uses controlled selects for the two fields that
+       already drive staff classification throughout the platform. The values
+       are written to the same existing profiles columns; no new data structure
+       or department list is introduced here. */
+    if (employmentTypeCol) {
+      fields.push({
+        col: employmentTypeCol,
+        label: "Employment Type",
+        type: "select",
+        options: ["Staff", "Intern"],
+        max: 40,
+        required: true
+      });
+    }
+
+    if (departmentCol) {
+      /* Department remains part of the existing profile/create flow, but is
+         intentionally a normal text field rather than a dropdown. This avoids
+         forcing the admin to choose from a generated list while still saving
+         the value to the same existing profiles column. */
+      fields.push({
+        col: departmentCol,
+        label: "Department",
+        type: "text",
+        max: 120,
+        required: true
+      });
+    }
+
+    /* Keep the remaining profile fields exactly as before, but do not add the
+       Employment Type / Department entries a second time as text inputs. */
     EDIT_FIELDS.forEach(function (f) {
       if (NAME_HANDLED.indexOf(f.keys) !== -1) return;
+      if (f.keys === TYPE_KEYS || f.keys === DEPT_KEYS) return;
       var col = colOf(sample, f.keys) || (known ? null : f.keys[0]);
       if (!col) return;
       fields.push({ col: col, label: f.label, max: f.max, type: f.type, options: f.options, required: f.keys === TYPE_KEYS });
@@ -1097,6 +1134,12 @@
       var lastVal = (profile[ADD_USER.lastNameCol] || "").trim();
       var fullVal = (firstVal + " " + lastVal).trim();
       if (fullVal) profile[ADD_USER.fullNameCol] = fullVal;
+    }
+
+    if (!ADD_USER.employmentTypeCol || !ADD_USER.departmentCol) {
+      err.hidden = false;
+      err.textContent = "Employment Type and Department could not be mapped to the existing staff profile fields.";
+      return;
     }
 
     var emailField = ADD_USER.fields.filter(function (f) { return f.type === "email"; })[0];
