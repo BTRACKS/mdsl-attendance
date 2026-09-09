@@ -2929,7 +2929,7 @@
       '<section class="about-hero"><div><h2>What the system is</h2>' +
       "<p>The E-Attendance Platform is Multidigital Service Limited's internal system for capturing, storing and reviewing staff attendance. " +
       "Every member of staff records a morning resumption time and an evening closing time, and each entry is time-stamped and locked the moment it is submitted.</p>" +
-      "<p>It gives the organisation one trusted source of truth for who resumed, when they resumed and when they closed — across every department.</p></div>" +
+      "<p>It gives the organisation one trusted source of truth for who resumed, when they resumed and when they closed across every department.</p></div>" +
       '<div class="about-stats"><div><span>Daily windows</span><b>2</b></div><div><span>Records editable</span><b>No</b></div>' +
       "<div><span>Departments covered</span><b>" + DEPARTMENTS.length + "</b></div></div></section>" +
 
