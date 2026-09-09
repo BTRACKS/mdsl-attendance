@@ -2942,7 +2942,7 @@
 
       '<section class="section"><div class="section-head"><h2>The problem it solves</h2></div>' +
       '<div class="about-split"><div class="about-panel"><h3>Before</h3><ul>' +
-      "<li>Paper registers and scattered spreadsheets</li><li>Times written in after the fact</li>" +
+      "<li>Paper registers and spreadsheets</li><li>Times written in after the fact</li>" +
       "<li>No reliable history for payroll or reviews</li><li>Manual collation at the end of every month</li></ul></div>" +
       '<div class="about-panel accent"><h3>With E-Attendance</h3><ul>' +
       "<li>One digital register for the whole company</li><li>Time-stamped, final submissions</li>" +
