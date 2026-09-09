@@ -2611,6 +2611,11 @@
   }
 
   async function writeSetting(key, value) {
+    /* Maintenance Mode must be sent as a real JSON boolean. The database
+       column stores text, but support_update_setting accepts jsonb. */
+    if (key === "maintenance_mode") {
+      value = value === true || value === 1 || String(value).toLowerCase().trim() === "true";
+    }
     return await sb.rpc("support_update_setting", {
       p_key: key,
       p_value: value
