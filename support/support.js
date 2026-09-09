@@ -2465,10 +2465,13 @@
 
     if (type === "boolean") {
       var boolChecked = value === true || value === 1 || String(value).toLowerCase().trim() === "true";
-      return '<label class="setting-toggle" for="' + id + '">' +
+      return '<label class="setting-toggle" for="' + id + '" style="display:inline-flex;align-items:center;gap:10px;cursor:' + (disabled ? 'not-allowed' : 'pointer') + ';">' +
         '<input id="' + id + '" data-setting="' + i + '" type="checkbox"' +
-        (boolChecked ? " checked" : "") + dis + ' />' +
-        '<span>Enabled</span></label>';
+        (boolChecked ? " checked" : "") + dis + ' style="position:absolute;opacity:0;width:1px;height:1px;pointer-events:none;" />' +
+        '<span aria-hidden="true" style="position:relative;display:inline-block;width:46px;height:26px;border-radius:999px;background:' + (boolChecked ? '#111' : '#c9c9c9') + ';transition:background .2s ease;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12);">' +
+          '<span style="position:absolute;top:3px;left:' + (boolChecked ? '23px' : '3px') + ';width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:left .2s ease;"></span>' +
+        '</span>' +
+        '<span class="setting-toggle-label">' + (boolChecked ? 'Enabled' : 'Disabled') + '</span></label>';
     }
 
     if (type === "number") {
@@ -2715,6 +2718,18 @@
       var b = e.target.closest("[data-reset-setting]");
       if (!b) return;
       askSettingReset(Number(b.getAttribute("data-reset-setting")));
+    });
+    $("settingsList").addEventListener("change", function (e) {
+      var input = e.target;
+      if (!input || input.type !== "checkbox" || !input.matches("[data-setting]")) return;
+      var label = input.closest(".setting-toggle");
+      if (!label) return;
+      var track = label.querySelector("span[aria-hidden=\"true\"]");
+      var text = label.querySelector(".setting-toggle-label");
+      var knob = track ? track.querySelector("span") : null;
+      if (track) track.style.background = input.checked ? "#111" : "#c9c9c9";
+      if (knob) knob.style.left = input.checked ? "23px" : "3px";
+      if (text) text.textContent = input.checked ? "Enabled" : "Disabled";
     });
 
     loadSettings();
