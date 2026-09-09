@@ -4,57 +4,68 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Maintenance | Multidigital Service Limited E-Attendance Platform</title>
-<meta name="description" content="The Multidigital Service Limited E-Attendance Platform is temporarily unavailable while maintenance is being carried out." />
+<meta name="description" content="The Multidigital Service Limited E-Attendance Platform is temporarily unavailable while improvements are being made." />
 <link rel="icon" type="image/png" sizes="256x256" href="favicon.png" />
 <link rel="apple-touch-icon" href="favicon.png" />
 <meta name="theme-color" content="#123a6b" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="style.css" />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="maintenance.css" />
 </head>
-<body class="maintenance-page">
-  <main class="maint" aria-labelledby="maintenanceTitle">
-    <div class="maint-card">
-      <div class="maint-brand">
+<body>
+  <main class="maintenance" aria-labelledby="maintenance-title">
+    <div class="ambient ambient-one" aria-hidden="true"></div>
+    <div class="ambient ambient-two" aria-hidden="true"></div>
+
+    <section class="maintenance-panel">
+      <header class="brand">
         <img class="brand-logo" src="logo-mark.png" alt="Multidigital Service Limited logo" width="42" height="42" />
-        <span class="brand-text">Multidigital Service Limited<em>E-Attendance Platform</em></span>
+        <span class="brand-name">Multidigital Service Limited<small>E-Attendance Platform</small></span>
+      </header>
+
+      <div class="maintenance-grid">
+        <div class="maintenance-copy">
+          <p class="status-label"><span aria-hidden="true"></span> Scheduled maintenance</p>
+          <h1 id="maintenance-title">We’re currently performing maintenance</h1>
+          <p class="lede">The E-Attendance Platform is temporarily unavailable while we make some improvements. Please check back shortly.</p>
+
+          <div class="reassurance" aria-label="Service status">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
+            <p><strong>Your attendance data is safe</strong><span>No action is required from you.</span></p>
+          </div>
+
+          <p class="help">Need assistance? <a href="mailto:info@multidigitalng.com">Contact the IT team</a></p>
+        </div>
+
+        <div class="maintenance-visual" aria-hidden="true">
+          <div class="orbit orbit-outer"></div>
+          <div class="orbit orbit-inner"></div>
+          <span class="orbit-dot dot-one"></span>
+          <span class="orbit-dot dot-two"></span>
+          <div class="attendance-device">
+            <div class="device-top"><i></i><i></i><i></i></div>
+            <div class="device-screen">
+              <div class="clock-face">
+                <span class="clock-hand hour"></span>
+                <span class="clock-hand minute"></span>
+                <span class="clock-centre"></span>
+              </div>
+              <div class="check-line"><span class="check-mark">✓</span><span>Attendance secured</span></div>
+            </div>
+          </div>
+          <div class="maintenance-badge">
+            <span class="badge-icon">
+              <svg viewBox="0 0 24 24"><path d="M12 2v3M12 19v3M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M2 12h3M19 12h3M4.93 19.07l2.12-2.12M16.95 7.05l2.12-2.12" /></svg>
+            </span>
+            <span><strong>Improving your experience</strong><small>We’ll be back shortly</small></span>
+          </div>
+        </div>
       </div>
-      <h1 id="maintenanceTitle">We are carrying out maintenance</h1>
-      <p class="maint-lede">The E-Attendance Platform is temporarily unavailable while essential maintenance is being carried out. Please try again shortly.</p>
-      <p class="maint-help">If you need assistance, <a href="mailto:info@multidigitalng.com">contact the IT team</a>.</p>
-      <p class="maint-foot">&copy; <span id="year"></span> Multidigital Service Limited. All rights reserved.</p>
-    </div>
+
+      <footer>&copy; <span id="year"></span> Multidigital Service Limited. All rights reserved.</footer>
+    </section>
   </main>
-  <script>
-    (function () {
-      "use strict";
-      var SB_URL = "https://wdrgcavxwamwqgxkdscn.supabase.co";
-      var SB_KEY = "sb_publishable_XlL1WvosmoBvl3vttrT-xw_nVvtMrQo";
-      var sb = null;
-      function goIfOff() {
-        if (!sb || goIfOff.checking) return;
-        goIfOff.checking = true;
-        sb.rpc("is_maintenance_mode").then(function (res) {
-          if (!res.error && !(res.data === true || String(res.data).toLowerCase() === "true")) {
-            location.replace("index.html");
-          }
-        }).catch(function () {}).finally(function () {
-          goIfOff.checking = false;
-        });
-      }
-      document.getElementById("year").textContent = new Date().getFullYear();
-      var script = document.createElement("script");
-      script.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2";
-      script.onload = function () {
-        if (window.supabase) {
-          sb = window.supabase.createClient(SB_URL, SB_KEY);
-          goIfOff();
-        }
-      };
-      document.head.appendChild(script);
-      setInterval(goIfOff, 5000);
-    })();
-  </script>
+  <script src="maintenance.js"></script>
 </body>
 </html>
