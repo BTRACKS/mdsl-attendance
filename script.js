@@ -584,12 +584,27 @@
   }
 
   function mapAttendance(a) {
+    function mapStamp(v) {
+      if (!v) return null;
+      /* Preserve the offline-first synchronization metadata returned by Supabase.
+         Without this, a successful sync is read back as a plain attendance
+         object and the UI can remain stuck on the local "Saved" state. */
+      if (typeof v === "object") {
+        return Object.assign({}, v, {
+          eventId: v.eventId || null,
+          syncStatus: v.syncStatus || null,
+          createdOffline: !!v.createdOffline,
+          serverReceivedAt: v.serverReceivedAt || null
+        });
+      }
+      return v;
+    }
     return {
       id: a.id || null,
       userId: a.user_id,
       date: normalizeAttendanceDate(a.date),
-      morning: a.morning || null,
-      evening: a.evening || null
+      morning: mapStamp(a.morning),
+      evening: mapStamp(a.evening)
     };
   }
   function mapLeave(r) {
