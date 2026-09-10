@@ -204,8 +204,20 @@
           var normalizeRes = await supabaseClient.from("attendance").update(normalizeRow)
             .eq("user_id", q.userId).eq("date", q.date);
           if (normalizeRes.error) throw normalizeRes.error;
+
+          /* An UPDATE acknowledgement alone is not enough. Read the record
+             back and require both the same eventId and SYNCED state before
+             completing the durable local queue item. */
+          var normalizedVerify = await fetchAttendanceRecord(q.userId, q.date);
+          if (normalizedVerify.error) throw normalizedVerify.error;
+          if (!normalizedVerify.row ||
+              !attendanceEventMatches(normalizedVerify.row[q.kind], q.eventId) ||
+              normalizedVerify.row[q.kind].syncStatus !== "SYNCED") {
+            throw new Error("Attendance synchronization could not be verified yet.");
+          }
+          existingEntry = normalizedVerify.row[q.kind];
         }
-        var alreadySyncedAt = q.serverReceivedAt || existingEntry.serverReceivedAt || Date.now();
+        var alreadySyncedAt = existingEntry.serverReceivedAt || q.serverReceivedAt || Date.now();
         await offlineUpdate(q.eventId, {
           status: "SYNCED",
           serverReceivedAt: alreadySyncedAt,
@@ -297,8 +309,9 @@
   }
 
   async function syncOfflineAttendance() {
-    if (OFFLINE_ATTENDANCE.syncing || !session()) return;
+    if (OFFLINE_ATTENDANCE.syncing || !session()) return false;
     OFFLINE_ATTENDANCE.syncing = true;
+    var syncedAny = false;
     try {
       var rows = await offlineAll();
       var pending = rows.filter(function (r) {
@@ -309,29 +322,34 @@
 
       for (var i = 0; i < pending.length; i++) {
         var ok = await syncOneOfflineAttendance(pending[i]);
-        if (!ok) continue;
+        if (ok) syncedAny = true;
       }
 
-      await hydrateOfflineAttendance();
-
-      /* Refresh only after at least one successful sync. If the connection is
-         still unavailable, the existing in-memory attendance remains intact. */
+      /* Successful syncs already update the live in-memory attendance record
+         in markAttendanceEntrySynced(). Do not call refreshData() here: an
+         attendance-only state change must not restart the page loader or rebuild
+         the whole dashboard. */
       var after = await offlineAll();
-      if (after.some(function (r) { return r.status === "SYNCED"; })) {
-        await refreshData({ preserveOffline: true });
-        after = await offlineAll();
+      var syncedRows = after.filter(function (r) { return r.status === "SYNCED"; });
+
+      for (var j = 0; j < syncedRows.length; j++) {
+        try {
+          await offlineDelete(syncedRows[j].eventId);
+        } catch (deleteErr) {
+          /* The server record is already verified. Keeping a completed local
+             row is harmless; the next pass will see SYNCED and clear it. */
+          console.warn("Offline attendance queue cleanup:", deleteErr);
+        }
       }
 
-      after.filter(function (r) { return r.status === "SYNCED"; }).forEach(function (r) {
-        offlineDelete(r.eventId).catch(function () {});
-      });
-
-      if (after.some(function (r) { return r.status === "SYNCED"; })) {
+      if (syncedAny) {
         toast("Attendance synchronized.");
         render();
       }
+      return syncedAny;
     } catch (e) {
       console.warn("Offline attendance synchronization:", e);
+      return false;
     } finally {
       OFFLINE_ATTENDANCE.syncing = false;
     }
@@ -362,24 +380,31 @@
 
   async function monitorAttendanceConnection() {
     if (!session()) return false;
+    var previousConnection = OFFLINE_ATTENDANCE.connection;
     var online = await probeSupabaseConnection();
 
     if (online) {
       /* A successful Supabase probe is the source of truth. Promote the app to
-         normal online mode immediately, then drain any durable local queue. */
+         normal online mode, then drain the durable local queue. */
       OFFLINE_ATTENDANCE.connection = "online";
-      await syncOfflineAttendance();
-      try {
-        await refreshData({ preserveOffline: true });
-      } catch (e) {
-        console.warn("Online attendance refresh:", e);
+      var rows = await offlineAll().catch(function () { return []; });
+      var hasPending = rows.some(function (r) { return r && r.status !== "SYNCED"; });
+      var becameOnline = previousConnection !== "online";
+
+      /* Only synchronize/render when reconnecting or when there is actually
+         pending work. A healthy online connection must not continuously rebuild
+         the dashboard. */
+      if (becameOnline || hasPending) {
+        var synced = await syncOfflineAttendance();
+        if (becameOnline && !synced) render();
       }
-      render();
     } else {
-      /* Keep the local queue and current attendance view intact while offline. */
+      /* Keep the local queue and current attendance view intact while offline.
+         Re-render only when the connection state actually changes. */
+      var changedOffline = previousConnection !== "offline";
       OFFLINE_ATTENDANCE.connection = "offline";
       await hydrateOfflineAttendance();
-      render();
+      if (changedOffline) render();
     }
     return online;
   }
@@ -413,14 +438,17 @@
     });
 
     if (OFFLINE_ATTENDANCE.retryTimer) clearInterval(OFFLINE_ATTENDANCE.retryTimer);
+    /* Keep a lightweight recovery probe for environments where the browser's
+       online event is unreliable. It no longer continuously refreshes a
+       healthy dashboard. */
     OFFLINE_ATTENDANCE.retryTimer = setInterval(function () {
       monitorAttendanceConnection();
     }, 15000);
 
-    if (OFFLINE_ATTENDANCE.monitorTimer) clearInterval(OFFLINE_ATTENDANCE.monitorTimer);
-    OFFLINE_ATTENDANCE.monitorTimer = setInterval(function () {
-      monitorAttendanceConnection();
-    }, 5000);
+    if (OFFLINE_ATTENDANCE.monitorTimer) {
+      clearInterval(OFFLINE_ATTENDANCE.monitorTimer);
+      OFFLINE_ATTENDANCE.monitorTimer = null;
+    }
   }
 
   function offlineStatusText(entry) {
@@ -1463,7 +1491,9 @@
   function attBlock(title, label, entry, kind, disabled) {
     var submitted = !!entry;
     var localStatus = submitted && offlineStatusText(entry);
-    var isLocalPending = submitted && entry.eventId && entry.syncStatus !== "SYNCED";
+    /* "Saved" is only a local pending state. The server-backed SYNCED flag
+       is authoritative for the final Submitted state. */
+    var isLocalPending = submitted && entry.eventId && entry.syncStatus === "PENDING";
     return '<div class="att' + (submitted ? " locked" : "") + '">' +
       '<div class="att-top"><h3>' + title + "</h3>" +
       (submitted ? '<span class="tag ' + (isLocalPending ? 'tag-pending' : 'tag-ok') + '">' + (isLocalPending ? 'Saved' : 'Submitted') + '</span>' : '<span class="tag tag-pending">Pending</span>') + "</div>" +
@@ -5830,6 +5860,17 @@
   async function init() {
     el("view").innerHTML = loadingView();
     var initialHash = location.hash || "";
+
+    /* Keep the dashboard chrome hidden during the initial data bootstrap so
+       navigation/footer cannot appear by themselves while the dashboard view
+       is still loading. render() reveals the complete page together. */
+    var holdDashboardChrome = PAGE === "app" && (!initialHash || initialHash === "#/dashboard");
+    if (holdDashboardChrome) {
+      var bootHead = el("masthead"), bootFoot = el("footer"), bootFaq = el("faqSection");
+      if (bootHead) bootHead.hidden = true;
+      if (bootFoot) bootFoot.hidden = true;
+      if (bootFaq) bootFaq.hidden = true;
+    }
 
     /* Check the public maintenance flag before bootstrapping the normal
        attendance UI. Authentication is deliberately not signed out or changed. */
