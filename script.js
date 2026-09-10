@@ -122,14 +122,14 @@
     }) || null;
   }
 
-  function attendancePayloadFromQueue(q) {
+  function attendancePayloadFromQueue(q, syncStatusOverride) {
     return {
       time: q.time,
       at: q.stampedAt,
       eventId: q.eventId,
       stampedAt: q.stampedAt,
       createdOffline: !!q.createdOffline,
-      syncStatus: q.status === "SYNCED" ? "SYNCED" : "PENDING",
+      syncStatus: syncStatusOverride || (q.status === "SYNCED" ? "SYNCED" : "PENDING"),
       serverReceivedAt: q.serverReceivedAt || null
     };
   }
@@ -177,9 +177,21 @@
       /* If the exact event is already on the server, the lost response case
          is resolved: do not write it again. */
       if (attendanceEventMatches(existingEntry, q.eventId)) {
+        /* Older offline-first builds could have written the correct eventId
+           with syncStatus=PENDING. Normalize that server payload now so the
+           normal submitted/locked UI is restored after reconnection. */
+        if (existingEntry.syncStatus !== "SYNCED") {
+          var normalizedPayload = attendancePayloadFromQueue(q, "SYNCED");
+          normalizedPayload.serverReceivedAt = existingEntry.serverReceivedAt || q.serverReceivedAt || Date.now();
+          var normalizeRow = {};
+          normalizeRow[q.kind] = normalizedPayload;
+          var normalizeRes = await supabaseClient.from("attendance").update(normalizeRow)
+            .eq("user_id", q.userId).eq("date", q.date);
+          if (normalizeRes.error) throw normalizeRes.error;
+        }
         await offlineUpdate(q.eventId, {
           status: "SYNCED",
-          serverReceivedAt: q.serverReceivedAt || Date.now(),
+          serverReceivedAt: q.serverReceivedAt || existingEntry.serverReceivedAt || Date.now(),
           syncedAt: Date.now()
         });
         return true;
@@ -196,7 +208,7 @@
         return false;
       }
 
-      var payload = attendancePayloadFromQueue(q);
+      var payload = attendancePayloadFromQueue(q, "SYNCED");
       var writeRes;
 
       if (existing) {
@@ -388,8 +400,10 @@
   }
 
   function offlineStatusText(entry) {
-    if (!entry) return "";
-    if (entry.syncStatus === "SYNCED") return "Attendance synchronized";
+    /* Only display the offline status while this attendance event is actually
+       pending locally. Once Supabase has accepted it, the existing normal
+       submitted/locked attendance UI must be restored with no offline text. */
+    if (!entry || !entry.eventId || entry.syncStatus === "SYNCED") return "";
     return "Attendance saved locally · Waiting for connection";
   }
 
