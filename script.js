@@ -161,6 +161,22 @@
     return !!(existing && existing.eventId && String(existing.eventId) === String(eventId));
   }
 
+  /* Immediately promote a successfully synchronized stamp in the live in-memory
+     attendance cache. This is important because the dashboard may already be
+     rendering the locally queued object; waiting for a full data refresh can leave
+     that object visually stuck on “Saved” even though Supabase accepted the stamp. */
+  function markAttendanceEntrySynced(q, serverReceivedAt) {
+    if (!q || !q.userId || !q.date || !q.kind) return;
+    var rec = record(q.userId, q.date);
+    if (!rec) {
+      rec = { userId: q.userId, date: q.date, morning: null, evening: null };
+      db.attendance.push(rec);
+    }
+    var syncedPayload = attendancePayloadFromQueue(q, "SYNCED");
+    syncedPayload.serverReceivedAt = serverReceivedAt || q.serverReceivedAt || Date.now();
+    rec[q.kind] = syncedPayload;
+  }
+
   async function syncOneOfflineAttendance(q) {
     if (!q || q.status === "SYNCED") return true;
     if (!session()) return false;
@@ -189,11 +205,13 @@
             .eq("user_id", q.userId).eq("date", q.date);
           if (normalizeRes.error) throw normalizeRes.error;
         }
+        var alreadySyncedAt = q.serverReceivedAt || existingEntry.serverReceivedAt || Date.now();
         await offlineUpdate(q.eventId, {
           status: "SYNCED",
-          serverReceivedAt: q.serverReceivedAt || existingEntry.serverReceivedAt || Date.now(),
+          serverReceivedAt: alreadySyncedAt,
           syncedAt: Date.now()
         });
+        markAttendanceEntrySynced(q, alreadySyncedAt);
         return true;
       }
 
@@ -225,11 +243,13 @@
           var afterConflict = await fetchAttendanceRecord(q.userId, q.date);
           if (afterConflict.error) throw afterConflict.error;
           if (attendanceEventMatches(afterConflict.row && afterConflict.row[q.kind], q.eventId)) {
+            var conflictSyncedAt = Date.now();
             await offlineUpdate(q.eventId, {
               status: "SYNCED",
-              serverReceivedAt: Date.now(),
+              serverReceivedAt: conflictSyncedAt,
               syncedAt: Date.now()
             });
+            markAttendanceEntrySynced(q, conflictSyncedAt);
             return true;
           }
           if (afterConflict.row && afterConflict.row[q.kind]) {
@@ -258,11 +278,13 @@
         throw new Error("Attendance was submitted but could not be verified yet.");
       }
 
+      var syncedAt = Date.now();
       await offlineUpdate(q.eventId, {
         status: "SYNCED",
-        serverReceivedAt: Date.now(),
+        serverReceivedAt: syncedAt,
         syncedAt: Date.now()
       });
+      markAttendanceEntrySynced(q, syncedAt);
       return true;
     } catch (err) {
       await offlineUpdate(q.eventId, {
@@ -343,8 +365,9 @@
     var online = await probeSupabaseConnection();
 
     if (online) {
-      /* A successful probe immediately returns the attendance page to its
-         normal online state, then drains any durable local queue. */
+      /* A successful Supabase probe is the source of truth. Promote the app to
+         normal online mode immediately, then drain any durable local queue. */
+      OFFLINE_ATTENDANCE.connection = "online";
       await syncOfflineAttendance();
       try {
         await refreshData({ preserveOffline: true });
@@ -354,6 +377,7 @@
       render();
     } else {
       /* Keep the local queue and current attendance view intact while offline. */
+      OFFLINE_ATTENDANCE.connection = "offline";
       await hydrateOfflineAttendance();
       render();
     }
@@ -404,6 +428,7 @@
        pending locally. Once Supabase has accepted it, the existing normal
        submitted/locked attendance UI must be restored with no offline text. */
     if (!entry || !entry.eventId || entry.syncStatus === "SYNCED") return "";
+    if (OFFLINE_ATTENDANCE.connection === "online") return "";
     return "Attendance saved locally · Waiting for connection";
   }
 
