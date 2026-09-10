@@ -23,7 +23,10 @@
     db: null,
     ready: null,
     retryTimer: null,
-    syncing: false
+    monitorTimer: null,
+    syncing: false,
+    connection: "unknown",
+    probing: false
   };
 
   function offlineUuid() {
@@ -300,33 +303,88 @@
     }
   }
 
+  async function probeSupabaseConnection() {
+    if (OFFLINE_ATTENDANCE.probing) return OFFLINE_ATTENDANCE.connection === "online";
+    if (!session()) return false;
+
+    OFFLINE_ATTENDANCE.probing = true;
+    try {
+      /* navigator.onLine only tells us that the device has a network interface.
+         A real Supabase request is the source of truth for the attendance app. */
+      var probe = await supabaseClient.from("attendance").select("id").limit(1);
+      if (probe && !probe.error) {
+        OFFLINE_ATTENDANCE.connection = "online";
+        return true;
+      }
+      OFFLINE_ATTENDANCE.connection = "offline";
+      return false;
+    } catch (e) {
+      OFFLINE_ATTENDANCE.connection = "offline";
+      return false;
+    } finally {
+      OFFLINE_ATTENDANCE.probing = false;
+    }
+  }
+
+  async function monitorAttendanceConnection() {
+    if (!session()) return false;
+    var online = await probeSupabaseConnection();
+
+    if (online) {
+      /* A successful probe immediately returns the attendance page to its
+         normal online state, then drains any durable local queue. */
+      await syncOfflineAttendance();
+      try {
+        await refreshData({ preserveOffline: true });
+      } catch (e) {
+        console.warn("Online attendance refresh:", e);
+      }
+      render();
+    } else {
+      /* Keep the local queue and current attendance view intact while offline. */
+      await hydrateOfflineAttendance();
+      render();
+    }
+    return online;
+  }
+
   function startOfflineAttendanceSync() {
     openOfflineDb().then(function () {
       hydrateOfflineAttendance().then(function () {
-        if (session()) syncOfflineAttendance();
+        if (session()) monitorAttendanceConnection();
       });
     }).catch(function (e) {
       console.warn("Offline attendance database:", e);
     });
 
+    /* The browser event is only a trigger. We immediately verify Supabase
+       itself before switching the application back to online mode. */
     window.addEventListener("online", function () {
-      syncOfflineAttendance();
+      monitorAttendanceConnection();
+    });
+
+    window.addEventListener("offline", function () {
+      OFFLINE_ATTENDANCE.connection = "offline";
+      hydrateOfflineAttendance().then(function () { render(); });
     });
 
     window.addEventListener("focus", function () {
-      syncOfflineAttendance();
+      monitorAttendanceConnection();
     });
 
-    if (document.visibilityState !== "hidden") {
-      document.addEventListener("visibilitychange", function () {
-        if (document.visibilityState === "visible") syncOfflineAttendance();
-      });
-    }
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "visible") monitorAttendanceConnection();
+    });
 
     if (OFFLINE_ATTENDANCE.retryTimer) clearInterval(OFFLINE_ATTENDANCE.retryTimer);
     OFFLINE_ATTENDANCE.retryTimer = setInterval(function () {
-      syncOfflineAttendance();
-    }, 30000);
+      monitorAttendanceConnection();
+    }, 15000);
+
+    if (OFFLINE_ATTENDANCE.monitorTimer) clearInterval(OFFLINE_ATTENDANCE.monitorTimer);
+    OFFLINE_ATTENDANCE.monitorTimer = setInterval(function () {
+      monitorAttendanceConnection();
+    }, 5000);
   }
 
   function offlineStatusText(entry) {
