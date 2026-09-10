@@ -3,6 +3,338 @@
 (function () {
   "use strict";
 
+
+  /* =========================================================================
+     OFFLINE-FIRST ATTENDANCE QUEUE
+     -------------------------------------------------------------------------
+     This layer wraps the existing attendance table rather than replacing it.
+     Pending stamps are persisted in IndexedDB before any network operation.
+     The same eventId is retained through synchronization so retries are
+     idempotent even when a request reaches Supabase but its response is lost.
+
+     Existing attendance JSON fields remain compatible: the event metadata is
+     carried alongside the existing { time, at } payload. No existing tables,
+     routes, attendance rules, reports or HSE records are changed here.
+     ========================================================================= */
+  var OFFLINE_ATTENDANCE = {
+    dbName: "e-attendance-offline",
+    storeName: "attendance_queue",
+    version: 1,
+    db: null,
+    ready: null,
+    retryTimer: null,
+    syncing: false
+  };
+
+  function offlineUuid() {
+    if (window.crypto && typeof window.crypto.randomUUID === "function") {
+      return window.crypto.randomUUID();
+    }
+    var r = function () { return Math.floor((1 + Math.random()) * 0x10000).toString(16).slice(1); };
+    return r()+r()+"-"+r()+"-4"+r().slice(1)+"-"+r()+"-"+r()+r()+r();
+  }
+
+  function openOfflineDb() {
+    if (OFFLINE_ATTENDANCE.ready) return OFFLINE_ATTENDANCE.ready;
+    OFFLINE_ATTENDANCE.ready = new Promise(function (resolve, reject) {
+      if (!window.indexedDB) {
+        reject(new Error("IndexedDB is unavailable in this browser."));
+        return;
+      }
+      var req = indexedDB.open(OFFLINE_ATTENDANCE.dbName, OFFLINE_ATTENDANCE.version);
+      req.onupgradeneeded = function () {
+        var db = req.result;
+        if (!db.objectStoreNames.contains(OFFLINE_ATTENDANCE.storeName)) {
+          var store = db.createObjectStore(OFFLINE_ATTENDANCE.storeName, { keyPath: "eventId" });
+          store.createIndex("status", "status", { unique: false });
+          store.createIndex("userId", "userId", { unique: false });
+          store.createIndex("userDateKind", "userDateKind", { unique: false });
+        }
+      };
+      req.onsuccess = function () {
+        OFFLINE_ATTENDANCE.db = req.result;
+        OFFLINE_ATTENDANCE.db.onversionchange = function () { OFFLINE_ATTENDANCE.db.close(); };
+        resolve(OFFLINE_ATTENDANCE.db);
+      };
+      req.onerror = function () { reject(req.error || new Error("Could not open offline attendance storage.")); };
+    });
+    return OFFLINE_ATTENDANCE.ready;
+  }
+
+  async function offlinePut(row) {
+    var db = await openOfflineDb();
+    return new Promise(function (resolve, reject) {
+      var tx = db.transaction(OFFLINE_ATTENDANCE.storeName, "readwrite");
+      tx.objectStore(OFFLINE_ATTENDANCE.storeName).put(row);
+      tx.oncomplete = function () { resolve(row); };
+      tx.onerror = function () { reject(tx.error || new Error("Could not save attendance locally.")); };
+      tx.onabort = function () { reject(tx.error || new Error("Could not save attendance locally.")); };
+    });
+  }
+
+  async function offlineGet(eventId) {
+    var db = await openOfflineDb();
+    return new Promise(function (resolve, reject) {
+      var tx = db.transaction(OFFLINE_ATTENDANCE.storeName, "readonly");
+      var req = tx.objectStore(OFFLINE_ATTENDANCE.storeName).get(eventId);
+      req.onsuccess = function () { resolve(req.result || null); };
+      req.onerror = function () { reject(req.error || new Error("Could not read offline attendance.")); };
+    });
+  }
+
+  async function offlineAll() {
+    var db = await openOfflineDb();
+    return new Promise(function (resolve, reject) {
+      var tx = db.transaction(OFFLINE_ATTENDANCE.storeName, "readonly");
+      var req = tx.objectStore(OFFLINE_ATTENDANCE.storeName).getAll();
+      req.onsuccess = function () { resolve(req.result || []); };
+      req.onerror = function () { reject(req.error || new Error("Could not read offline attendance.")); };
+    });
+  }
+
+  async function offlineDelete(eventId) {
+    var db = await openOfflineDb();
+    return new Promise(function (resolve, reject) {
+      var tx = db.transaction(OFFLINE_ATTENDANCE.storeName, "readwrite");
+      tx.objectStore(OFFLINE_ATTENDANCE.storeName).delete(eventId);
+      tx.oncomplete = function () { resolve(); };
+      tx.onerror = function () { reject(tx.error || new Error("Could not clear offline attendance.")); };
+    });
+  }
+
+  async function offlineUpdate(eventId, patch) {
+    var row = await offlineGet(eventId);
+    if (!row) return null;
+    Object.keys(patch || {}).forEach(function (k) { row[k] = patch[k]; });
+    return offlinePut(row);
+  }
+
+  async function offlinePendingFor(userId, date, kind) {
+    var rows = await offlineAll();
+    return rows.find(function (r) {
+      return String(r.userId) === String(userId) &&
+        r.date === date &&
+        r.kind === kind &&
+        r.status !== "SYNCED";
+    }) || null;
+  }
+
+  function attendancePayloadFromQueue(q) {
+    return {
+      time: q.time,
+      at: q.stampedAt,
+      eventId: q.eventId,
+      stampedAt: q.stampedAt,
+      createdOffline: !!q.createdOffline,
+      syncStatus: q.status === "SYNCED" ? "SYNCED" : "PENDING",
+      serverReceivedAt: q.serverReceivedAt || null
+    };
+  }
+
+  function mergeQueuedAttendanceIntoDb(rows) {
+    (rows || []).forEach(function (q) {
+      if (!q || !q.userId || !q.date || !q.kind || q.status === "SYNCED") return;
+      var rec = record(q.userId, q.date);
+      if (!rec) {
+        rec = { userId: q.userId, date: q.date, morning: null, evening: null };
+        db.attendance.push(rec);
+      }
+      if (!rec[q.kind]) rec[q.kind] = attendancePayloadFromQueue(q);
+    });
+  }
+
+  async function hydrateOfflineAttendance() {
+    try {
+      var rows = await offlineAll();
+      mergeQueuedAttendanceIntoDb(rows);
+      return rows;
+    } catch (e) {
+      console.warn("Offline attendance storage:", e);
+      return [];
+    }
+  }
+
+  function attendanceEventMatches(existing, eventId) {
+    return !!(existing && existing.eventId && String(existing.eventId) === String(eventId));
+  }
+
+  async function syncOneOfflineAttendance(q) {
+    if (!q || q.status === "SYNCED") return true;
+    if (!session()) return false;
+
+    await offlineUpdate(q.eventId, { status: "SYNCING", lastAttemptAt: Date.now() });
+
+    try {
+      var live = await fetchAttendanceRecord(q.userId, q.date);
+      if (live.error) throw live.error;
+
+      var existing = live.row;
+      var existingEntry = existing && existing[q.kind];
+
+      /* If the exact event is already on the server, the lost response case
+         is resolved: do not write it again. */
+      if (attendanceEventMatches(existingEntry, q.eventId)) {
+        await offlineUpdate(q.eventId, {
+          status: "SYNCED",
+          serverReceivedAt: q.serverReceivedAt || Date.now(),
+          syncedAt: Date.now()
+        });
+        return true;
+      }
+
+      /* A different stamp occupying the same immutable slot wins. Never
+         overwrite it during a retry. This preserves existing server rules. */
+      if (existingEntry) {
+        await offlineUpdate(q.eventId, {
+          status: "FAILED",
+          error: "This attendance slot is already recorded on the server.",
+          failedAt: Date.now()
+        });
+        return false;
+      }
+
+      var payload = attendancePayloadFromQueue(q);
+      var writeRes;
+
+      if (existing) {
+        var updateRow = {};
+        updateRow[q.kind] = payload;
+        writeRes = await supabaseClient.from("attendance").update(updateRow)
+          .eq("user_id", q.userId).eq("date", q.date);
+      } else {
+        var insertRow = { user_id: q.userId, date: q.date, morning: null, evening: null };
+        insertRow[q.kind] = payload;
+        writeRes = await supabaseClient.from("attendance").insert(insertRow);
+
+        if (writeRes.error && /duplicate|unique/i.test(writeRes.error.message || "")) {
+          var afterConflict = await fetchAttendanceRecord(q.userId, q.date);
+          if (afterConflict.error) throw afterConflict.error;
+          if (attendanceEventMatches(afterConflict.row && afterConflict.row[q.kind], q.eventId)) {
+            await offlineUpdate(q.eventId, {
+              status: "SYNCED",
+              serverReceivedAt: Date.now(),
+              syncedAt: Date.now()
+            });
+            return true;
+          }
+          if (afterConflict.row && afterConflict.row[q.kind]) {
+            await offlineUpdate(q.eventId, {
+              status: "FAILED",
+              error: "This attendance slot is already recorded on the server.",
+              failedAt: Date.now()
+            });
+            return false;
+          }
+          var retryRow = {};
+          retryRow[q.kind] = payload;
+          writeRes = await supabaseClient.from("attendance").update(retryRow)
+            .eq("user_id", q.userId).eq("date", q.date);
+        }
+      }
+
+      if (writeRes.error) throw writeRes.error;
+
+      /* The write succeeded. Keep the local row until the server has confirmed
+         the exact event on a read-back; this makes the queue robust to lost
+         responses and transient acknowledgement failures. */
+      var verify = await fetchAttendanceRecord(q.userId, q.date);
+      if (verify.error) throw verify.error;
+      if (!verify.row || !attendanceEventMatches(verify.row[q.kind], q.eventId)) {
+        throw new Error("Attendance was submitted but could not be verified yet.");
+      }
+
+      await offlineUpdate(q.eventId, {
+        status: "SYNCED",
+        serverReceivedAt: Date.now(),
+        syncedAt: Date.now()
+      });
+      return true;
+    } catch (err) {
+      await offlineUpdate(q.eventId, {
+        status: "FAILED",
+        error: err && err.message ? err.message : "Synchronization failed.",
+        failedAt: Date.now()
+      }).catch(function () {});
+      return false;
+    }
+  }
+
+  async function syncOfflineAttendance() {
+    if (OFFLINE_ATTENDANCE.syncing || !session()) return;
+    OFFLINE_ATTENDANCE.syncing = true;
+    try {
+      var rows = await offlineAll();
+      var pending = rows.filter(function (r) {
+        return r && r.status !== "SYNCED";
+      }).sort(function (a, b) {
+        return (a.stampedAt || 0) - (b.stampedAt || 0);
+      });
+
+      for (var i = 0; i < pending.length; i++) {
+        var ok = await syncOneOfflineAttendance(pending[i]);
+        if (!ok) continue;
+      }
+
+      await hydrateOfflineAttendance();
+
+      /* Refresh only after at least one successful sync. If the connection is
+         still unavailable, the existing in-memory attendance remains intact. */
+      var after = await offlineAll();
+      if (after.some(function (r) { return r.status === "SYNCED"; })) {
+        await refreshData({ preserveOffline: true });
+        after = await offlineAll();
+      }
+
+      after.filter(function (r) { return r.status === "SYNCED"; }).forEach(function (r) {
+        offlineDelete(r.eventId).catch(function () {});
+      });
+
+      if (after.some(function (r) { return r.status === "SYNCED"; })) {
+        toast("Attendance synchronized.");
+        render();
+      }
+    } catch (e) {
+      console.warn("Offline attendance synchronization:", e);
+    } finally {
+      OFFLINE_ATTENDANCE.syncing = false;
+    }
+  }
+
+  function startOfflineAttendanceSync() {
+    openOfflineDb().then(function () {
+      hydrateOfflineAttendance().then(function () {
+        if (session()) syncOfflineAttendance();
+      });
+    }).catch(function (e) {
+      console.warn("Offline attendance database:", e);
+    });
+
+    window.addEventListener("online", function () {
+      syncOfflineAttendance();
+    });
+
+    window.addEventListener("focus", function () {
+      syncOfflineAttendance();
+    });
+
+    if (document.visibilityState !== "hidden") {
+      document.addEventListener("visibilitychange", function () {
+        if (document.visibilityState === "visible") syncOfflineAttendance();
+      });
+    }
+
+    if (OFFLINE_ATTENDANCE.retryTimer) clearInterval(OFFLINE_ATTENDANCE.retryTimer);
+    OFFLINE_ATTENDANCE.retryTimer = setInterval(function () {
+      syncOfflineAttendance();
+    }, 30000);
+  }
+
+  function offlineStatusText(entry) {
+    if (!entry) return "";
+    if (entry.syncStatus === "SYNCED") return "Attendance synchronized";
+    return "Attendance saved locally · Waiting for connection";
+  }
+
   /* ------------------------- Supabase ------------------------- */
   var SUPABASE_URL = "https://wdrgcavxwamwqgxkdscn.supabase.co";
   var SUPABASE_PUBLISHABLE_KEY = "sb_publishable_XlL1WvosmoBvl3vttrT-xw_nVvtMrQo";
@@ -180,7 +512,13 @@
   }
 
   function mapAttendance(a) {
-    return { userId: a.user_id, date: normalizeAttendanceDate(a.date), morning: a.morning || null, evening: a.evening || null };
+    return {
+      id: a.id || null,
+      userId: a.user_id,
+      date: normalizeAttendanceDate(a.date),
+      morning: a.morning || null,
+      evening: a.evening || null
+    };
   }
   function mapLeave(r) {
     return {
@@ -202,7 +540,8 @@
   }
   function leaveTypeLabel(v) { return String(v || "").replace(/_/g, " ").replace(/\b\w/g, function(c){return c.toUpperCase();}); }
 
-  async function refreshData() {
+  async function refreshData(options) {
+    options = options || {};
     pageLoader.show();
     try {
       dataError = null;
@@ -212,6 +551,7 @@
       if (attendanceRes.error) dataError = attendanceRes.error.message;
       db.users = (profilesRes.data || []).map(mapProfile);
       db.attendance = (attendanceRes.data || []).map(mapAttendance);
+      await hydrateOfflineAttendance();
       var leaveRes = await supabaseClient.from("staff_leave").select("*").order("start_date", { ascending: false });
       db.leaves = leaveRes.error ? [] : (leaveRes.data || []).map(mapLeave);
 
@@ -1010,14 +1350,18 @@
 
   function attBlock(title, label, entry, kind, disabled) {
     var submitted = !!entry;
+    var localStatus = submitted && offlineStatusText(entry);
+    var isLocalPending = submitted && entry.eventId && entry.syncStatus !== "SYNCED";
     return '<div class="att' + (submitted ? " locked" : "") + '">' +
       '<div class="att-top"><h3>' + title + "</h3>" +
-      (submitted ? '<span class="tag tag-ok">Submitted</span>' : '<span class="tag tag-pending">Pending</span>') + "</div>" +
+      (submitted ? '<span class="tag ' + (isLocalPending ? 'tag-pending' : 'tag-ok') + '">' + (isLocalPending ? 'Saved' : 'Submitted') + '</span>' : '<span class="tag tag-pending">Pending</span>') + "</div>" +
       '<p class="att-time' + (submitted ? "" : " pending") + '">' + (submitted ? esc(entry.time) : "--:--") + "</p>" +
       '<p class="att-meta">' + label + " time" + (submitted ? " recorded" : " not yet recorded") + ".</p>" +
-      (submitted
-        ? '<div class="locked-note"><span class="lock-icon" aria-hidden="true">' + ICON.lock + '</span> Locked — cannot be edited or resubmitted</div>'
-        : '<button class="btn btn-primary btn-block" data-att="' + kind + '"' + (disabled ? " disabled" : "") + ">Submit " + label.toLowerCase() + " time</button>") +
+      (localStatus
+        ? '<p class="offline-att-status">' + esc(localStatus) + (isLocalPending ? " · " + esc(entry.time) : "") + "</p>"
+        : submitted
+          ? '<div class="locked-note"><span class="lock-icon" aria-hidden="true">' + ICON.lock + '</span> Locked — cannot be edited or resubmitted</div>'
+          : '<button class="btn btn-primary btn-block" data-att="' + kind + '"' + (disabled ? " disabled" : "") + ">Submit " + label.toLowerCase() + " time</button>") +
       "</div>";
   }
 
@@ -2389,9 +2733,15 @@
   /* ------------------------- actions ------------------------- */
   function submitAttendance(kind) {
     var u = session(); if (!u) return;
-    var now = new Date(), key = dateKey(now);
+
+    /* Capture the stamp instant from the user's attendance-button click.
+       The confirmation modal may remain open for several seconds; the
+       attendance time must still be the original click time. */
+    var stampCapturedAt = new Date();
+    var key = dateKey(stampCapturedAt);
     var rec = record(u.id, key);
-    var dayState = dayStatus(now);
+    var dayState = dayStatus(stampCapturedAt);
+
     if (!dayState.open) {
       toast(dayState.kind === "weekend"
         ? "Attendance is only available Monday–Friday."
@@ -2399,82 +2749,77 @@
       return;
     }
 
-    if (rec && rec[kind]) { toast("This attendance is locked and cannot be changed.", "error"); return; }
-    // If the local cache does not contain today's row, do not conclude that
-    // evening attendance is impossible. The authoritative row is re-read just
-    // before the write below, which also handles records hidden by stale/RLS data.
-    if (kind === "evening" && rec && !rec.morning) { toast("Submit your morning resumption first.", "error"); return; }
+    if (rec && rec[kind]) {
+      toast("This attendance is locked and cannot be changed.", "error");
+      return;
+    }
 
-    var time = clockTime(now);
-    var isMorning = kind === "morning";
-    confirmDialog(
-      isMorning ? "Confirm Attendance" : "Confirm Closing Time",
-      (isMorning
-        ? "Please review your resumption time before submitting. Once submitted, this attendance cannot be changed."
-        : "Please review your closing time before submitting. Once submitted, this attendance cannot be changed.") +
-      "  Recorded time: " + time + ".",
-      async function () {
-        var payload = { time: time, at: Date.now() };
+    /* Check IndexedDB as well as the in-memory record. This prevents a second
+       click from creating another event while the first one is still pending. */
+    offlinePendingFor(u.id, key, kind).then(function (pending) {
+      if (pending) {
+        toast("This attendance is already saved and waiting to synchronize.", "error");
+        return;
+      }
 
-        // Re-read the exact unique-key row immediately before writing. The in-memory
-        // cache may be stale or may not contain the row because of RLS/loading order.
-        var live = await fetchAttendanceRecord(u.id, key);
-        if (live.error) {
-          toast("Attendance could not be verified. Please refresh and try again.", "error");
-          return;
-        }
+      if (kind === "evening" && rec && !rec.morning) {
+        toast("Submit your morning resumption first.", "error");
+        return;
+      }
 
-        var existing = live.row;
-        var writeRes;
+      var time = clockTime(stampCapturedAt);
+      var isMorning = kind === "morning";
+      confirmDialog(
+        isMorning ? "Confirm Attendance" : "Confirm Closing Time",
+        (isMorning
+          ? "Please review your resumption time before submitting. Once submitted, this attendance cannot be changed."
+          : "Please review your closing time before submitting. Once submitted, this attendance cannot be changed.") +
+        "  Recorded time: " + time + ".",
+        async function () {
+          var eventId = offlineUuid();
+          var stampedAt = stampCapturedAt.getTime();
+          var queueRow = {
+            eventId: eventId,
+            userId: u.id,
+            date: key,
+            kind: kind,
+            time: time,
+            stampedAt: stampedAt,
+            createdOffline: !navigator.onLine,
+            status: "PENDING",
+            createdAt: Date.now(),
+            serverReceivedAt: null,
+            attempts: 0
+          };
 
-        if (existing) {
-          if (existing[kind]) {
-            db.attendance = mergeAttendanceRecords(db.attendance, [existing]);
-            toast("This attendance is already recorded for today.", "error");
-            render();
+          /* Critical durability step: write locally BEFORE attempting Supabase.
+             Once this succeeds, a network drop cannot make the stamp disappear. */
+          try {
+            await offlinePut(queueRow);
+          } catch (storageErr) {
+            console.error("Attendance local save:", storageErr);
+            toast("Attendance could not be saved locally. Please try again.", "error");
             return;
           }
-          var updateRow = {};
-          updateRow[kind] = payload;
-          writeRes = await supabaseClient.from("attendance").update(updateRow)
-            .eq("user_id", u.id).eq("date", key);
-        } else {
-          var insertRow = { user_id: u.id, date: key, morning: null, evening: null };
-          insertRow[kind] = payload;
-          writeRes = await supabaseClient.from("attendance").insert(insertRow);
 
-          // Handle a concurrent writer safely. The unique constraint stays enabled;
-          // re-read the winning row and update only the missing stamp if appropriate.
-          if (writeRes.error && /duplicate|unique/i.test(writeRes.error.message || "")) {
-            var afterConflict = await fetchAttendanceRecord(u.id, key);
-            if (afterConflict.error || !afterConflict.row) {
-              toast(writeRes.error.message, "error");
-              return;
-            }
-            if (afterConflict.row[kind]) {
-              db.attendance = mergeAttendanceRecords(db.attendance, [afterConflict.row]);
-              toast("This attendance is already recorded for today.", "error");
-              render();
-              return;
-            }
-            var retryRow = {};
-            retryRow[kind] = payload;
-            writeRes = await supabaseClient.from("attendance").update(retryRow)
-              .eq("user_id", u.id).eq("date", key);
+          mergeQueuedAttendanceIntoDb([queueRow]);
+          render();
+
+          /* First attempt: the queue is now durable, so even a lost response
+             or browser close can safely be recovered by the next sync. */
+          await syncOfflineAttendance();
+
+          var local = await offlineGet(eventId);
+          if (local && local.status !== "SYNCED") {
+            toast("Attendance saved locally · " + time + " · Waiting for connection.");
+            render();
           }
         }
-
-        if (writeRes.error) { toast(writeRes.error.message, "error"); return; }
-
-        var mergedRecord = existing || { userId: u.id, date: key, morning: null, evening: null };
-        mergedRecord[kind] = payload;
-        db.attendance = mergeAttendanceRecords(db.attendance, [mergedRecord]);
-
-        await refreshData();
-        toast(isMorning ? "Morning attendance submitted successfully." : "Evening attendance submitted successfully.");
-        render();
-      }
-    );
+      );
+    }).catch(function (e) {
+      console.warn("Attendance local duplicate check:", e);
+      toast("Attendance could not be prepared. Please try again.", "error");
+    });
   }
 
 
@@ -5499,6 +5844,7 @@
     } catch (e) {}
   }, 60000);
 
+  startOfflineAttendanceSync();
   init();
 })();
 

@@ -2167,3 +2167,13 @@ aside .panel:has(#hseSettingsForm){overflow:visible}
   .history-detail-head{gap:12px}
   .history-detail-id{width:100%}
 }
+
+
+/* ---------- Offline attendance status ---------- */
+.offline-att-status{
+  margin:8px 0 0;
+  font-size:12px;
+  line-height:1.45;
+  color:var(--ink-3);
+  font-weight:600;
+}
