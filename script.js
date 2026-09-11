@@ -254,8 +254,9 @@
         if (writeRes.error && /duplicate|unique/i.test(writeRes.error.message || "")) {
           var afterConflict = await fetchAttendanceRecord(q.userId, q.date);
           if (afterConflict.error) throw afterConflict.error;
-          if (attendanceEventMatches(afterConflict.row && afterConflict.row[q.kind], q.eventId)) {
-            var conflictSyncedAt = Date.now();
+          if (attendanceEventMatches(afterConflict.row && afterConflict.row[q.kind], q.eventId) &&
+              afterConflict.row[q.kind].syncStatus === "SYNCED") {
+            var conflictSyncedAt = afterConflict.row[q.kind].serverReceivedAt || Date.now();
             await offlineUpdate(q.eventId, {
               status: "SYNCED",
               serverReceivedAt: conflictSyncedAt,
@@ -286,7 +287,9 @@
          responses and transient acknowledgement failures. */
       var verify = await fetchAttendanceRecord(q.userId, q.date);
       if (verify.error) throw verify.error;
-      if (!verify.row || !attendanceEventMatches(verify.row[q.kind], q.eventId)) {
+      if (!verify.row ||
+          !attendanceEventMatches(verify.row[q.kind], q.eventId) ||
+          verify.row[q.kind].syncStatus !== "SYNCED") {
         throw new Error("Attendance was submitted but could not be verified yet.");
       }
 
@@ -456,7 +459,9 @@
        pending locally. Once Supabase has accepted it, the existing normal
        submitted/locked attendance UI must be restored with no offline text. */
     if (!entry || !entry.eventId || entry.syncStatus === "SYNCED") return "";
-    if (OFFLINE_ATTENDANCE.connection === "online") return "";
+    if (OFFLINE_ATTENDANCE.connection === "online") {
+      return "Attendance saved locally · Synchronization pending";
+    }
     return "Attendance saved locally · Waiting for connection";
   }
 
@@ -1493,7 +1498,7 @@
     var localStatus = submitted && offlineStatusText(entry);
     /* "Saved" is only a local pending state. The server-backed SYNCED flag
        is authoritative for the final Submitted state. */
-    var isLocalPending = submitted && entry.eventId && entry.syncStatus === "PENDING";
+    var isLocalPending = submitted && entry.eventId && entry.syncStatus !== "SYNCED";
     return '<div class="att' + (submitted ? " locked" : "") + '">' +
       '<div class="att-top"><h3>' + title + "</h3>" +
       (submitted ? '<span class="tag ' + (isLocalPending ? 'tag-pending' : 'tag-ok') + '">' + (isLocalPending ? 'Saved' : 'Submitted') + '</span>' : '<span class="tag tag-pending">Pending</span>') + "</div>" +
