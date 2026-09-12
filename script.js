@@ -480,6 +480,57 @@
      single maintenance flag. */
   var MAINTENANCE = { active: false, known: false, checking: false, timer: null };
   var MAINTENANCE_URL = "maintenance.html";
+  var DEV_PREVIEW_PATH = "/dev-preview";
+  var DEV_PREVIEW_API = "/api/dev-preview";
+  var DEV_PREVIEW = { active: false, checking: false, timer: null };
+
+  function isDevPreviewPath() {
+    return location.pathname.replace(/\/$/, "") === DEV_PREVIEW_PATH;
+  }
+
+  async function establishDeveloperPreviewSession() {
+    if (!isDevPreviewPath() || !authUser || DEV_PREVIEW.active) return true;
+    try {
+      var tokenRes = await supabaseClient.auth.getSession();
+      var accessToken = tokenRes && tokenRes.data && tokenRes.data.session && tokenRes.data.session.access_token;
+      if (!accessToken) return false;
+      var res = await fetch(DEV_PREVIEW_API, {
+        method: "POST",
+        headers: { "Authorization": "Bearer " + accessToken },
+        credentials: "include"
+      });
+      if (!res.ok) return false;
+      DEV_PREVIEW.active = true;
+      return true;
+    } catch (e) {
+      console.warn("Developer preview session:", e);
+      return false;
+    }
+  }
+
+  async function validateDeveloperPreviewSession() {
+    if (!isDevPreviewPath() || !DEV_PREVIEW.active || DEV_PREVIEW.checking) return true;
+    DEV_PREVIEW.checking = true;
+    try {
+      var res = await fetch(DEV_PREVIEW_API, { method: "GET", credentials: "include", cache: "no-store" });
+      if (!res.ok) {
+        DEV_PREVIEW.active = false;
+        location.replace(MAINTENANCE_URL);
+        return false;
+      }
+      return true;
+    } catch (e) {
+      return true;
+    } finally {
+      DEV_PREVIEW.checking = false;
+    }
+  }
+
+  async function clearDeveloperPreviewSession() {
+    if (!isDevPreviewPath()) return;
+    try { await fetch(DEV_PREVIEW_API, { method: "DELETE", credentials: "include", keepalive: true }); } catch (e) {}
+    DEV_PREVIEW.active = false;
+  }
 
   async function readMaintenanceMode() {
     if (MAINTENANCE.checking) return MAINTENANCE.active;
@@ -504,7 +555,7 @@
   }
 
   function enterMaintenanceMode() {
-    if (PAGE === "about") return;
+    if (PAGE === "about" || (isDevPreviewPath() && DEV_PREVIEW.active)) return;
     if (location.pathname.endsWith("/" + MAINTENANCE_URL) || location.pathname.endsWith(MAINTENANCE_URL)) return;
     location.replace(MAINTENANCE_URL);
   }
@@ -513,6 +564,11 @@
     if (MAINTENANCE.timer) return;
     MAINTENANCE.timer = setInterval(async function () {
       if (PAGE === "about") return;
+      if (isDevPreviewPath() && DEV_PREVIEW.active) {
+        await validateDeveloperPreviewSession();
+        return;
+      }
+      if (isDevPreviewPath()) return;
       var active = await readMaintenanceMode();
       if (active) enterMaintenanceMode();
     }, 5000);
@@ -1114,6 +1170,7 @@
       messageState.pinSessionExpiresAt = 0;
       if (messagePinSessionTimer) { clearTimeout(messagePinSessionTimer); messagePinSessionTimer = null; }
       if (logoutUserId) await clearMessagingPinSession(logoutUserId);
+      await clearDeveloperPreviewSession();
       authUser = null; currentUser = null;
       toast("You have been signed out.");
       go("#/login");
@@ -5830,6 +5887,16 @@
         }
         return;
       }
+      if (isDevPreviewPath()) {
+        var previewGranted = await establishDeveloperPreviewSession();
+        if (!previewGranted) {
+          await supabaseClient.auth.signOut();
+          authUser = null;
+          currentUser = null;
+          location.replace(MAINTENANCE_URL);
+          return;
+        }
+      }
       await initMessaging();
       toast("Signed in as " + profileDisplayName(currentUser) + ".");
       location.hash = normalizeRole(currentUser.role) === "admin" ? "#/admin" : "#/dashboard";
@@ -5879,7 +5946,7 @@
 
     /* Check the public maintenance flag before bootstrapping the normal
        attendance UI. Authentication is deliberately not signed out or changed. */
-    if (PAGE !== "about" && await readMaintenanceMode()) {
+    if (PAGE !== "about" && !isDevPreviewPath() && await readMaintenanceMode()) {
       enterMaintenanceMode();
       return;
     }
@@ -5891,6 +5958,12 @@
       return authUser;
     });
     await authRestorePromise;
+    if (isDevPreviewPath() && authUser) {
+      if (!(await establishDeveloperPreviewSession())) {
+        location.replace(MAINTENANCE_URL);
+        return;
+      }
+    }
     if (initialHash === "#/messages") {
       if (authUser) {
         var profileRes = await supabaseClient.from("profiles").select("*").eq("id", authUser.id).maybeSingle();
