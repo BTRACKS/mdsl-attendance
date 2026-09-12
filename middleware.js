@@ -23,7 +23,13 @@ async function maintenanceOn() {
 
 export default async function middleware(request) {
   const path=new URL(request.url).pathname.replace(/\/$/,'')||'/';
-  if(path.startsWith('/api/')||path===MAINTENANCE||path==='/dev-preview.html') return next();
+  // Static assets required by the existing maintenance page and developer preview
+  // must remain reachable while Maintenance Mode is ON. Only document/application
+  // routes are gated below.
+  const staticAsset = path.startsWith('/assets/') || path.startsWith('/fonts/') ||
+    path.startsWith('/support/') || path.startsWith('/learn/') ||
+    /\.(?:css|js|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|otf|webmanifest|json|wav|mp3)$/i.test(path);
+  if(path.startsWith('/api/') || path===MAINTENANCE || path==='/dev-preview.html' || staticAsset) return next();
   const active=await maintenanceOn();
   const previewCookie=request.headers.get('cookie')||'';
   const match=previewCookie.split(';').map(x=>x.trim()).find(x=>x.startsWith(COOKIE+'='));
