@@ -508,14 +508,38 @@
     }
   }
 
+  /* Restore the server-issued preview session when the developer leaves
+     /dev-preview and enters the normal SPA. The cookie is HttpOnly, so the
+     browser cannot inspect it directly; this endpoint is the authoritative
+     server-side check. This keeps Maintenance Mode from redirecting the
+     developer back to the maintenance page after the hand-off. */
+  async function restoreDeveloperPreviewSession() {
+    if (DEV_PREVIEW.active || DEV_PREVIEW.checking) return DEV_PREVIEW.active;
+    try {
+      DEV_PREVIEW.checking = true;
+      var res = await fetch(DEV_PREVIEW_API, {
+        method: "GET",
+        credentials: "include",
+        cache: "no-store"
+      });
+      DEV_PREVIEW.active = res.ok;
+      return DEV_PREVIEW.active;
+    } catch (e) {
+      DEV_PREVIEW.active = false;
+      return false;
+    } finally {
+      DEV_PREVIEW.checking = false;
+    }
+  }
+
   async function validateDeveloperPreviewSession() {
-    if (!isDevPreviewPath() || !DEV_PREVIEW.active || DEV_PREVIEW.checking) return true;
+    if (!DEV_PREVIEW.active || DEV_PREVIEW.checking) return true;
     DEV_PREVIEW.checking = true;
     try {
       var res = await fetch(DEV_PREVIEW_API, { method: "GET", credentials: "include", cache: "no-store" });
       if (!res.ok) {
         DEV_PREVIEW.active = false;
-        location.replace(MAINTENANCE_URL);
+        if (await readMaintenanceMode()) location.replace(MAINTENANCE_URL);
         return false;
       }
       return true;
@@ -527,7 +551,6 @@
   }
 
   async function clearDeveloperPreviewSession() {
-    if (!isDevPreviewPath()) return;
     try { await fetch(DEV_PREVIEW_API, { method: "DELETE", credentials: "include", keepalive: true }); } catch (e) {}
     DEV_PREVIEW.active = false;
   }
@@ -555,7 +578,7 @@
   }
 
   function enterMaintenanceMode() {
-    if (PAGE === "about" || (isDevPreviewPath() && DEV_PREVIEW.active)) return;
+    if (PAGE === "about" || DEV_PREVIEW.active) return;
     if (location.pathname.endsWith("/" + MAINTENANCE_URL) || location.pathname.endsWith(MAINTENANCE_URL)) return;
     location.replace(MAINTENANCE_URL);
   }
@@ -564,7 +587,7 @@
     if (MAINTENANCE.timer) return;
     MAINTENANCE.timer = setInterval(async function () {
       if (PAGE === "about") return;
-      if (isDevPreviewPath() && DEV_PREVIEW.active) {
+      if (DEV_PREVIEW.active) {
         await validateDeveloperPreviewSession();
         return;
       }
@@ -5944,26 +5967,33 @@
       if (bootFaq) bootFaq.hidden = true;
     }
 
-    /* Check the public maintenance flag before bootstrapping the normal
-       attendance UI. Authentication is deliberately not signed out or changed. */
-    if (PAGE !== "about" && !isDevPreviewPath() && await readMaintenanceMode()) {
-      enterMaintenanceMode();
-      return;
-    }
-    startMaintenanceWatcher();
-
     /* Bootstrap Auth once before any route can decide whether Sign In is required. */
     authRestorePromise = supabaseClient.auth.getSession().then(function (authRes) {
       authUser = (authRes.data && authRes.data.session) ? authRes.data.session.user : null;
       return authUser;
     });
     await authRestorePromise;
+
+    /* If the developer has just authenticated through /dev-preview, restore
+       the server-validated HttpOnly preview session before the maintenance
+       gate runs. This prevents the first SPA render from racing the preview
+       hand-off and redirecting back to maintenance. */
     if (isDevPreviewPath() && authUser) {
       if (!(await establishDeveloperPreviewSession())) {
         location.replace(MAINTENANCE_URL);
         return;
       }
+    } else if (PAGE !== "about") {
+      await restoreDeveloperPreviewSession();
     }
+
+    /* Check the public maintenance flag before bootstrapping the normal
+       attendance UI. Authentication is deliberately not signed out or changed. */
+    if (PAGE !== "about" && !DEV_PREVIEW.active && await readMaintenanceMode()) {
+      enterMaintenanceMode();
+      return;
+    }
+    startMaintenanceWatcher();
     if (initialHash === "#/messages") {
       if (authUser) {
         var profileRes = await supabaseClient.from("profiles").select("*").eq("id", authUser.id).maybeSingle();
